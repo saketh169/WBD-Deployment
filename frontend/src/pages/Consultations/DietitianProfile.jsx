@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { FaPlus } from "react-icons/fa";
-import axios from "axios";
+import axios from "../../axios";
 
 import BookingSidebar from "./BookingSidebar";
 import PaymentModal from "./PaymentModal";

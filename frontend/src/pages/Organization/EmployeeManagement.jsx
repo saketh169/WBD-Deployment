@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import axios from '../../../axios';
+import axios from '../../axios';
 import AuthContext from '../../contexts/AuthContext';
 
 const EmployeeManagement = () => {

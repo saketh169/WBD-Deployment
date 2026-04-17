@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import AuthContext from '../../contexts/AuthContext';
-import axios from '../axios';
+import axios from '../../axios';
 import { io } from 'socket.io-client';
 
 const ChatPage = () => {
