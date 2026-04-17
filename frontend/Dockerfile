@@ -9,7 +9,8 @@ COPY package*.json ./
 # Install all dependencies (including devDependencies for build)
 RUN npm ci
 
-# Copy source code
+# Copy source code and env file
+COPY .env* ./
 COPY . .
 
 # Build the production bundle

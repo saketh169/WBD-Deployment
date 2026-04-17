@@ -31,6 +31,8 @@ services:
     container_name: wbd-frontend
     ports:
       - "80:80"
+    environment:
+      - VITE_API_URL=http://backend:5000
     volumes:
       - ./frontend:/app
       - /app/node_modules
