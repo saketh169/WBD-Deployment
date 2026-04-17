@@ -1,5 +1,5 @@
-// Load environment variables first (before any other imports that may use process.env)
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+// Load environment variables from .env file in utils folder
+require('dotenv').config({ path: require('path').join(__dirname, 'utils', '.env') });
 
 const express = require('express');
 const cors = require('cors');
@@ -47,11 +47,6 @@ app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 5000;
 
-// Allowed frontend origins (configure via env for production)
-const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',')
-  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost'];
-
 // --- Middlewares ---
 // Connect to the database
 connectDB();
@@ -63,13 +58,8 @@ app.use(rateLimiter);
 // Request logger
 app.use(requestLogger);
 
-// Enable CORS with specific origins
-app.use(cors({
-  origin: ALLOWED_ORIGINS,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
+// Enable CORS
+app.use(cors());
 
 // Parse incoming JSON requests with increased limits for image uploads
 app.use(express.json({ limit: '10mb' }));
@@ -259,13 +249,12 @@ app.get('/', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Nutri-Connect Backend Server is running' });
 });
 
-// 404 handler (must be after all routes)
-app.use(notFoundHandler);
+// 404 handler for API routes
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found', path: req.path });
+});
 
 // Error handler (must be last)
-app.use(errorHandler);
-
-// Global error handler (must be last)
 app.use(errorHandler);
 
 // Initialize Elasticsearch and Cron Jobs (for both local and serverless)
@@ -281,9 +270,12 @@ app.use(errorHandler);
 
 // Start server only for local deployment
 if (require.main === module) {
+  const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',')
+    : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost'];
+
   const server = app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-    console.log(`Swagger docs at http://localhost:${PORT}/api-docs`);
+    console.log(`Server running on http://localhost:${PORT}`);
   });
 
   // Initialize Socket.io
