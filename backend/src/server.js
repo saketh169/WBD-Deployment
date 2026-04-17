@@ -268,15 +268,20 @@ app.use(errorHandler);
 // Global error handler (must be last)
 app.use(errorHandler);
 
-// Initialize Cron Jobs
-require('./utils/cronJobs').startCronJobs();
-
-// Start server
-if (require.main === module) {
-  const server = app.listen(PORT, async () => {
-    // Initialize Elasticsearch globally
+// Initialize Elasticsearch and Cron Jobs (for both local and serverless)
+(async () => {
+  try {
     await initElastic();
-    
+    require('./utils/cronJobs').startCronJobs();
+  } catch (err) {
+    console.error('Error initializing Elasticsearch or Cron Jobs:', err.message);
+    // Don't block server startup if these fail
+  }
+})();
+
+// Start server only for local deployment
+if (require.main === module) {
+  const server = app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
     console.log(`Swagger docs at http://localhost:${PORT}/api-docs`);
   });
