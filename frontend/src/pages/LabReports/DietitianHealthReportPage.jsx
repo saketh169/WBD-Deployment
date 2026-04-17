@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import AuthContext from '../../contexts/AuthContext';
 import { FileText, Eye, Download, Send, Plus, ChevronLeft, User, ClipboardList } from 'lucide-react';
-import axios from 'axios';
+import axios from '../../axios';
 
 const DietitianHealthReportPage = () => {
   const navigate = useNavigate();

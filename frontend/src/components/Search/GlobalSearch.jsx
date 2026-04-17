@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import axios from '../../axios';
 import { useNavigate } from 'react-router-dom';
 
 const GlobalSearch = ({ onClose, currentRole }) => {
@@ -37,7 +37,7 @@ const GlobalSearch = ({ onClose, currentRole }) => {
     const fetchResults = async () => {
       setIsLoading(true);
       try {
-        const response = await axios.get(`http://localhost:5000/api/search?q=${query}&limit=3`);
+        const response = await axios.get(`/api/search?q=${query}&limit=3`);
         if (response.data.success) {
           setResults({
             dietitians: response.data.results.dietitians || [],
@@ -88,9 +88,9 @@ const GlobalSearch = ({ onClose, currentRole }) => {
 
     // --- Role-Specific Actions (Dietitian) ---
     ...(currentRole === 'dietitian' ? [
-      { keywords: ['schedule', 'appointments', 'book', 'calendar'], title: 'Patient Appointments', icon: 'fa-calendar-check', path: '/dietitian/schedule' },
-      { keywords: ['patients', 'clients', 'list'], title: 'My Patients', icon: 'fa-user-friends', path: '/dietitian/clients-profiles' },
-      { keywords: ['meal plan', 'meals', 'diet'], title: 'Meal Plan Creator', icon: 'fa-utensils', path: '/dietitian/add-plans' },
+      { keywords: ['schedule', 'appointments', 'book', 'calendar'], title: 'Patient Appointments', icon: 'fa-calendar-check', path: '/dietitian/appointments' },
+      { keywords: ['patients', 'clients', 'list'], title: 'My Patients', icon: 'fa-user-friends', path: '/dietitian/all-patients' },
+      { keywords: ['meal plan', 'meals', 'diet'], title: 'Meal Plan Creator', icon: 'fa-utensils', path: '/dietitian/meal-plans' },
     ] : []),
 
     // --- General Actions (Client/User) ---
@@ -125,10 +125,10 @@ const GlobalSearch = ({ onClose, currentRole }) => {
     navigate(`${basePath}/dietitian-profiles/${id}`);
   };
 
-  const handleMealPlanClick = () => {
+  const handleMealPlanClick = (id) => {
     onClose();
     const basePath = currentRole ? `/${currentRole}` : '/user';
-    navigate(`${basePath}/get-plans`); // Navigate to plans page
+    navigate(`${basePath}/get-plans/${id}`); // Navigate to plans page
   };
 
   const handleBlogClick = (id) => {
@@ -142,7 +142,7 @@ const GlobalSearch = ({ onClose, currentRole }) => {
     results.users.length === 0 && results.mealplans.length === 0 && results.organizations.length === 0 && matchedNavs.length === 0;
 
   return (
-    <div className="fixed inset-0 z-100 flex items-start justify-center pt-24 pb-4 px-4 bg-transparent transition-all duration-300">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 pb-4 px-4 bg-transparent transition-all duration-300">
       <div 
         ref={searchRef}
         className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in-down border border-gray-200"

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuthContext } from '../../hooks/useAuthContext';
-import axios from 'axios';
+import axios from '../../axios';
 
 // Helper function to decode HTML entities
 const decodeHtmlEntities = (text) => {

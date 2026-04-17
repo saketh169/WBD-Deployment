@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../../axios';
 
 // NOTE: Assumes Font Awesome CSS is imported globally.
 const FIELD_MAP = {

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useContext, useCallback } from 'react';
 import AuthContext from '../../contexts/AuthContext';
-import axios from 'axios';
+import axios from '../../axios';
 import { io } from 'socket.io-client';
 
 // Helper function to decode HTML entities

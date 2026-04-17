@@ -3,7 +3,7 @@ import ChatBotHeader from './ChatBotHeader';
 import InputArea from './InputArea';
 import MessageList from './MessageList';
 import NutritionCard from './NutritionCard';
-import axios from 'axios';
+import axios from '../axios';
 import SubscriptionAlert from '../../middleware/SubscriptionAlert';
 import { RefreshCw, Trash2, MessageCircle } from 'lucide-react';
 import { useAuthContext } from '../../hooks/useAuthContext';

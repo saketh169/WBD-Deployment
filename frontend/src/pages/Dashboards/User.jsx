@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Chart from "chart.js/auto";
-import axios from 'axios';
+import axios from '../../axios';
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { io } from 'socket.io-client';

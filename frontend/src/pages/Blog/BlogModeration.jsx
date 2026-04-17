@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import axios from 'axios';
+import axios from '../../axios';
 import moment from 'moment';
 import { FaTrash, FaEye, FaExclamationTriangle, FaUser, FaCheck } from 'react-icons/fa';
 

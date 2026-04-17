@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from 'axios';
+import axios from '../../axios';
 import Sidebar from "../../components/Sidebar/Sidebar";
 import Status from "../../middleware/StatusBadge";
 import { useAuthContext } from "../../hooks/useAuthContext";

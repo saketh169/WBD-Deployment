@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../../axios';
 import { useForm, Controller } from 'react-hook-form'; // 1. Import necessary hooks
 import { yupResolver } from '@hookform/resolvers/yup'; // 2. Import Yup resolver
 import * as Yup from 'yup'; // 3. Import Yup

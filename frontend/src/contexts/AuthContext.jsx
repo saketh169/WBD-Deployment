@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import axios from '../axios';
 import { isTokenExpired } from '../utils/jwtUtils';
 
 // Create Auth Context

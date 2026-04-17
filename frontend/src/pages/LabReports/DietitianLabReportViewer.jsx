@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import AuthContext from '../../contexts/AuthContext';
 import { Heart, Activity, Pill, FileText, Eye, Download, Zap, User } from 'lucide-react';
-import axios from 'axios';
+import axios from '../../axios';
 
 const DietitianLabReportViewer = () => {
   const navigate = useNavigate();

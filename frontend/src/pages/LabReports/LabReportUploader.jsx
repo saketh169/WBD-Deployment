@@ -6,7 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { User, Heart, Leaf, TestTube, Factory, Activity, Upload, Scale, TrendingUp, Calendar, Droplet, Eye, CheckCircle, X } from 'lucide-react';
 import AuthContext from '../../contexts/AuthContext';
 import { useContext } from 'react';
-import axios from 'axios';
+import axios from '../../axios';
 
 // Yup validation schema for client info fields
 const labReportSchema = Yup.object().shape({

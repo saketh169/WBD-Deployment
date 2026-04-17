@@ -1,6 +1,6 @@
 import React, { createContext, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../axios';
 import { useAuthContext } from '../hooks/useAuthContext';
 
 // Create Verify Context

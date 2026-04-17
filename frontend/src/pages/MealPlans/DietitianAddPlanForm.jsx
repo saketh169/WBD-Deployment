@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useContext } from 'react';
 import { ChevronLeft, ChevronRight, Utensils, Users, X, Plus, Save, Trash2, Loader2, Calendar, Search, Check, Edit, Clipboard, CheckCircle, BarChart, Home, Flame } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../../axios';
 import AuthContext from '../../contexts/AuthContext';
 /**
  * Converts a Date object to a YYYY-MM-DD string key for planning.

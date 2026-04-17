@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
-import axios from 'axios';
+import axios from '../axios';
 import { useAuthContext } from '../hooks/useAuthContext';
 
 const DietitianSetup = () => {

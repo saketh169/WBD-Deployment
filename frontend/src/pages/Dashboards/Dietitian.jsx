@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from 'axios';
+import axios from '../../axios';
 import { io } from 'socket.io-client';
 import Sidebar from "../../components/Sidebar/Sidebar";
 import Status from "../../middleware/StatusBadge";

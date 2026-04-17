@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import axios from 'axios';
+import axios from '../../axios';
 const FIELD_MAP = {
   resume: {
     name: 'Resume',

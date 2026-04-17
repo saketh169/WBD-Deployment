@@ -3,7 +3,7 @@ import BookingSidebar from "./Consultations/BookingSidebar";
 import PaymentModal from "./Consultations/PaymentModal";
 import DietitianCard from "./Consultations/DietitianCard";
 import FilterSidebar from "./Consultations/FilterSidebar";
-import axios from 'axios';
+import axios from '../axios';
 
 // Notification Component with Green Theme
 const Notification = ({ show, message, type, onClose }) => {

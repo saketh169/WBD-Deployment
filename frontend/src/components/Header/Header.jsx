@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import NavHeader from '../Navbar/NavHeader';
 import { useAuth } from '../../hooks/useAuth';
-import axios from 'axios';
+import axios from '../../axios';
 import RoleModal from '../../pages/RoleModal';
 import GlobalSearch from '../Search/GlobalSearch';
 

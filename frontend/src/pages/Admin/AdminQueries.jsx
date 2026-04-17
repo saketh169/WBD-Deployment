@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Sidebar from "../../components/Sidebar/Sidebar";
-import axios from 'axios';
+import axios from '../../axios';
 
 // Mock data for queries
 const mockQueries = [

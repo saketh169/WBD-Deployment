@@ -5,7 +5,7 @@ import BookingSidebar from "./Consultations/BookingSidebar";
 import PaymentModal from "./Consultations/PaymentModal";
 import { Notification } from "./AllDietitiansPage";
 import DietitianCard from "./Consultations/DietitianCard";
-import axios from 'axios';
+import axios from '../axios';
 
 // Helper to get specialization filters based on the page type
 const getSpecializationData = (specializationType) => {

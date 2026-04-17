@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../axios';
 import { roleConfig, ProfileContext as Context, useProfile } from './roleConfig';
 import { useAuthContext } from '../hooks/useAuthContext';
 

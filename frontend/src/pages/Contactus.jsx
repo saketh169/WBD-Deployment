@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as Yup from 'yup';
-import axios from 'axios';
+import axios from '../axios';
 import { useLocation } from 'react-router-dom';
 import { AuthProvider } from '../contexts/AuthContext';
 import { useAuthContext } from '../hooks/useAuthContext';

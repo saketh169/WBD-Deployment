@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FileText, Eye, Download, ChevronLeft, ClipboardList, User } from 'lucide-react';
 import AuthContext from '../../contexts/AuthContext';
-import axios from 'axios';
+import axios from '../../axios';
 
 const ClientHealthReportViewer = () => {
   const { dietitianId } = useParams();

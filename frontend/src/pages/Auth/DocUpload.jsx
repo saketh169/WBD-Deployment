@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as Yup from 'yup';
-import axios from 'axios';
+import axios from '../../axios';
 
 // SelectField Component with React Hook Form integration
 const SelectField = ({ label, options, required, error, field, colSpan }) => (

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Utensils, Heart, Activity, Pill, FileText, Eye, Download, Zap } from 'lucide-react';
 import AuthContext from '../../contexts/AuthContext';
 import { useContext } from 'react';
-import axios from 'axios';
+import axios from '../../axios';
 
 const ClientLabReportViewer = () => {
   const { dietitianId } = useParams();

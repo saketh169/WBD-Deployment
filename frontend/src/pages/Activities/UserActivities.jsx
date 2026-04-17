@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from '../../axios';
 import { io } from 'socket.io-client';
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { useAuthContext } from "../../hooks/useAuthContext";
