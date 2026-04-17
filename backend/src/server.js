@@ -254,9 +254,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Simple test route (kept from your original code)
+// Root route for health check
 app.get('/', (req, res) => {
-  res.json({ message: 'Nutri Connect Server is Currently Live!' });
+  res.status(200).json({ status: 'ok', message: 'Nutri-Connect Backend Server is running' });
 });
 
 // 404 handler (must be after all routes)
@@ -271,15 +271,18 @@ app.use(errorHandler);
 // Initialize Cron Jobs
 require('./utils/cronJobs').startCronJobs();
 
-// Start Server
-const server = app.listen(PORT, async () => {
-  // Initialize Elasticsearch globally
-  await initElastic();
-  
-  console.log(`Server running at http://localhost:${PORT}`);
-  console.log(`Swagger docs at http://localhost:${PORT}/api-docs`);
-});
+// Start server
+if (require.main === module) {
+  const server = app.listen(PORT, async () => {
+    // Initialize Elasticsearch globally
+    await initElastic();
+    
+    console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`Swagger docs at http://localhost:${PORT}/api-docs`);
+  });
 
+  // Initialize Socket.io
+  require('./utils/socket').init(server, ALLOWED_ORIGINS);
+}
 
-// Initialize Socket.io
-require('./utils/socket').init(server, ALLOWED_ORIGINS);
+module.exports = app;
