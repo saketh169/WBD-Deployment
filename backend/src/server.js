@@ -50,7 +50,7 @@ const PORT = process.env.PORT || 5000;
 // Allowed frontend origins (configure via env for production)
 const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',')
-  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost'];
+  : true; // Allow all origins in development (can be configured via CORS_ORIGINS env var)
 
 // --- Middlewares ---
 // Connect to the database
@@ -63,7 +63,7 @@ app.use(rateLimiter);
 // Request logger
 app.use(requestLogger);
 
-// Enable CORS with specific origins
+// Enable CORS
 app.use(cors({
   origin: ALLOWED_ORIGINS,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
