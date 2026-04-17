@@ -1,0 +1,447 @@
+================================================================================
+                    JWT WORKFLOW - NUTRI CONNECT APPLICATION
+                         Complete Reference Document
+================================================================================
+
+
+================================================================================
+SECTION 1: JWT TOKEN STRUCTURE
+================================================================================
+
+There are 2 types of JWT tokens in this application:
+
+TYPE A - REGULAR TOKEN (user, dietitian, admin, organization)
+--------------------------------------------------------------
+Payload:
+{
+    userId:  <UserAuth collection _id>      (the authentication record id)
+    role:    "user" | "dietitian" | "admin" | "organization"
+    roleId:  <Profile collection _id>       (User/Dietitian/Admin/Organization document id)
+}
+
+Created at:
+- authController.js -> signupController         (line ~103)
+- authController.js -> verifyLoginOTPController  (line ~501)
+
+Important:
+- userId  = the _id from the UserAuth table (central auth record)
+- roleId  = the _id from the role-specific profile table
+- for database queries about user data, ALWAYS use roleId (profile id)
+- for password operations, use userId (auth record id)
+
+
+TYPE B - EMPLOYEE TOKEN
+--------------------------------------------------------------
+Payload:
+{
+    employeeId:     <Employee collection _id>
+    organizationId: <Organization collection _id>
+    role:           "organization"
+    orgType:        "employee"
+}
+
+Created at:
+- authController.js -> verifyLoginOTPController  (line ~476)
+
+Important:
+- employee tokens have NO userId and NO roleId
+- they have employeeId (the employee document _id)
+- they have organizationId (their parent org document _id)
+- role is always "organization" (so they pass org-level middleware)
+- orgType is "employee" (used to distinguish from org admin)
+
+
+TOKEN EXPIRY
+--------------------------------------------------------------
+- default: 1 day ("1d")
+- with "remember me": 7 days ("7d")
+- secret: process.env.JWT_SECRET (fallback: "fallback-secret-for-development")
+
+
+================================================================================
+SECTION 2: ID FIELD MAPPING
+================================================================================
+
+DATABASE TABLES AND THEIR _id FIELDS
+--------------------------------------------------------------
+UserAuth._id      -> stored in JWT as "userId"
+User._id          -> stored in JWT as "roleId" (for role=user)
+Dietitian._id     -> stored in JWT as "roleId" (for role=dietitian)
+Admin._id         -> stored in JWT as "roleId" (for role=admin)
+Organization._id  -> stored in JWT as "roleId" (for role=organization)
+Employee._id      -> stored in JWT as "employeeId"
+
+WHICH ID TO USE WHERE
+--------------------------------------------------------------
+Purpose                          | Use This Field
+---------------------------------|------------------------------
+find user profile in DB          | roleId (or employeeId for employees)
+change password                  | userId (to find UserAuth record)
+store/query bookings             | roleId
+store/query payments             | roleId
+store/query progress             | roleId
+store/query blogs (author)       | roleId
+store/query meal plans           | roleId
+store/query lab reports          | roleId
+find organization for employee   | organizationId
+verify token validity            | userId (UserAuth record)
+
+FRONTEND USER OBJECT
+--------------------------------------------------------------
+The frontend AuthContext fetches user details via API and stores:
+    user.id = response.data.id = profile document _id = roleId
+
+So in the frontend, user.id always equals the backend roleId.
+
+
+================================================================================
+SECTION 3: BACKEND - HOW TOKENS ARE VERIFIED
+================================================================================
+
+AUTH MIDDLEWARE (authMiddleware.js)
+--------------------------------------------------------------
+All middleware functions extract the token from:
+    req.headers.authorization = "Bearer <token>"
+
+Then verify with jwt.verify() and set:
+    req.user = decoded token payload
+
+Available middleware functions:
+    authenticateJWT                  - any authenticated user
+    ensureDietitianAuthenticated     - only role=dietitian
+    ensureOrganizationAuthenticated  - only role=organization (includes employees!)
+    ensureAdminAuthenticated         - only role=admin
+
+After middleware runs, controllers can access:
+    req.user.userId          (regular tokens only)
+    req.user.role            (all tokens)
+    req.user.roleId          (regular tokens only)
+    req.user.employeeId      (employee tokens only)
+    req.user.organizationId  (employee tokens only)
+    req.user.orgType         (employee tokens only, value: "employee")
+
+FIELDS THAT DO NOT EXIST ON req.user:
+    req.user.id              (NEVER exists, use roleId instead)
+    req.user._id             (NEVER exists, use roleId instead)
+    req.user.name            (NEVER exists, fetch from DB instead)
+    req.user.email           (NEVER exists, fetch from DB instead)
+
+
+BLOG MIDDLEWARE (blogMiddleware.js)
+--------------------------------------------------------------
+The blog middleware is DIFFERENT from auth middleware.
+It verifies the token AND re-shapes req.user:
+
+    verifyBlogAuth / optionalAuth set:
+        req.user = {
+            userId:         roleId or employeeId (profile id, NOT auth id)
+            userName:       fetched from DB
+            userRole:       decoded.role
+            userEmail:      fetched from DB
+            isEmployee:     true/false
+            organizationId: (if employee)
+        }
+
+So in blog controllers, req.user.userId = profile document id (safe for DB queries).
+
+
+STATUS MIDDLEWARE (statusMiddleware.js)
+--------------------------------------------------------------
+    - verifies token
+    - sets req.user = decoded (raw token)
+    - uses decoded.roleId to find profile
+    - only works for dietitian and organization roles
+
+
+================================================================================
+SECTION 4: BACKEND - CONTROLLER JWT USAGE
+================================================================================
+
+CONTROLLERS USING req.user (FROM MIDDLEWARE)
+--------------------------------------------------------------
+
+activityLogController.js
+    - logActivityFromFrontend:  req.user.orgType, req.user.organizationId,
+                                req.user.employeeId || req.user.roleId || req.user.userId
+    - getEmployeeWorkSummary:   req.user.roleId || req.user.organizationId
+    - getEmployeeActivities:    req.user.roleId || req.user.organizationId
+
+blogController.js (uses blog middleware's re-shaped req.user)
+    - createBlog:               req.user.userId (= profile id from blog middleware)
+    - getBlogById:              req.user.userId (= profile id from blog middleware)
+    - updateBlog:               req.user.userId (= profile id from blog middleware)
+    - deleteBlog:               req.user.userId, req.user.userRole
+
+contactusController.js
+    - getEmployeeQueries:       req.user.roleId
+
+employeeController.js (all functions)
+    - getAllEmployees etc:       req.user.roleId (protected by org-admin-only middleware)
+
+labReportController.js
+    - updateLabReportStatus:    req.user?.roleId || req.body.dietitianId
+
+mealPlanController.js
+    - createMealPlan:           req.user?.roleId || req.body.dietitianId
+
+notificationController.js
+    - getUserDashboardData:     req.user?.roleId || req.params.userId
+    - getDietitianDashboardData: req.user?.roleId || req.params.dietitianId
+
+paymentController.js
+    - initializePayment:        req.user.roleId || req.user.userId
+    - processPayment:           req.user.roleId || req.user.userId
+    - verifyPayment:            req.user.roleId || req.user.userId
+    - getActiveSubscription:    req.user.roleId
+    - getPaymentHistory:        req.user.roleId
+    - cancelSubscription:       req.user.roleId
+    - getPaymentAnalytics:      req.user.roleId || req.user.userId
+
+
+CONTROLLERS THAT DECODE TOKEN MANUALLY (NO MIDDLEWARE)
+--------------------------------------------------------------
+
+profileController.js
+    - getUserIdFromToken():     decoded.roleId (helper function)
+    - getRoleFromToken():       decoded.role   (helper function)
+    - getUserDetailsGeneric():  decoded.orgType, decoded.employeeId,
+                                decoded.organizationId (for employee path)
+
+progressController.js
+    - getUserIdFromToken():     decoded.roleId || decoded.userId (helper function)
+
+statusController.js
+    - getDietitianStatus:       decoded.role, decoded.roleId
+    - getOrganizationStatus:    decoded.role, decoded.roleId
+    - getEmployeeOrgStatus:     decoded.orgType, decoded.organizationId
+
+authController.js
+    - verifyTokenController:    decoded.userId, decoded.role
+    - changePasswordController: decoded.userId (correct: needs auth record id)
+
+
+================================================================================
+SECTION 5: BACKEND - MIDDLEWARE JWT USAGE
+================================================================================
+
+subscriptionMiddleware.js
+    - checkBookingLimit:        req.user?.roleId || req.user?.userId
+    - checkBlogLimit:           req.user?.roleId || req.user?.userId
+    - checkChatbotLimit:        req.user?.roleId || req.user?.userId
+    - checkMealPlanLimit:       req.user?.roleId || req.user?.userId
+    - checkProgressLimit:       req.user?.roleId || req.user?.userId
+    - getSubscriptionStatus:    req.user?.roleId || req.user?.userId
+
+
+================================================================================
+SECTION 6: FRONTEND - TOKEN STORAGE
+================================================================================
+
+LOCAL STORAGE KEYS
+--------------------------------------------------------------
+Token keys (one per role):
+    authToken_user
+    authToken_dietitian
+    authToken_admin
+    authToken_organization
+    authToken_employee
+
+User data keys (one per role):
+    authUser_user
+    authUser_dietitian
+    authUser_admin
+    authUser_organization
+    authUser_employee
+
+Temporary key (used only during signup -> doc upload flow):
+    userId                  (stores roleId for document upload page)
+
+Employee distinction:
+    - employee tokens are stored under authToken_employee (NOT authToken_organization)
+    - the signin page checks data.orgType === "employee" to determine the storage key
+    - backward-compat migration exists in AuthContext for old sessions stored under
+      authToken_organization with orgType=employee
+
+
+================================================================================
+SECTION 7: FRONTEND - HOW TOKENS ARE SENT
+================================================================================
+
+All API calls include the token via:
+    headers: { Authorization: "Bearer <token>" }
+
+This is set in two ways:
+1. axios.defaults.headers.common["Authorization"] = "Bearer <token>"
+   (set by AuthContext on login/initialization)
+
+2. Explicit header on individual requests:
+   headers: { Authorization: "Bearer ${token}" }
+   (used by ProfileContext and some page components)
+
+The token for the current role is retrieved from:
+    localStorage.getItem("authToken_<role>")
+
+
+================================================================================
+SECTION 8: FRONTEND - USER OBJECT FIELDS
+================================================================================
+
+The AuthContext fetches user details from the API and creates:
+
+    user = {
+        id:              response.data.id       (= profile document _id = roleId)
+        name:            response.data.name
+        email:           response.data.email
+        phone:           response.data.phone
+        age:             response.data.age
+        address:         response.data.address
+        profileImage:    response.data.profileImage
+        gender:          response.data.gender
+        org_name:        response.data.org_name          (organization only)
+        specialization:  response.data.specialization    (dietitian only)
+        experience:      response.data.experience        (dietitian only)
+        licenseNumber:   response.data.licenseNumber     (dietitian/org only)
+    }
+
+Frontend code accesses user.id for API calls that need the profile document id.
+Some files use user.id || user._id as a defensive fallback (both resolve to the
+same profile _id).
+
+
+================================================================================
+SECTION 9: ROUTE PROTECTION SUMMARY
+================================================================================
+
+ROUTE FILE                  MIDDLEWARE USED               ROLE CHECK
+--------------------------------------------------------------
+paymentRoutes.js            authenticateJWT               any authenticated user
+employeeRoutes.js           authenticateJWT               role=organization + orgType!=employee
+activityLogRoutes.js
+  - POST /log-activity      authenticateJWT               checks orgType=employee in controller
+  - GET (work summary)      ensureOrganizationAuthenticated  role=organization
+blogRoutes.js               verifyBlogAuth / optionalAuth  blog middleware (custom)
+notificationRoutes.js       authenticateJWT               any authenticated user
+labReportRoutes.js
+  - PUT /status             authenticateJWT               any authenticated user
+  - POST /submit            none (uses upload middleware)
+  - GET routes              none (public-ish)
+mealPlanRoutes.js           authenticateJWT               any authenticated user
+profileRoutes.js
+  - GET details             none (token decoded in controller manually)
+  - PUT update              none (token decoded in controller manually)
+  - GET subscription-status authenticateJWT               any authenticated user
+contactusRoutes.js
+  - GET employee-queries    authenticateJWT + requireOrg  role=organization + orgType!=employee
+statusRoutes.js             uses statusMiddleware inline
+progressRoutes.js           authenticateJWT               any authenticated user
+
+
+================================================================================
+SECTION 10: COMPLETE LOGIN FLOW (STEP BY STEP)
+================================================================================
+
+STEP 1: USER ENTERS CREDENTIALS
+    Frontend: POST /api/signin/<role>
+    Body: { email, password, licenseNumber?, adminKey?, rememberMe?, orgType? }
+
+STEP 2: BACKEND VERIFIES CREDENTIALS
+    - finds UserAuth by email (or Employee for employee login)
+    - checks password hash
+    - validates role-specific credentials (license, admin key)
+    - does NOT return token yet
+
+STEP 3: 2FA - OTP SENT
+    - backend sends OTP to user's email
+    - responds with { requires2FA: true, email }
+    - frontend shows OTP input form
+
+STEP 4: USER ENTERS OTP
+    Frontend: POST /api/verify-login-otp/<role>
+    Body: { email, otp, rememberMe, orgType? }
+
+STEP 5: BACKEND VERIFIES OTP AND CREATES TOKEN
+    - verifies OTP
+    - creates JWT token:
+        regular: { userId: authUser._id, role, roleId: authUser.roleId }
+        employee: { employeeId, organizationId, role: "organization", orgType: "employee" }
+    - responds with { token, role, orgType?, expiresIn }
+
+STEP 6: FRONTEND STORES TOKEN
+    - determines storage key:
+        employee -> "authToken_employee"
+        others   -> "authToken_<role>"
+    - stores: localStorage.setItem(key, token)
+    - stores: localStorage.setItem("authUser_<role>", JSON.stringify(userData))
+    - sets: axios.defaults.headers.common["Authorization"] = "Bearer <token>"
+
+STEP 7: FRONTEND FETCHES USER DETAILS
+    - calls role-specific API endpoint:
+        user:         GET /api/getuserdetails
+        dietitian:    GET /api/getdietitiandetails
+        admin:        GET /api/getadmindetails
+        organization: GET /api/getorganizationdetails
+        employee:     GET /api/getorganizationdetails
+    - backend decodes token, finds profile, returns user data
+    - frontend stores as user object with user.id = profile _id
+
+STEP 8: SUBSEQUENT API CALLS
+    - all requests include Authorization: Bearer <token>
+    - backend middleware verifies token and sets req.user
+    - controllers use req.user.roleId for DB queries
+
+
+================================================================================
+SECTION 11: COMPLETE SIGNUP FLOW (STEP BY STEP)
+================================================================================
+
+STEP 1: USER FILLS SIGNUP FORM
+    Frontend: POST /api/signup/<role>
+    Body: { email, password, name, phone, dob?, gender?, address?, licenseNumber?, ... }
+
+STEP 2: BACKEND CREATES RECORDS
+    - creates profile document in role-specific collection (User/Dietitian/Admin/Organization)
+    - creates UserAuth record with: { email, passwordHash, role, roleId: profile._id }
+    - creates JWT token: { userId: authUser._id, role, roleId: profile._id }
+    - responds with { token, role, roleId }
+
+STEP 3: FRONTEND STORES TOKEN
+    - stores: localStorage.setItem("authToken_<role>", token)
+    - stores: localStorage.setItem("userId", roleId)  (temporary, for doc upload)
+
+STEP 4: DOCUMENT UPLOAD (dietitian/organization only)
+    - reads token from localStorage.getItem("authToken_<role>")
+    - reads roleId from localStorage.getItem("userId")
+    - POST /api/documents/upload/<role> with { userId: roleId, files... }
+    - backend uses req.user?.roleId || req.body.userId to find profile
+    - stores uploaded documents on the profile document
+
+
+================================================================================
+SECTION 12: AUDIT RESULT
+================================================================================
+
+VERIFIED CORRECT:
+    - all jwt.sign() calls produce the documented payload structure
+    - all auth middleware functions set req.user = decoded token
+    - all controllers use req.user.roleId (or roleId || userId fallback) for profile queries
+    - all controllers use req.user.userId for auth-table queries (password change)
+    - employee tokens are handled separately where needed
+    - no uppercase/lowercase mismatches in role comparisons
+    - no incorrect id/_id field accesses
+    - frontend user.id consistently maps to backend roleId (profile _id)
+    - token storage keys are consistent (authToken_<role>)
+    - all employee tokens stored under authToken_employee (not authToken_organization)
+    - employee access properly blocked from org-admin endpoints
+
+MINOR NOTES:
+    - profileController.js uses .toLowerCase() on role comparisons (redundant but harmless)
+    - some frontend files use user.id || user._id (defensive fallback, harmless)
+    - controllers that decode tokens manually (profileController, progressController,
+      statusController) duplicate the work already done by middleware on some routes;
+      this is redundant but not harmful since these controllers also handle routes
+      without middleware
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================

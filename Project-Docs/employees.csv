@@ -1,0 +1,11 @@
+name,email,password,age,address,contact,licenseNumber,status
+Employee One,employee1@gmail.com,123456,28,101 Green St New Delhi,9811111111,WES111111,active
+Employee Two,employee2@gmail.com,123456,32,202 Blue Ave Mumbai,9822222222,WES111112,active
+Employee Three,employee3@gmail.com,123456,25,303 Red Rd Bangalore,9833333333,WES111113,active
+Employee Four,employee4@gmail.com,123456,30,404 Orange Lane Chennai,9844444444,WES111114,active
+Employee Five,employee5@gmail.com,123456,27,505 Yellow Blvd Kolkata,9855555555,WES111115,active
+Employee Six,employee6@gmail.com,123456,35,606 Purple St Hyderabad,9866666666,WES111116,active
+Employee Seven,employee7@gmail.com,123456,29,707 Pink Ave Pune,9877777777,WES111117,active
+Employee Eight,employee8@gmail.com,123456,31,808 White Rd Ahmedabad,9888888888,WES111118,active
+Employee Nine,employee9@gmail.com,123456,26,909 Black Lane Jaipur,9899999999,WES111119,inactive
+Employee Ten,employee10@gmail.com,123456,33,1010 Silver Blvd Lucknow,9800000000,WES111120,active

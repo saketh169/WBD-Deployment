@@ -1,0 +1,98 @@
+
+services:
+  # ── Backend API Server ──
+  backend:
+    build: ./backend
+    container_name: wbd-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGODB_URL=mongodb+srv://Saketh:Saketh%40169@cluster0.a5er4aj.mongodb.net/NutriConnectDatabase?retryWrites=true&w=majority&appName=Cluster0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - CORS_ORIGINS=http://localhost,http://localhost:5173,http://localhost:3000
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+      - elasticsearch
+    restart: unless-stopped
+    networks:
+      - wbd-network
+
+  # ── Frontend (React + Nginx) ──
+  frontend:
+    build: ./frontend
+    container_name: wbd-frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - wbd-network
+
+
+  # ── Redis Cache ──
+  redis:
+    image: public.ecr.aws/docker/library/redis:7-alpine
+    container_name: wbd-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - wbd-network
+
+  # ── Elasticsearch ──
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    container_name: wbd-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+    networks:
+      - wbd-network
+
+  # ── Swagger UI ──
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    container_name: wbd-swagger
+    ports:
+      - "8080:8080"
+    environment:
+      - SWAGGER_JSON=/swagger.json
+      - URL=http://localhost:5000/api-docs
+      - URLS=[{"url":"http://localhost:5000/api-docs","name":"WBD API"}]
+    volumes:
+      - ./backend/swagger.json:/swagger.json:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - wbd-network
+
+volumes:
+  redis_data:
+    driver: local
+  elastic_data:
+    driver: local
+
+networks:
+  wbd-network:
+    driver: bridge
