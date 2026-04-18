@@ -32,6 +32,12 @@ jobs:
         JWT_SECRET=${{ secrets.JWT_SECRET }}
         EOF
     
+    - name: Install dependencies and run tests
+      run: |
+        cd backend
+        npm install
+        npm test
+    
     - name: Push to GitHub
       run: |
         git config --global user.email "ci@github.com"
