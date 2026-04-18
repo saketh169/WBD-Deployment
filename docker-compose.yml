@@ -7,14 +7,22 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - PORT=5000
-      - MONGODB_URL=mongodb+srv://Saketh:Saketh%40169@cluster0.a5er4aj.mongodb.net/NutriConnectDatabase?retryWrites=true&w=majority&appName=Cluster0
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - CORS_ORIGINS=http://localhost,http://localhost:5173,http://localhost:3000
-    env_file:
-      - ./backend/.env
+      - PORT=${PORT:-5000}
+      - MONGODB_URL=${MONGODB_URL}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL:-http://elasticsearch:9200}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:3000}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
+      - USDA_API_KEY=${USDA_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ADMIN_SIGNIN_KEY=${ADMIN_SIGNIN_KEY}
+      - JWT_SECRET=${JWT_SECRET}
     volumes:
       - ./backend:/app
       - /app/node_modules

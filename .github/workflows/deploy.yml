@@ -1,0 +1,45 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Create backend .env file from secrets
+      run: |
+        cat > backend/.env << EOF
+        PORT=5000
+        MONGODB_URL=${{ secrets.MONGODB_URL }}
+        REDIS_HOST=${{ secrets.REDIS_HOST }}
+        REDIS_PORT=${{ secrets.REDIS_PORT }}
+        REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+        ELASTICSEARCH_URL=${{ secrets.ELASTICSEARCH_URL }}
+        CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
+        CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
+        CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
+        CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}
+        EMAIL_USER=${{ secrets.EMAIL_USER }}
+        EMAIL_PASS=${{ secrets.EMAIL_PASS }}
+        USDA_API_KEY=${{ secrets.USDA_API_KEY }}
+        GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+        ADMIN_SIGNIN_KEY=${{ secrets.ADMIN_SIGNIN_KEY }}
+        JWT_SECRET=${{ secrets.JWT_SECRET }}
+        EOF
+    
+    - name: Push to GitHub
+      run: |
+        git config --global user.email "ci@github.com"
+        git config --global user.name "GitHub CI"
+        git add backend/.env
+        git commit -m "Auto-generated .env file" || echo "No changes to commit"
+        git push origin main || echo "Already up to date"
+    
+    # Render will automatically deploy on push to main
+    - name: Trigger Render deployment
+      run: curl -X POST https://api.render.com/deploy/srv-${{ secrets.RENDER_SERVICE_ID }}?key=${{ secrets.RENDER_API_KEY }}
