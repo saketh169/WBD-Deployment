@@ -38,14 +38,6 @@ jobs:
         npm install
         npm test
     
-    - name: Push to GitHub
-      run: |
-        git config --global user.email "ci@github.com"
-        git config --global user.name "GitHub CI"
-        git add backend/.env
-        git commit -m "Auto-generated .env file" || echo "No changes to commit"
-        git push origin main || echo "Already up to date"
-    
     # Render will automatically deploy on push to main
     - name: Trigger Render deployment
       run: curl -X POST https://api.render.com/deploy/srv-${{ secrets.RENDER_SERVICE_ID }}?key=${{ secrets.RENDER_API_KEY }}
