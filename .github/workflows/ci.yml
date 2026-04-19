@@ -39,102 +39,90 @@ jobs:
         working-directory: backend
         run: |
           echo "=== Validating Required Imports ==="
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
-            
-            const validateDirectory = (dirPath, dirName) => {
-              if (!fs.existsSync(dirPath)) {
-                console.warn('⚠ ' + dirName + ' directory not found');
-                return true;
-              }
-              
-              const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.js'));
-              let errors = [];
-              
-              files.forEach(file => {
-                try {
-                  const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
-                  const lines = content.split('\n');
-                  
-                  // Extract all ACTIVE imports (ignore commented)
-                  const declaredVars = new Set();
-                  const importLines = [];
-                  
-                  lines.forEach((line, idx) => {
-                    // Skip commented lines
-                    if (line.trim().startsWith('//')) return;
-                    
-                    // Match: const X = require(...) or const { X } = require(...)
-                    const requireMatch = line.match(/(?:const|let|var)\s+([\\w{},\\s]+)\s*=\s*require\(['\"]([^'\"]+)['\"]\)/);
-                    if (requireMatch) {
-                      const varPart = requireMatch[1].trim();
-                      const modulePath = requireMatch[2];
-                      
-                      // Extract variable names from destructuring { X, Y } or single var
-                      if (varPart.includes('{')) {
-                        const extracted = varPart.match(/\{([^}]+)\}/)[1];
-                        extracted.split(',').forEach(v => {
-                          declaredVars.add(v.trim().split(' as ')[0].trim());
-                        });
-                      } else {
-                        declaredVars.add(varPart);
-                      }
-                      
-                      importLines.push(line.trim());
-                      console.log('✓ ' + file + ' (line ' + (idx + 1) + '): imported ' + varPart);
-                    }
-                  });
-                  
-                  // Now check if all used variables are declared
-                  const codeLines = lines.filter(l => !l.trim().startsWith('//')).join('\\n');
-                  
-                  // Find all identifiers used in code (after imports)
-                  const importedCount = importLines.length;
-                  const codeAfterImports = lines.slice(importedCount).join('\\n');
-                  
-                  // Extract used identifiers (simplified regex for common patterns)
-                  const usedVars = new Set();
-                  const varPattern = /\\b([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*\\(/g;
-                  let match;
-                  while ((match = varPattern.exec(codeAfterImports)) !== null) {
-                    usedVars.add(match[1]);
-                  }
-                  
-                  // Check if used vars are defined
-                  usedVars.forEach(v => {
-                    if (!declaredVars.has(v) && v !== 'async' && v !== 'if' && v !== 'for' && v !== 'while' && v !== 'return' && v !== 'function' && v !== 'new') {
-                      // Only flag common library functions that should be imported
-                      if (['exports', 'console', 'require', 'module', 'process', 'Buffer', 'JSON', 'Math', 'String', 'Number', 'Array', 'Object', 'Date'].indexOf(v) === -1) {
-                        // Skip built-in globals
-                      }
-                    }
-                  });
-                  
-                } catch (err) {
-                  errors.push(file + ': ' + err.message);
-                }
-              });
-              
-              console.log('✓ ' + dirName + ' validated: ' + files.length + ' files');
-              
-              if (errors.length > 0) {
-                console.error('\n✗ ' + dirName + ' import errors:');
-                errors.forEach(e => console.error('  - ' + e));
-                return false;
-              }
+          node << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          
+          const validateDirectory = (dirPath, dirName) => {
+            if (!fs.existsSync(dirPath)) {
+              console.warn('⚠ ' + dirName + ' directory not found');
               return true;
-            };
-            
-            const controllerValid = validateDirectory('./src/controllers', 'Controllers');
-            const routeValid = validateDirectory('./src/routes', 'Routes');
-            const serviceValid = validateDirectory('./src/services', 'Services');
-            
-            if (!controllerValid || !routeValid || !serviceValid) {
-              process.exit(1);
             }
-            console.log('\n✓ All required imports are present');
-          "
+            
+            const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.js'));
+            let errors = [];
+            
+            files.forEach(file => {
+              try {
+                const filePath = path.join(dirPath, file);
+                const content = fs.readFileSync(filePath, 'utf8');
+                const lines = content.split('\n');
+                
+                // Extract declared variables from active imports
+                const declaredVars = new Set();
+                
+                lines.forEach((line, idx) => {
+                  // Skip commented lines
+                  const trimmed = line.trim();
+                  if (trimmed.startsWith('//')) return;
+                  
+                  // Match: const X = require(...) or const { X, Y } = require(...)
+                  const match = line.match(/(?:const|let|var)\s+([{}\w,\s]+)\s*=\s*require\(['"]([^'"]+)['"]\)/);
+                  if (match) {
+                    const vars = match[1].trim();
+                    
+                    if (vars.includes('{')) {
+                      const extracted = vars.match(/\{([^}]+)\}/)[1];
+                      extracted.split(',').forEach(v => {
+                        const cleaned = v.trim().split(' as ')[0].trim();
+                        if (cleaned) declaredVars.add(cleaned);
+                      });
+                    } else {
+                      if (vars) declaredVars.add(vars);
+                    }
+                    
+                    console.log('✓ ' + file + ' imported: ' + vars);
+                  }
+                });
+                
+                // Get code after imports
+                const codeContent = lines.filter(l => !l.match(/require\(/)).join('\n');
+                
+                // Check each declared variable is actually used
+                declaredVars.forEach(varName => {
+                  const regex = new RegExp('\\b' + varName + '\\b');
+                  if (!regex.test(codeContent)) {
+                    errors.push(file + ': Unused import: ' + varName);
+                  }
+                });
+                
+              } catch (err) {
+                errors.push(file + ': ' + err.message);
+              }
+            });
+            
+            console.log('✓ ' + dirName + ' validated: ' + files.length + ' files');
+            
+            if (errors.length > 0) {
+              console.error('\n✗ ' + dirName + ' errors:');
+              errors.forEach(e => console.error('  - ' + e));
+              return false;
+            }
+            return true;
+          };
+          
+          const allValid = 
+            validateDirectory('./src/controllers', 'Controllers') &&
+            validateDirectory('./src/routes', 'Routes') &&
+            validateDirectory('./src/services', 'Services') &&
+            validateDirectory('./src/middlewares', 'Middlewares');
+          
+          if (!allValid) {
+            console.error('\n✗ Import validation FAILED');
+            process.exit(1);
+          }
+          console.log('\n✓ All imports validated successfully');
+          EOF
 
       - name: Lint backend code
         working-directory: backend
