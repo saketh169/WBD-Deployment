@@ -245,10 +245,10 @@ describe('Intentional CI Failure Demo', () => {
 //   }))).rejects.toThrow(); // ValidationError: date must be future
 // });
 
-// // 3. Duplicate Payment ID
-// test('CI Fail: unique payment ID constraint', async () => {
-//   const paymentId = 'PAY_UNIQUE_123';
-//   await Booking.create(createValidBooking({ paymentId }));
-//   await expect(Booking.create(createValidBooking({ paymentId })))
-//     .rejects.toThrow(); // E11000: duplicate key error
-// });
+// 3. Duplicate Payment ID
+test('CI Fail: unique payment ID constraint', async () => {
+  const paymentId = 'PAY_UNIQUE_123';
+  await Booking.create(createValidBooking({ paymentId }));
+  await expect(Booking.create(createValidBooking({ paymentId })))
+    .rejects.toThrow(); // E11000: duplicate key error
+});
