@@ -17,6 +17,7 @@ import {
   clearError,
   setPaymentStatus
 } from "../../redux/slices/paymentSlice";
+import { loadRazorpayCheckout } from "../../utils/razorpayCheckout";
 
 const Payment = () => {
   const navigate = useNavigate();
@@ -139,8 +140,6 @@ const Payment = () => {
   };
 
   const handleProceed = async () => {
-    const errors = {};
-
     // First check subscription status using Redux
     try {
       const result = await dispatch(checkActiveSubscription()).unwrap();
@@ -152,68 +151,13 @@ const Payment = () => {
       console.error('Error checking subscription:', err);
     }
 
-    // Validate based on selected payment method
-    if (selectedMethod === 'card') {
-      if (!cardDetails.cardNumber) {
-        errors.cardNumber = "Card number is required";
-      } else if (!validateCardNumber(cardDetails.cardNumber)) {
-        errors.cardNumber = "Card number must be 16 digits (e.g., 1111 1111 1111 1111)";
-      }
-
-      if (!cardDetails.validThrough) {
-        errors.validThrough = "Expiry date is required";
-      } else if (!validateExpiry(cardDetails.validThrough)) {
-        errors.validThrough = "Card has expired or invalid date";
-      }
-
-      if (!cardDetails.cvv) {
-        errors.cvv = "CVV is required";
-      } else if (cardDetails.cvv.length < 3) {
-        errors.cvv = "CVV must be 3 or 4 digits";
-      }
-
-      if (!cardDetails.cardName) {
-        errors.cardName = "Cardholder name is required";
-      } else if (cardDetails.cardName.trim().length < 3) {
-        errors.cardName = "Name must be at least 3 characters";
-      }
-
-    } else if (selectedMethod === 'netbanking') {
-      if (!selectedBank) {
-        errors.bank = "Please select a bank";
-      }
-      if (!netbankingCredentials.username || netbankingCredentials.username.length < 3) {
-        errors.netbankingUsername = "Username must be at least 3 characters";
-      }
-      if (!netbankingCredentials.password || netbankingCredentials.password.length < 6) {
-        errors.netbankingPassword = "Password must be at least 6 characters";
-      }
-      // Removed strict verification requirement - optional verification for UX
-    } else if (selectedMethod === 'upi') {
-      if (!upiId && !selectedUpiApp) {
-        errors.upi = "Please enter a UPI ID or select a UPI app";
-      } else if (upiId && !validateUpiId(upiId)) {
-        errors.upi = "Invalid UPI ID. Use format: name@upi or 9876543210@paytm";
-      }
-
-    } else if (selectedMethod === 'emi') {
-      if (!emiBank) {
-        errors.emiBank = "Please select a bank";
-      }
-      if (!emiTenure) {
-        errors.emiTenure = "Please select EMI tenure";
-      }
+    if (!selectedMethod) {
+      alert('Please select a payment method to continue.');
+      return;
     }
 
-    setValidationErrors(errors);
-
-    if (Object.keys(errors).length === 0) {
-      setShowModal(true);
-    } else {
-      // Show specific error messages
-      const errorMessages = Object.values(errors).join('\n');
-      alert(`Please fix the following errors:\n\n${errorMessages}`);
-    }
+    setValidationErrors({});
+    setShowModal(true);
   };
 
   const handleVerifyUpi = () => {
@@ -264,8 +208,6 @@ const Payment = () => {
   };
 
   const handleConfirmPayment = async () => {
-    dispatch(setPaymentStatus('processing'));
-
     try {
       // Validate token before making API call
       if (!token) {
@@ -284,13 +226,7 @@ const Payment = () => {
 
       // Initialize payment using Redux thunk
       const paymentDetails = {
-        cardLast4: selectedMethod === 'card' ? cardDetails.cardNumber.replace(/\s/g, '').slice(-4) : undefined,
-        cardType: selectedMethod === 'card' ? 'Credit/Debit' : undefined,
-        bankName: selectedMethod === 'netbanking' ? selectedBank : undefined,
-        upiId: selectedMethod === 'upi' ? upiId : undefined,
-        upiApp: selectedMethod === 'upi' ? selectedUpiApp : undefined,
-        emiBank: selectedMethod === 'emi' ? emiBank : undefined,
-        emiTenure: selectedMethod === 'emi' ? emiTenure : undefined
+        gatewaySelection: selectedMethod
       };
 
       const initResult = await dispatch(initializePayment({
@@ -301,10 +237,78 @@ const Payment = () => {
         paymentDetails
       })).unwrap();
 
-      if (initResult?.id) {
-        // Process the payment using Redux thunk
-        await dispatch(processPayment({ paymentId: initResult.id })).unwrap();
+      if (!initResult?.id || !initResult?.razorpay?.orderId) {
+        throw new Error('Failed to initialize Razorpay order');
       }
+
+      const razorpayLoaded = await loadRazorpayCheckout();
+      if (!razorpayLoaded || !window.Razorpay) {
+        throw new Error('Unable to load Razorpay checkout. Please check your connection and try again.');
+      }
+
+      const keyId = import.meta.env.VITE_RAZORPAY_KEY_ID || initResult?.razorpay?.keyId;
+      if (!keyId) {
+        throw new Error('Razorpay key is not configured in frontend environment.');
+      }
+
+      setLocalPaymentStatus('processing');
+
+      const methodConfig = {
+        card: selectedMethod === 'card',
+        netbanking: selectedMethod === 'netbanking',
+        upi: selectedMethod === 'upi',
+        emi: selectedMethod === 'emi',
+        wallet: false,
+        paylater: false
+      };
+
+      const razorpay = new window.Razorpay({
+        key: keyId,
+        amount: initResult.razorpay.amount,
+        currency: initResult.razorpay.currency || 'INR',
+        name: 'NutriConnect',
+        description: `${plan?.toUpperCase()} Plan (${billing})`,
+        order_id: initResult.razorpay.orderId,
+        method: methodConfig,
+        notes: {
+          planType: plan,
+          billingCycle: billing
+        },
+        theme: {
+          color: '#27AE60'
+        },
+        handler: async (response) => {
+          try {
+            await dispatch(processPayment({
+              paymentId: initResult.id,
+              paymentMethod: selectedMethod,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature
+            })).unwrap();
+          } catch (processError) {
+            console.error('Payment verification error:', processError);
+            setLocalPaymentStatus('failed');
+            dispatch(setPaymentStatus('failed'));
+            alert(processError || 'Payment verification failed. Please contact support if amount was debited.');
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setLocalPaymentStatus(null);
+            dispatch(setPaymentStatus(null));
+          }
+        }
+      });
+
+      razorpay.on('payment.failed', (response) => {
+        const message = response?.error?.description || 'Payment failed. Please try again.';
+        setLocalPaymentStatus('failed');
+        dispatch(setPaymentStatus('failed'));
+        alert(message);
+      });
+
+      razorpay.open();
     } catch (error) {
       console.error('Payment error:', error);
       
@@ -313,6 +317,8 @@ const Payment = () => {
         alert('Authentication failed. Please login again.');
         navigate('/role');
       } else {
+        setLocalPaymentStatus('failed');
+        dispatch(setPaymentStatus('failed'));
         alert(error || 'Payment failed. Please try again.');
       }
     }
@@ -894,21 +900,25 @@ const Payment = () => {
                 />
                 <label className="ml-3" style={{ color: '#2F4F4F' }}>{method.title}</label>
               </div>
-              {selectedMethod === key && method.content}
+              {selectedMethod === key && (
+                <div className="p-4 bg-emerald-50 border-t border-emerald-200 text-sm" style={{ color: '#1A4A40' }}>
+                  Details will be entered securely on Razorpay checkout.
+                </div>
+              )}
             </div>
           ))}
         </div>
 
         <button
           onClick={handleProceed}
-          className={`w-full mt-8 py-3 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${selectedMethod && !(selectedMethod === 'upi' && !upiVerified)
+          className={`w-full mt-8 py-3 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${selectedMethod
             ? "text-white"
             : "bg-gray-300 cursor-not-allowed text-gray-500"
             }`}
-          style={selectedMethod && !(selectedMethod === 'upi' && !upiVerified) ? { backgroundColor: '#27AE60' } : {}}
-          onMouseEnter={(e) => selectedMethod && !(selectedMethod === 'upi' && !upiVerified) && (e.target.style.backgroundColor = '#1A4A40')}
-          onMouseLeave={(e) => selectedMethod && !(selectedMethod === 'upi' && !upiVerified) && (e.target.style.backgroundColor = '#27AE60')}
-          disabled={!selectedMethod || (selectedMethod === 'upi' && !upiVerified)}
+          style={selectedMethod ? { backgroundColor: '#27AE60' } : {}}
+          onMouseEnter={(e) => selectedMethod && (e.target.style.backgroundColor = '#1A4A40')}
+          onMouseLeave={(e) => selectedMethod && (e.target.style.backgroundColor = '#27AE60')}
+          disabled={!selectedMethod}
         >
           Proceed to Payment
         </button>
@@ -974,30 +984,11 @@ const Payment = () => {
                         <p className="text-sm text-gray-600 mb-2">Amount to Pay</p>
                         <p className="text-5xl font-bold" style={{ color: '#27AE60' }}>₹{amount}</p>
                       </div>
-
-                      {/* Show method-specific details */}
-                      {selectedMethod === 'card' && cardDetails.cardNumber && (
-                        <div className="mt-4 pt-4 border-t text-left">
-                          <p className="text-xs text-gray-600">Card ending in ****{cardDetails.cardNumber.slice(-4)}</p>
-                        </div>
-                      )}
-                      {selectedMethod === 'netbanking' && selectedBank && (
-                        <div className="mt-4 pt-4 border-t text-left">
-                          <p className="text-xs text-gray-600">Bank: {selectedBank}</p>
-                        </div>
-                      )}
-                      {selectedMethod === 'upi' && (upiId || selectedUpiApp) && (
-                        <div className="mt-4 pt-4 border-t text-left">
-                          <p className="text-xs text-gray-600">
-                            {upiId ? `UPI ID: ${upiId}` : `App: ${selectedUpiApp}`}
-                          </p>
-                        </div>
-                      )}
-                      {selectedMethod === 'emi' && emiBank && emiTenure && (
-                        <div className="mt-4 pt-4 border-t text-left">
-                          <p className="text-xs text-gray-600">EMI: {emiBank} - {emiTenure} months</p>
-                        </div>
-                      )}
+                      <div className="mt-4 pt-4 border-t text-left">
+                        <p className="text-xs text-gray-600">
+                          You will enter payment details only once in Razorpay checkout.
+                        </p>
+                      </div>
                     </div>
                     <div className="flex justify-center gap-4">
                       <button
