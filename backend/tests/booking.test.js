@@ -221,34 +221,30 @@ describe('BlockedSlot Model', () => {
   });
 });
 
-// describe('Intentional CI Failure Demo', () => {
-//   test('should fail intentionally for pipeline validation', () => {
-//     expect(1).toBe(2);
-//   });
-// });
+describe('Booking - Real CI/CD Failure Scenarios', () => {
+  test('CI Fail: invalid email format validation', async () => {
+    await expect(Booking.create(createValidBooking({
+      email: 'not-an-email',
+      paymentId: 'PAY_EMAIL_' + Date.now()
+    }))).rejects.toThrow();
+    // Validates: email must match regex with @ symbol
+  });
 
-//  // 1. Invalid Email Format
-// test('CI Fail: email validation regex check', async () => {
-//   await expect(Booking.create(createValidBooking({
-//     email: 'not-an-email',
-//     paymentId: 'PAY_EMAIL_' + Date.now()
-//   }))).rejects.toThrow(); // ValidationError: invalid email
-// });
+  test('CI Fail: past date booking validation', async () => {
+    const pastDate = new Date();
+    pastDate.setDate(pastDate.getDate() - 5);
+    await expect(Booking.create(createValidBooking({
+      date: pastDate,
+      paymentId: 'PAY_PAST_' + Date.now()
+    }))).rejects.toThrow();
+    // Validates: booking date must be today or in future
+  });
 
-// // 2. Past Date Booking
-// test('CI Fail: past date validation fails', async () => {
-//   const pastDate = new Date();
-//   pastDate.setDate(pastDate.getDate() - 5);
-//   await expect(Booking.create(createValidBooking({
-//     date: pastDate,
-//     paymentId: 'PAY_PAST_' + Date.now()
-//   }))).rejects.toThrow(); // ValidationError: date must be future
-// });
-
-// 3. Duplicate Payment ID
-// test('CI Fail: unique payment ID constraint', async () => {
-//   const paymentId = 'PAY_UNIQUE_123';
-//   await Booking.create(createValidBooking({ paymentId }));
-//   await expect(Booking.create(createValidBooking({ paymentId })))
-//     .rejects.toThrow(); // E11000: duplicate key error
-// });
+  test('CI Fail: duplicate payment ID constraint', async () => {
+    const paymentId = 'PAY_UNIQUE_123';
+    await Booking.create(createValidBooking({ paymentId }));
+    await expect(Booking.create(createValidBooking({ paymentId })))
+      .rejects.toThrow();
+    // Validates: unique index on paymentId enforced
+  });
+});
