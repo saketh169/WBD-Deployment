@@ -514,4 +514,3 @@ This project consists of a backend and frontend setup:
   - **`vite.config.js`**: Vite build configuration.
 
 ---
-

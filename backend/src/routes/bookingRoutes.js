@@ -192,6 +192,7 @@ router.post("/check-limits", async (req, res) => {
  *         description: Subscription limit reached
  */
 // POST /api/bookings/create (with subscription limit check)
+router.post("/payment/order", checkBookingLimit, bookingController.createBookingPaymentOrder);
 router.post("/create", checkBookingLimit, bookingController.createBooking);
 
 // Redis Booking Concurency Locks
