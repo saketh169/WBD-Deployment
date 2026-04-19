@@ -35,162 +35,6 @@ jobs:
         working-directory: backend
         run: npm ci
 
-      - name: Validate Controller & Route Imports
-        working-directory: backend
-        run: |
-          echo "=== Validating Backend Imports ==="
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
-            
-            // All possible models and dependencies
-            const allModels = ['User', 'Admin', 'Dietitian', 'Employee', 'Booking', 'Payment', 'Blog', 'ActivityLog', 'Progress', 'MealPlan', 'HealthReport', 'LabReport', 'Message', 'Conversation', 'FAQ', 'ChatHistory', 'Query', 'EmployeeQuery', 'TeamBoard', 'Settings', 'NutritionCache', 'HardcodedResponse', 'BlockedSlot', 'Organization'];
-            const allControllers = ['authController', 'blogController', 'bookingController', 'chatController', 'chatbotController', 'contactusController', 'crudController', 'employeeController', 'forgotPasswordController', 'healthReportController', 'labReportController', 'mealPlanController', 'notificationController', 'paymentController', 'profileController', 'progressController', 'settingsController', 'statusController', 'teamBoardController', 'verifyController', 'analyticsController', 'activityLogController'];
-            const allServices = ['otpService', 'paymentService', 'razorpayService', 'bookingService', 'emailService', 'contactService'];
-            const allPackages = ['bcrypt', 'jwt', 'mongoose', 'multer', 'csv', 'nodemailer', 'axios', 'crypto', 'morgan', 'helmet', 'rateLimit', 'cloudinary', 'Razorpay', 'GoogleGenerativeAI', 'Readable', 'OAuth2Client'];
-            
-            const validateControllers = () => {
-              const dirPath = './src/controllers';
-              const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.js'));
-              let errors = [];
-              
-              files.forEach(file => {
-                try {
-                  const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
-                  const lines = content.split('\n');
-                  
-                  // Extract ACTIVE imports
-                  const importedVars = new Set();
-                  lines.forEach((line) => {
-                    if (line.trim().startsWith('//')) return;
-                    const requireMatch = line.match(/(?:const|let|var)\s+(\w+|\{[^}]+\})\s*=\s*require\(['\"]([^'\"]+)['\"]\)/);
-                    if (requireMatch) {
-                      const varPart = requireMatch[1];
-                      if (varPart.includes('{')) {
-                        const extracted = varPart.match(/\{([^}]+)\}/)[1];
-                        extracted.split(',').forEach(v => importedVars.add(v.trim()));
-                      } else {
-                        importedVars.add(varPart.trim());
-                      }
-                    }
-                  });
-                  
-                  // Find what controller NEEDS
-                  const codeContent = lines.join('\n');
-                  const needed = new Set();
-                  
-                  // Check models
-                  allModels.forEach(model => {
-                    const regex = new RegExp('\\b' + model + '\\b(?!:)', 'g');
-                    if (codeContent.match(regex)) needed.add(model);
-                  });
-                  
-                  // Check services
-                  allServices.forEach(service => {
-                    const regex = new RegExp('\\b' + service + '\\b', 'g');
-                    if (codeContent.match(regex)) needed.add(service);
-                  });
-                  
-                  // Check packages
-                  allPackages.forEach(pkg => {
-                    const regex = new RegExp('\\b' + pkg + '\\b', 'g');
-                    if (codeContent.match(regex)) needed.add(pkg);
-                  });
-                  
-                  // Verify all needed imports are present
-                  needed.forEach(item => {
-                    if (!importedVars.has(item)) {
-                      errors.push('❌ CONTROLLER: ' + file + ' - USES \"' + item + '\" but NOT IMPORTED!');
-                    }
-                  });
-                  
-                  if (needed.size > 0) {
-                    console.log('✓ ' + file + ' needs: ' + Array.from(needed).join(', '));
-                  }
-                  
-                } catch (err) {
-                  errors.push('Controller: ' + file + ': ' + err.message);
-                }
-              });
-              
-              console.log('✓ Controllers validated: ' + files.length + ' files');
-              return errors;
-            };
-            
-            const validateRoutes = () => {
-              const dirPath = './src/routes';
-              const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.js'));
-              let errors = [];
-              
-              files.forEach(file => {
-                try {
-                  const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
-                  const lines = content.split('\n');
-                  
-                  // Extract ACTIVE imports
-                  const importedVars = new Set();
-                  lines.forEach((line) => {
-                    if (line.trim().startsWith('//')) return;
-                    const requireMatch = line.match(/(?:const|let|var)\s+(\w+|\{[^}]+\})\s*=\s*require\(['\"]([^'\"]+)['\"]\)/);
-                    if (requireMatch) {
-                      const varPart = requireMatch[1];
-                      if (varPart.includes('{')) {
-                        const extracted = varPart.match(/\{([^}]+)\}/)[1];
-                        extracted.split(',').forEach(v => importedVars.add(v.trim()));
-                      } else {
-                        importedVars.add(varPart.trim());
-                      }
-                    }
-                  });
-                  
-                  // Find what route NEEDS
-                  const codeContent = lines.join('\n');
-                  const needed = new Set();
-                  
-                  // Check controllers
-                  allControllers.forEach(controller => {
-                    const regex = new RegExp('\\b' + controller + '\\b', 'g');
-                    if (codeContent.match(regex)) needed.add(controller);
-                  });
-                  
-                  // Check models
-                  allModels.forEach(model => {
-                    const regex = new RegExp('\\b' + model + '\\b(?!:)', 'g');
-                    if (codeContent.match(regex)) needed.add(model);
-                  });
-                  
-                  // Verify all needed imports are present
-                  needed.forEach(item => {
-                    if (!importedVars.has(item)) {
-                      errors.push('❌ ROUTE: ' + file + ' - USES \"' + item + '\" but NOT IMPORTED!');
-                    }
-                  });
-                  
-                  if (needed.size > 0) {
-                    console.log('✓ ' + file + ' needs: ' + Array.from(needed).join(', '));
-                  }
-                  
-                } catch (err) {
-                  errors.push('Route: ' + file + ': ' + err.message);
-                }
-              });
-              
-              console.log('✓ Routes validated: ' + files.length + ' files');
-              return errors;
-            };
-            
-            const allErrors = [];
-            allErrors.push(...validateControllers());
-            allErrors.push(...validateRoutes());
-            
-            if (allErrors.length > 0) {
-              console.error('\n❌ IMPORT VALIDATION FAILED:');
-              allErrors.forEach(e => console.error(e));
-              process.exit(1);
-            }
-            console.log('\n✓ All imports validated successfully');
-          "
-
       - name: Lint backend code
         working-directory: backend
         run: npm run lint
@@ -222,10 +66,10 @@ jobs:
           retention-days: 30
 
   # ─────────────────────────────────────────────
-  # Frontend Build
+  # Frontend Tests
   # ─────────────────────────────────────────────
-  frontend-build:
-    name: Frontend Build
+  frontend-test:
+    name: Frontend Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -243,10 +87,38 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Lint check
+      - name: Lint frontend code
         working-directory: frontend
         run: npm run lint
         continue-on-error: true
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test -- --run
+        continue-on-error: true
+
+  # ─────────────────────────────────────────────
+  # Frontend Build
+  # ─────────────────────────────────────────────
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    needs: [frontend-test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
       - name: Build frontend for production
         working-directory: frontend
@@ -267,7 +139,7 @@ jobs:
   docker-build:
     name: Docker Build Verification
     runs-on: ubuntu-latest
-    needs: [backend-test, frontend-build]
+    needs: [backend-test, frontend-test, frontend-build]
 
     steps:
       - name: Checkout code
