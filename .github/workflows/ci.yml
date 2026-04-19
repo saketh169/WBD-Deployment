@@ -35,94 +35,92 @@ jobs:
         working-directory: backend
         run: npm ci
 
-      - name: Validate All Required Imports
+      - name: Validate Controller & Route Imports
         working-directory: backend
         run: |
-          echo "=== Validating Required Imports ==="
-          node << 'EOF'
-          const fs = require('fs');
-          const path = require('path');
-          
-          const validateDirectory = (dirPath, dirName) => {
-            if (!fs.existsSync(dirPath)) {
-              console.warn('⚠ ' + dirName + ' directory not found');
-              return true;
-            }
+          echo "=== Validating Backend Imports ==="
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
             
-            const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.js'));
-            let errors = [];
+            // Common patterns to detect missing imports
+            const commonModels = ['User', 'Admin', 'Dietitian', 'Employee', 'Booking', 'Payment', 'Blog', 'ActivityLog'];
             
-            files.forEach(file => {
-              try {
-                const filePath = path.join(dirPath, file);
-                const content = fs.readFileSync(filePath, 'utf8');
-                const lines = content.split('\n');
-                
-                // Extract declared variables from active imports
-                const declaredVars = new Set();
-                
-                lines.forEach((line, idx) => {
-                  // Skip commented lines
-                  const trimmed = line.trim();
-                  if (trimmed.startsWith('//')) return;
-                  
-                  // Match: const X = require(...) or const { X, Y } = require(...)
-                  const match = line.match(/(?:const|let|var)\s+([{}\w,\s]+)\s*=\s*require\(['"]([^'"]+)['"]\)/);
-                  if (match) {
-                    const vars = match[1].trim();
-                    
-                    if (vars.includes('{')) {
-                      const extracted = vars.match(/\{([^}]+)\}/)[1];
-                      extracted.split(',').forEach(v => {
-                        const cleaned = v.trim().split(' as ')[0].trim();
-                        if (cleaned) declaredVars.add(cleaned);
-                      });
-                    } else {
-                      if (vars) declaredVars.add(vars);
-                    }
-                    
-                    console.log('✓ ' + file + ' imported: ' + vars);
-                  }
-                });
-                
-                // Get code after imports
-                const codeContent = lines.filter(l => !l.match(/require\(/)).join('\n');
-                
-                // Check each declared variable is actually used
-                declaredVars.forEach(varName => {
-                  const regex = new RegExp('\\b' + varName + '\\b');
-                  if (!regex.test(codeContent)) {
-                    errors.push(file + ': Unused import: ' + varName);
-                  }
-                });
-                
-              } catch (err) {
-                errors.push(file + ': ' + err.message);
+            const validateDirectory = (dirPath, dirName) => {
+              if (!fs.existsSync(dirPath)) {
+                console.warn('⚠ ' + dirName + ' directory not found');
+                return true;
               }
-            });
+              
+              const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.js'));
+              let errors = [];
+              let validCount = 0;
+              
+              files.forEach(file => {
+                try {
+                  const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
+                  const lines = content.split('\n');
+                  
+                  // Extract all imported variables
+                  const importedVars = new Set();
+                  
+                  lines.forEach((line, idx) => {
+                    const requireMatch = line.match(/(?:const|let|var)\s+(\w+|\{[^}]+\})\s*=\s*require\(['\"]([^'\"]+)['\"]\)/);
+                    if (requireMatch) {
+                      const varPart = requireMatch[1];
+                      
+                      // Extract variable names
+                      if (varPart.includes('{')) {
+                        const extracted = varPart.match(/\{([^}]+)\}/)[1];
+                        extracted.split(',').forEach(v => importedVars.add(v.trim()));
+                      } else {
+                        importedVars.add(varPart.trim());
+                      }
+                      
+                      console.log('✓ ' + file + ' imports: ' + varPart);
+                      validCount++;
+                    }
+                  });
+                  
+                  // Check if code uses models/services that aren't imported
+                  const codeContent = lines.join('\n');
+                  
+                  commonModels.forEach(model => {
+                    // Check if model is used in code but NOT imported
+                    const regex = new RegExp('\\b' + model + '\\b(?!:)', 'g');
+                    const usages = codeContent.match(regex) || [];
+                    
+                    if (usages.length > 0 && !importedVars.has(model)) {
+                      errors.push('❌ ' + file + ' - USES \"' + model + '\" but NOT IMPORTED!');
+                    }
+                  });
+                  
+                } catch (err) {
+                  errors.push(file + ': ' + err.message);
+                }
+              });
+              
+              console.log('✓ ' + dirName + ' validated: ' + files.length + ' files, ' + validCount + ' imports found');
+              
+              if (errors.length > 0) {
+                console.error('\n❌ MISSING IMPORTS DETECTED:');
+                errors.forEach(e => console.error(e));
+                return false;
+              }
+              return true;
+            };
             
-            console.log('✓ ' + dirName + ' validated: ' + files.length + ' files');
+            const controllerValid = validateDirectory('./src/controllers', 'Controllers');
+            const routeValid = validateDirectory('./src/routes', 'Routes');
+            const serviceValid = validateDirectory('./src/services', 'Services');
+            const middlewareValid = validateDirectory('./src/middlewares', 'Middlewares');
             
-            if (errors.length > 0) {
-              console.error('\n✗ ' + dirName + ' errors:');
-              errors.forEach(e => console.error('  - ' + e));
-              return false;
+            if (!controllerValid || !routeValid || !serviceValid || !middlewareValid) {
+              console.error('\n❌ CRITICAL: Missing required imports detected!');
+              process.exit(1);
             }
-            return true;
-          };
-          
-          const allValid = 
-            validateDirectory('./src/controllers', 'Controllers') &&
-            validateDirectory('./src/routes', 'Routes') &&
-            validateDirectory('./src/services', 'Services') &&
-            validateDirectory('./src/middlewares', 'Middlewares');
-          
-          if (!allValid) {
-            console.error('\n✗ Import validation FAILED');
-            process.exit(1);
-          }
-          console.log('\n✓ All imports validated successfully');
-          EOF
+            console.log('\n✓ All imports validated successfully');
+          "
 
       - name: Lint backend code
         working-directory: backend
