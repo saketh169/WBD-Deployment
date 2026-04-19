@@ -10,7 +10,7 @@ import {
     fetchUserRevenue,
     setExpandedSubscriptionId,
 } from '../../redux/slices/analyticsSlice';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 // Pagination Component
 const Pagination = ({ currentPage, totalPages, onPageChange, theme }) => {
@@ -191,6 +191,9 @@ const Analytics = () => {
         yearTotal: 0,
     });
 
+    const consultationBarPalette = ['#27AE60', '#2ECC71', '#16A085', '#1ABC9C', '#3CB371'];
+    const membershipBarPalette = ['#1E6F5C', '#0E7490', '#0EA5A4', '#0891B2', '#22C55E'];
+
     // Function to filter subscriptions based on payment dates
     const getFilteredSubscriptions = (subs) => {
         const now = new Date();
@@ -316,6 +319,105 @@ const Analytics = () => {
     const consultationCommissionRate = parseFloat(revenueAnalytics.summary?.commissionRates?.consultationCommission?.replace('%', '') || 0) / 100;
     const platformShareRate = parseFloat(revenueAnalytics.summary?.commissionRates?.platformShare?.replace('%', '') || 0) / 100;
 
+    const userStatsExportRows = [
+        { metric: 'Total Registered', count: userStats.totalRegistered || 0 },
+        { metric: 'Active Clients', count: userStats.totalUsers || 0 },
+        { metric: 'Active Dietitians', count: userStats.totalDietitians || 0 },
+        { metric: 'Verifying Organizations', count: userStats.totalOrganizations || 0 },
+        { metric: 'Active Diet Plans', count: userStats.activeDietPlans || 0 },
+    ];
+
+    const consultationRevenueExportRows = [
+        ...(consultationRevenue.dailyPeriods || []).map(item => ({
+            periodType: 'Daily (Last 7 Days)',
+            period: item.displayDate,
+            revenue: item.revenue || 0,
+        })),
+        ...(consultationRevenue.monthlyPeriods || []).map(item => ({
+            periodType: 'Monthly (Last 6 Months)',
+            period: item.month,
+            revenue: item.revenue || 0,
+        })),
+        ...(consultationRevenue.yearlyPeriods || []).map(item => ({
+            periodType: 'Yearly (Last 4 Years)',
+            period: item.year,
+            revenue: item.revenue || 0,
+        })),
+    ];
+
+    const membershipRevenueExportRows = [
+        ...calculatedData.dateWise.map(item => ({
+            periodType: 'Daily (Last 7 Days)',
+            period: item.displayDate,
+            revenue: item.revenue || 0,
+        })),
+        ...calculatedData.monthWise.map(item => ({
+            periodType: 'Monthly (Last 6 Months)',
+            period: item.month,
+            revenue: item.revenue || 0,
+        })),
+        ...calculatedData.yearWise.map(item => ({
+            periodType: 'Yearly (Last 4 Years)',
+            period: item.year,
+            revenue: item.revenue || 0,
+        })),
+    ];
+
+    const peakHoursExportRows = [
+        ...(revenueAnalytics.peakHours?.consultation || []).map(item => ({
+            stream: 'Consultation',
+            hour: item.hourLabel,
+            revenue: item.revenue || 0,
+            transactions: item.transactions || 0,
+        })),
+        ...(revenueAnalytics.peakHours?.membership || []).map(item => ({
+            stream: 'Membership',
+            hour: item.hourLabel,
+            revenue: item.revenue || 0,
+            transactions: item.transactions || 0,
+        })),
+    ];
+
+    const totalRevenueSummaryExportRows = [
+        {
+            period: 'Total (Lifetime/Yearly Basis)',
+            consultationRevenue: (yearlyConsultationTotal * consultationCommissionRate).toFixed(2),
+            membershipRevenue: (calculatedData.yearTotal * platformShareRate).toFixed(2),
+            totalRevenue: ((yearlyConsultationTotal * consultationCommissionRate) + (calculatedData.yearTotal * platformShareRate)).toFixed(2),
+        },
+        {
+            period: 'Monthly (Avg./Current)',
+            consultationRevenue: (monthlyConsultationTotal * consultationCommissionRate).toFixed(2),
+            membershipRevenue: (calculatedData.monthTotal * platformShareRate).toFixed(2),
+            totalRevenue: ((monthlyConsultationTotal * consultationCommissionRate) + (calculatedData.monthTotal * platformShareRate)).toFixed(2),
+        },
+        {
+            period: 'Yearly (Current)',
+            consultationRevenue: (yearlyConsultationTotal * consultationCommissionRate).toFixed(2),
+            membershipRevenue: (calculatedData.yearTotal * platformShareRate).toFixed(2),
+            totalRevenue: ((yearlyConsultationTotal * consultationCommissionRate) + (calculatedData.yearTotal * platformShareRate)).toFixed(2),
+        },
+    ];
+
+    const recentConsultationsExportRows = (revenueAnalytics.recentConsultations || []).map((consultation) => ({
+        date: consultation.date ? new Date(consultation.date).toLocaleDateString() : '',
+        dietitian: consultation.dietitian || '',
+        consultationFee: consultation.amount || 0,
+        platformCommission: consultation.commission || 0,
+        dietitianEarnings: consultation.dietitianEarnings || 0,
+    }));
+
+    const subscriptionsExportRows = (subscriptions || []).map((sub) => ({
+        name: sub.name || '',
+        plan: sub.plan || '',
+        cycle: sub.cycle || '',
+        startDate: sub.startDate || '',
+        expireDate: sub.expiresAt || '',
+        revenueGenerated: sub.revenue || 0,
+        paymentMethod: sub.paymentMethod || '',
+        transactionId: sub.transactionId || '',
+    }));
+
 
     // --- UI Renderers ---
 
@@ -430,9 +532,17 @@ const Analytics = () => {
 
                 {/* --- Card 1: User Statistics --- */}
                 <div className="bg-white p-6 rounded-xl shadow-lg border-b-4 border-green-500 hover:shadow-2xl transition-all duration-300">
-                    <h2 style={{ color: THEME.primary }} className="text-xl font-bold mb-4">
-                        <i style={{ color: THEME.primary }} className="fas fa-users mr-2"></i> User Statistics
-                    </h2>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 style={{ color: THEME.primary }} className="text-xl font-bold">
+                            <i style={{ color: THEME.primary }} className="fas fa-users mr-2"></i> User Statistics
+                        </h2>
+                        <button
+                            onClick={() => exportToCSV(userStatsExportRows, 'user_statistics.csv')}
+                            className="px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm shadow-sm"
+                        >
+                            <i className="fas fa-file-csv"></i> Export CSV
+                        </button>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <table className="min-w-full divide-y divide-gray-200 shadow-md rounded-lg overflow-hidden border-collapse">
                             <thead style={{ backgroundColor: THEME.primary }} className="text-white">
@@ -481,9 +591,17 @@ const Analytics = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     {/* --- Card 2: Revenue from Consultations --- */}
                     <div className="bg-white p-6 rounded-xl shadow-lg border-b-4 border-green-500 hover:shadow-2xl transition-all duration-300">
-                        <h2 style={{ color: THEME.primary }} className="text-xl font-bold mb-4">
-                            <i style={{ color: THEME.primary }} className="fas fa-stethoscope mr-2"></i> Revenue from Consultations ({revenueAnalytics.summary?.commissionRates?.consultationCommission || '15%'})
-                        </h2>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 style={{ color: THEME.primary }} className="text-xl font-bold">
+                                <i style={{ color: THEME.primary }} className="fas fa-stethoscope mr-2"></i> Revenue from Consultations ({revenueAnalytics.summary?.commissionRates?.consultationCommission || '15%'})
+                            </h2>
+                            <button
+                                onClick={() => exportToCSV(consultationRevenueExportRows, 'consultation_revenue_periods.csv')}
+                                className="px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm shadow-sm"
+                            >
+                                <i className="fas fa-file-csv"></i> Export CSV
+                            </button>
+                        </div>
 
                         <div className="grid grid-cols-1 gap-6">
                             <div>
@@ -503,9 +621,17 @@ const Analytics = () => {
 
                     {/* --- Card 3: Revenue from Memberships --- */}
                     <div className="bg-white p-6 rounded-xl shadow-lg border-b-4 border-green-500 hover:shadow-2xl transition-all duration-300">
-                        <h2 style={{ color: THEME.primary }} className="text-xl font-bold mb-4">
-                            <i style={{ color: THEME.primary }} className="fas fa-chart-line mr-2"></i> Revenue from Memberships ({revenueAnalytics.summary?.commissionRates?.platformShare || '20%'})
-                        </h2>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 style={{ color: THEME.primary }} className="text-xl font-bold">
+                                <i style={{ color: THEME.primary }} className="fas fa-chart-line mr-2"></i> Revenue from Memberships ({revenueAnalytics.summary?.commissionRates?.platformShare || '20%'})
+                            </h2>
+                            <button
+                                onClick={() => exportToCSV(membershipRevenueExportRows, 'membership_revenue_periods.csv')}
+                                className="px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm shadow-sm"
+                            >
+                                <i className="fas fa-file-csv"></i> Export CSV
+                            </button>
+                        </div>
 
                         <div className="grid grid-cols-1 gap-6">
                             <div>
@@ -571,6 +697,76 @@ const Analytics = () => {
                         </div>
                     </div>
 
+                    {/* Peak Hour Revenue (Separate by Stream) */}
+                    <div className="mb-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold text-gray-800">Peak Revenue Hours</h3>
+                            <button
+                                onClick={() => exportToCSV(peakHoursExportRows, 'peak_revenue_hours.csv')}
+                                className="px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm shadow-sm"
+                            >
+                                <i className="fas fa-file-csv"></i> Export CSV
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h4 className="text-base font-semibold mb-2">Consultation Revenue Peak Hours</h4>
+                                {(revenueAnalytics.peakHours?.consultation || []).length > 0 ? (
+                                    <div className="bg-white rounded-lg border border-gray-200 p-3">
+                                        <ResponsiveContainer width="100%" height={280}>
+                                            <BarChart data={revenueAnalytics.peakHours?.consultation || []}>
+                                                <CartesianGrid strokeDasharray="3 3" />
+                                                <XAxis dataKey="hourLabel" />
+                                                <YAxis />
+                                                <Tooltip formatter={(value) => [`₹${Number(value || 0).toFixed(2)}`, 'Revenue']} />
+                                                <Bar dataKey="revenue" radius={[6, 6, 0, 0]}>
+                                                    {(revenueAnalytics.peakHours?.consultation || []).map((entry, index) => (
+                                                        <Cell
+                                                            key={`consultation-bar-${entry.hourLabel}-${index}`}
+                                                            fill={consultationBarPalette[index % consultationBarPalette.length]}
+                                                        />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                ) : (
+                                    <div className="px-4 py-4 text-sm text-gray-500 text-center bg-white rounded-lg border border-gray-200">
+                                        No consultation revenue data available.
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <h4 className="text-base font-semibold mb-2">Membership Revenue Peak Hours</h4>
+                                {(revenueAnalytics.peakHours?.membership || []).length > 0 ? (
+                                    <div className="bg-white rounded-lg border border-gray-200 p-3">
+                                        <ResponsiveContainer width="100%" height={280}>
+                                            <BarChart data={revenueAnalytics.peakHours?.membership || []}>
+                                                <CartesianGrid strokeDasharray="3 3" />
+                                                <XAxis dataKey="hourLabel" />
+                                                <YAxis />
+                                                <Tooltip formatter={(value) => [`₹${Number(value || 0).toFixed(2)}`, 'Revenue']} />
+                                                <Bar dataKey="revenue" radius={[6, 6, 0, 0]}>
+                                                    {(revenueAnalytics.peakHours?.membership || []).map((entry, index) => (
+                                                        <Cell
+                                                            key={`membership-bar-${entry.hourLabel}-${index}`}
+                                                            fill={membershipBarPalette[index % membershipBarPalette.length]}
+                                                        />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                ) : (
+                                    <div className="px-4 py-4 text-sm text-gray-500 text-center bg-white rounded-lg border border-gray-200">
+                                        No membership revenue data available.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Monthly Breakdown */}
                     <div className="mb-6">
                         <div className="flex justify-between items-center mb-4">
@@ -610,7 +806,15 @@ const Analytics = () => {
 
                     {/* Total Platform Revenue Summary Table */}
                     <div className="revenue-table">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Total Platform Revenue Summary</h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold text-gray-800">Total Platform Revenue Summary</h3>
+                            <button
+                                onClick={() => exportToCSV(totalRevenueSummaryExportRows, 'total_platform_revenue_summary.csv')}
+                                className="px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm shadow-sm"
+                            >
+                                <i className="fas fa-file-csv"></i> Export CSV
+                            </button>
+                        </div>
                         <table className="min-w-full divide-y divide-gray-200 shadow-md rounded-lg overflow-hidden border-collapse">
                             <thead style={{ backgroundColor: THEME.primary }} className="text-white">
                                 <tr>
@@ -931,9 +1135,17 @@ const Analytics = () => {
 
                 {/* --- Card 7: Recent Consultations (Full Width) --- */}
                 <div className="bg-white p-6 rounded-xl shadow-lg border-b-4 border-green-500 hover:shadow-2xl transition-all duration-300 mt-6">
-                    <h2 className={`text-xl font-bold text-gray-700 mb-4`}>
-                        <i className={`fas fa-stethoscope text-gray-700 mr-2`}></i> Recent Consultations (Last 10)
-                    </h2>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className={`text-xl font-bold text-gray-700`}>
+                            <i className={`fas fa-stethoscope text-gray-700 mr-2`}></i> Recent Consultations (Last 10)
+                        </h2>
+                        <button
+                            onClick={() => exportToCSV(recentConsultationsExportRows, 'recent_consultations.csv')}
+                            className="px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm shadow-sm"
+                        >
+                            <i className="fas fa-file-csv"></i> Export CSV
+                        </button>
+                    </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200 shadow-md rounded-lg overflow-hidden border-collapse">
                             <thead style={{ backgroundColor: THEME.primary }} className="text-white">
@@ -964,9 +1176,17 @@ const Analytics = () => {
 
                 {/* --- Card 5: Subscriptions Detail Table (Full Width) --- */}
                 <div className="bg-white p-6 rounded-xl shadow-lg border-b-4 border-green-500 hover:shadow-2xl transition-all duration-300 mt-6 mb-8">
-                    <h2 className={`text-xl font-bold text-gray-700 mb-4`}>
-                        <i className={`fas fa-list-alt text-gray-700 mr-2`}></i> Users and Their Subscription Plans
-                    </h2>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className={`text-xl font-bold text-gray-700`}>
+                            <i className={`fas fa-list-alt text-gray-700 mr-2`}></i> Users and Their Subscription Plans
+                        </h2>
+                        <button
+                            onClick={() => exportToCSV(subscriptionsExportRows, 'subscription_plans.csv')}
+                            className="px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm shadow-sm"
+                        >
+                            <i className="fas fa-file-csv"></i> Export CSV
+                        </button>
+                    </div>
                     <div className="overflow-x-auto">
                         {renderSubscriptionTable()}
                     </div>
