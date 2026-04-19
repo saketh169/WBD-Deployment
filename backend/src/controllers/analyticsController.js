@@ -175,7 +175,7 @@ exports.getSubscriptions = async (req, res) => {
 // Get membership/subscription revenue
 exports.getMembershipRevenue = async (req, res) => {
     try {
-        const subscriptions = await Payment.find({ paymentStatus: 'completed' })
+        const subscriptions = await Payment.find({ paymentStatus: 'success' })
             .select('amount planType billingCycle createdAt subscriptionStartDate subscriptionEndDate')
             .sort({ createdAt: -1 });
 
@@ -346,6 +346,29 @@ exports.getConsultationRevenue = async (req, res) => {
 // Get revenue analytics with commission calculations
 exports.getRevenueAnalytics = async (req, res) => {
     try {
+        const buildHourlyRevenue = (items, getDate, getAmount) => {
+            const hourlyTotals = Array.from({ length: 24 }, (_, hour) => ({
+                hour,
+                hourLabel: `${String(hour).padStart(2, '0')}:00`,
+                revenue: 0
+            }));
+
+            items.forEach(item => {
+                const dateValue = getDate(item);
+                const amountValue = Number(getAmount(item) || 0);
+                const parsedDate = dateValue ? new Date(dateValue) : null;
+
+                if (!parsedDate || Number.isNaN(parsedDate.getTime()) || amountValue <= 0) {
+                    return;
+                }
+
+                const hour = parsedDate.getHours();
+                hourlyTotals[hour].revenue += amountValue;
+            });
+
+            return hourlyTotals;
+        };
+
         // Get current settings for commission rates and subscription tiers
         const settings = await Settings.findOne();
         const consultationCommission = settings?.consultationCommission || 15; // default 15%
@@ -361,7 +384,7 @@ exports.getRevenueAnalytics = async (req, res) => {
             .select('planType billingCycle amount paymentMethod transactionId subscriptionStartDate subscriptionEndDate createdAt paymentDate userId userName');
 
         // Get actual subscription payments to determine active subscriptions
-        const subscriptionPayments = await Payment.find({ paymentStatus: 'completed' })
+        const subscriptionPayments = await Payment.find({ paymentStatus: 'success' })
             .select('amount planType billingCycle createdAt subscriptionEndDate')
             .sort({ createdAt: -1 });
 
@@ -376,6 +399,28 @@ exports.getRevenueAnalytics = async (req, res) => {
         // Get consultation revenue
         const totalConsultationRevenue = consultationBookings.reduce((sum, booking) => sum + (booking.amount || 0), 0);
         const totalRevenue = totalSubscriptionRevenue + totalConsultationRevenue;
+
+        const consultationHourly = buildHourlyRevenue(
+            consultationBookings,
+            booking => booking.createdAt,
+            booking => booking.amount
+        );
+
+        const membershipHourly = buildHourlyRevenue(
+            subscriptionPayments,
+            payment => payment.createdAt,
+            payment => payment.amount
+        );
+
+        const topConsultationHours = consultationHourly
+            .filter(slot => slot.revenue > 0)
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 5);
+
+        const topMembershipHours = membershipHourly
+            .filter(slot => slot.revenue > 0)
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 5);
 
         // Calculate commission-based earnings (only consultation commission)
         const consultationCommissionAmount = (totalConsultationRevenue * consultationCommission) / 100;
@@ -435,6 +480,10 @@ exports.getRevenueAnalytics = async (req, res) => {
                         consultationCommission: `${consultationCommission}%`,
                         platformShare: `${platformShare}%`
                     }
+                },
+                peakHours: {
+                    consultation: topConsultationHours,
+                    membership: topMembershipHours
                 },
                 monthlyBreakdown: monthlyData,
                 recentConsultations: consultationBookings

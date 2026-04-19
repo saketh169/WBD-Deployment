@@ -293,6 +293,10 @@ export const fetchRevenueAnalytics = createAsyncThunk(
           platformShare: '20%'
         }
       },
+      peakHours: {
+        consultation: [],
+        membership: []
+      },
       monthlyBreakdown: [],
       recentConsultations: []
     };
