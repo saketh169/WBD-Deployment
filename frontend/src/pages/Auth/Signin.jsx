@@ -3,6 +3,7 @@ import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import axios from '../../axios';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
+import { GoogleLogin } from '@react-oauth/google';
 
 // --- Color constants for UI consistency ---
 const primaryGreen = '#1E6F5C';
@@ -204,6 +205,50 @@ const Signin = () => {
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const handleGoogleSuccess = async (credentialResponse) => {
+        if (role !== 'user') return;
+
+        const credential = credentialResponse?.credential;
+        if (!credential) {
+            setMessage('Error: Google sign-in did not return a valid token.');
+            return;
+        }
+
+        setMessage('Signing in with Google...');
+
+        try {
+            const response = await axios.post('/api/signin/user/google', { credential });
+            const data = response.data;
+
+            if (!data.token) {
+                setMessage('Error: Google sign-in failed. Please try again.');
+                return;
+            }
+
+            localStorage.setItem('authToken_user', data.token);
+            const existingUser = JSON.parse(localStorage.getItem('authUser_user') || '{}');
+            const userUpdate = { ...existingUser };
+            if (data.name) userUpdate.name = data.name;
+            if (data.email) userUpdate.email = data.email;
+            if (data.roleId) userUpdate.id = data.roleId;
+            localStorage.setItem('authUser_user', JSON.stringify(userUpdate));
+
+            setMessage('Sign-in successful! Redirecting...');
+            setTimeout(() => {
+                setMessage('');
+                navigate(roleRoutes.user);
+            }, 1000);
+        } catch (error) {
+            console.error('Google Sign-in Error:', error.response ? error.response.data : error.message);
+            const errorMessage = error.response?.data?.message || 'Google sign-in failed. Please try again.';
+            setMessage(`Error: ${errorMessage}`);
+        }
+    };
+
+    const handleGoogleError = () => {
+        setMessage('Error: Google sign-in was cancelled or failed.');
     };
 
     // 2FA OTP submission handler
@@ -525,6 +570,28 @@ const Signin = () => {
                                         'Continue'
                                     )}
                                 </button>
+
+                                {role === 'user' && (
+                                    <>
+                                        <div className="relative py-1">
+                                            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                                <div className="w-full border-t border-gray-300"></div>
+                                            </div>
+                                            <div className="relative flex justify-center text-xs uppercase">
+                                                <span className="bg-white px-2 text-gray-500">or continue with</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-center">
+                                            <GoogleLogin
+                                                onSuccess={handleGoogleSuccess}
+                                                onError={handleGoogleError}
+                                                text="signin_with"
+                                                shape="pill"
+                                            />
+                                        </div>
+                                    </>
+                                )}
 
                                 <p className="text-center text-sm mt-4">
                                     Don't have an account?{' '}

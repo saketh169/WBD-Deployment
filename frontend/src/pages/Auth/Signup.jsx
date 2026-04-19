@@ -4,6 +4,7 @@ import axios from '../../axios';
 import { useForm, Controller } from 'react-hook-form'; // 1. Import necessary hooks
 import { yupResolver } from '@hookform/resolvers/yup'; // 2. Import Yup resolver
 import * as Yup from 'yup'; // 3. Import Yup
+import { GoogleLogin } from '@react-oauth/google';
 
 // --- Color constants for UI consistency ---
 const primaryGreen = '#1E6F5C';
@@ -160,6 +161,7 @@ const Signup = () => {
     const [role, setRole] = useState('');
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [googleCredential, setGoogleCredential] = useState('');
 
     // Get role from URL on mount
     useEffect(() => {
@@ -174,7 +176,7 @@ const Signup = () => {
     // The schema resolver is tied to the 'role' state so it updates when the role changes.
     const validationSchema = buildSignupValidationSchema(role);
 
-    const { register, handleSubmit, formState: { errors }, control, reset } = useForm({
+    const { register, handleSubmit, formState: { errors }, control, reset, setValue } = useForm({
         resolver: yupResolver(validationSchema),
         defaultValues: getInitialValues(role),
         mode: 'onBlur', // Validate on blur for better UX
@@ -184,9 +186,46 @@ const Signup = () => {
     useEffect(() => {
         if (role) {
             reset(getInitialValues(role));
+            setGoogleCredential('');
             setMessage(''); // Clear message on role change
         }
     }, [role, reset]);
+
+    const decodeGoogleCredential = (credential) => {
+        try {
+            const tokenParts = credential.split('.');
+            if (tokenParts.length < 2) return null;
+            const base64 = tokenParts[1].replace(/-/g, '+').replace(/_/g, '/');
+            const paddedBase64 = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+            const payload = JSON.parse(atob(paddedBase64));
+            return payload;
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const handleGoogleSignupSuccess = (credentialResponse) => {
+        const credential = credentialResponse?.credential;
+        if (!credential) {
+            setMessage('Error: Google signup did not return a valid token.');
+            return;
+        }
+
+        const payload = decodeGoogleCredential(credential);
+        if (payload?.email) {
+            setValue('email', payload.email, { shouldValidate: true });
+        }
+        if (payload?.name) {
+            setValue('name', payload.name, { shouldValidate: true });
+        }
+
+        setGoogleCredential(credential);
+        setMessage('Google account linked. Fill remaining fields and click Get Started.');
+    };
+
+    const handleGoogleSignupError = () => {
+        setMessage('Error: Google signup was cancelled or failed.');
+    };
 
     // --- MODIFIED: Submission Handler using React Hook Form's data ---
     // The data object already contains the serialized, validated form values.
@@ -209,7 +248,13 @@ const Signup = () => {
         // Add the role to the payload
         formData.role = role;
 
-        const apiRoute = `/api/signup/${role}`; // Dynamically sets route: /api/signup/user, /api/signup/dietitian, etc.
+        if (role === 'user' && googleCredential) {
+            formData.credential = googleCredential;
+        }
+
+        const apiRoute = role === 'user' && googleCredential
+            ? '/api/signup/user/google'
+            : `/api/signup/${role}`; // Dynamically sets route: /api/signup/user, /api/signup/dietitian, etc.
 
         // 1. Show the initial validation/pre-check message
         setIsLoading(true);
@@ -384,6 +429,25 @@ const Signup = () => {
 
                             <div className="lg:col-span-2">
                                 <SubmitButton />
+                            </div>
+
+                            <div className="lg:col-span-2">
+                                <div className="relative py-1 mb-2">
+                                    <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                        <div className="w-full border-t border-gray-300"></div>
+                                    </div>
+                                    <div className="relative flex justify-center text-xs uppercase">
+                                        <span className="bg-white px-2 text-gray-500">or use Google</span>
+                                    </div>
+                                </div>
+                                <div className="flex justify-center">
+                                    <GoogleLogin
+                                        onSuccess={handleGoogleSignupSuccess}
+                                        onError={handleGoogleSignupError}
+                                        text="signup_with"
+                                        shape="pill"
+                                    />
+                                </div>
                             </div>
 
                             <LoginLink />
@@ -578,7 +642,7 @@ const Signup = () => {
                 {message && (
                     <div
                         aria-live="polite"
-                        className={`p-3 mb-5 text-center text-base font-medium rounded-lg shadow-sm animate-slide-in w-full ${message.includes('successful')
+                        className={`p-3 mb-5 text-center text-base font-medium rounded-lg shadow-sm animate-slide-in w-full ${(message.includes('successful') || message.includes('linked') || message.includes('Google account'))
                                 ? 'text-green-800 bg-green-100 border border-green-300'
                                 : message.includes('Validating')
                                     ? 'text-blue-800 bg-blue-100 border border-blue-300' // Using blue for validation/loading

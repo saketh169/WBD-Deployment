@@ -1,9 +1,30 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
+const crypto = require('crypto');
 // Mongoose Models
 const { UserAuth, User, Admin, Dietitian, Organization, Employee } = require('../models/userModel');
 const otpService = require('../services/otpService');
 const { JWT_SECRET, ADMIN_SIGNIN_KEY } = require('../utils/jwtConfig');
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+const verifyGoogleCredential = async (credential) => {
+    const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const googleEmail = payload?.email;
+    const emailVerified = payload?.email_verified;
+
+    if (!googleEmail || !emailVerified) {
+        return { error: 'Google account email is invalid or unverified.' };
+    }
+
+    return { payload, googleEmail };
+};
 
 const PROFILE_MODELS = {
     user: User,
@@ -142,6 +163,97 @@ exports.signupController = async (req, res) => {
     }
 };
 
+exports.userGoogleSignupController = async (req, res) => {
+    const { credential, name, phone, dob, gender, address } = req.body;
+
+    if (!credential) {
+        return res.status(400).json({ message: 'Google credential token is required.' });
+    }
+
+    if (!process.env.GOOGLE_CLIENT_ID) {
+        return res.status(500).json({ message: 'Google OAuth is not configured on server.' });
+    }
+
+    if (!name || !phone || !dob || !gender || !address) {
+        return res.status(400).json({ message: 'Name, phone, dob, gender and address are required.' });
+    }
+
+    try {
+        const googleData = await verifyGoogleCredential(credential);
+        if (googleData.error) {
+            return res.status(401).json({ message: googleData.error });
+        }
+
+        const { googleEmail } = googleData;
+
+        const nameConflict = await checkGlobalConflict('name', name,
+            `The Name "${name}" is already in use by another profile.`);
+        if (nameConflict) return res.status(409).json(nameConflict);
+
+        const phoneConflict = await checkGlobalConflict('phone', phone,
+            `The Phone Number "${phone}" is already registered globally.`);
+        if (phoneConflict) return res.status(409).json(phoneConflict);
+
+        const existingAuth = await UserAuth.findOne({ email: googleEmail });
+        if (existingAuth) {
+            return res.status(409).json({ message: 'Email address is already registered.' });
+        }
+
+        const profile = new User({
+            name,
+            email: googleEmail,
+            phone,
+            dob,
+            gender,
+            address,
+        });
+        await profile.save();
+
+        // Generate a strong random password hash because UserAuth requires passwordHash.
+        const randomPassword = crypto.randomBytes(32).toString('hex');
+        const hashedPassword = await bcrypt.hash(randomPassword, 12);
+
+        const authUser = new UserAuth({
+            email: googleEmail,
+            passwordHash: hashedPassword,
+            role: 'user',
+            roleId: profile._id,
+        });
+        await authUser.save();
+
+        const token = jwt.sign(
+            { userId: authUser._id, role: authUser.role, roleId: authUser.roleId },
+            JWT_SECRET,
+            { expiresIn: '1d' }
+        );
+
+        return res.status(201).json({
+            message: 'Registration successful! Proceed to the next step.',
+            name: profile.name,
+            token,
+            role: 'user',
+            roleId: profile._id,
+            email: googleEmail,
+        });
+    } catch (error) {
+        console.error('Error during Google user signup:', error);
+
+        if (error.name === 'ValidationError') {
+            const errors = {};
+            for (const field in error.errors) {
+                errors[field] = error.errors[field].message;
+            }
+            return res.status(400).json({ message: 'Validation failed.', errors });
+        }
+
+        if (error.code === 11000) {
+            return res.status(409).json({ message: 'A unique field is already registered.' });
+        }
+
+        return res.status(500).json({ message: 'Internal Server Error during Google signup.' });
+    }
+};
+
 exports.signinController = async (req, res) => {
     const role = req.params.role;
     const { email, password, licenseNumber, adminKey, rememberMe, orgType } = req.body;
@@ -252,6 +364,58 @@ exports.signinController = async (req, res) => {
     } catch (error) {
         console.error(`Error during ${role} signin:`, error);
         res.status(500).json({ message: 'Internal Server Error during login.' });
+    }
+};
+
+exports.userGoogleSigninController = async (req, res) => {
+    const { credential } = req.body;
+
+    if (!credential) {
+        return res.status(400).json({ message: 'Google credential token is required.' });
+    }
+
+    if (!process.env.GOOGLE_CLIENT_ID) {
+        return res.status(500).json({ message: 'Google OAuth is not configured on server.' });
+    }
+
+    try {
+        const googleData = await verifyGoogleCredential(credential);
+        if (googleData.error) {
+            return res.status(401).json({ message: googleData.error });
+        }
+
+        const { payload, googleEmail } = googleData;
+
+        // Only allow OAuth for existing USER role accounts.
+        const authUser = await UserAuth.findOne({ email: googleEmail, role: 'user' });
+        if (!authUser) {
+            return res.status(404).json({
+                message: 'No user account found for this Google email. Please sign up as user first.'
+            });
+        }
+
+        const profile = await User.findById(authUser.roleId).lean();
+        if (!profile) {
+            return res.status(404).json({ message: 'User profile not found.' });
+        }
+
+        const token = jwt.sign(
+            { userId: authUser._id, role: authUser.role, roleId: authUser.roleId },
+            JWT_SECRET,
+            { expiresIn: '1d' }
+        );
+
+        return res.status(200).json({
+            message: 'Google sign-in successful!',
+            token,
+            role: 'user',
+            roleId: authUser.roleId,
+            name: profile?.name || payload?.name || '',
+            email: googleEmail,
+        });
+    } catch (error) {
+        console.error('Error during Google user signin:', error);
+        return res.status(401).json({ message: 'Google sign-in failed. Please try again.' });
     }
 };
 

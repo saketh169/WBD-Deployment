@@ -108,6 +108,12 @@ router.post('/signup/user',
     authController.signupController
 );
 
+// 1b. User Google Signup Route: POST /api/signup/user/google
+router.post('/signup/user/google',
+    authRateLimiter,
+    authController.userGoogleSignupController
+);
+
 /**
  * @swagger
  * /api/signup/admin:
@@ -413,6 +419,12 @@ router.post('/signin/user',
     authRateLimiter,
     injectRole('user'),
     authController.signinController
+);
+
+// 6b. User Google Signin Route: POST /api/signin/user/google
+router.post('/signin/user/google',
+    authRateLimiter,
+    authController.userGoogleSigninController
 );
 
 /**
