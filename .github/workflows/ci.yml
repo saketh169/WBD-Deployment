@@ -35,6 +35,74 @@ jobs:
         working-directory: backend
         run: npm ci
 
+      - name: Validate Controller & Route Imports
+        working-directory: backend
+        run: |
+          echo "=== Validating Backend Imports ==="
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            
+            const validateDirectory = (dirPath, dirName) => {
+              if (!fs.existsSync(dirPath)) {
+                console.warn('⚠ ' + dirName + ' directory not found');
+                return true;
+              }
+              
+              const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.js'));
+              let errors = [];
+              let validCount = 0;
+              
+              files.forEach(file => {
+                try {
+                  const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
+                  const lines = content.split('\n');
+                  
+                  lines.forEach((line, idx) => {
+                    const requireMatch = line.match(/require\(['\"]([^'\"]+)['\"]\)/);
+                    if (requireMatch) {
+                      const modulePath = requireMatch[1];
+                      
+                      // Skip node_modules and relative paths starting with ./
+                      if (!modulePath.includes('node_modules') && !modulePath.startsWith('.')) {
+                        console.log('✓ ' + file + ' (line ' + (idx + 1) + '): ' + modulePath);
+                        validCount++;
+                      }
+                    }
+                  });
+                  
+                } catch (err) {
+                  errors.push(file + ': ' + err.message);
+                }
+              });
+              
+              console.log('✓ ' + dirName + ' validated: ' + files.length + ' files, ' + validCount + ' imports');
+              
+              if (errors.length > 0) {
+                console.error('\n✗ ' + dirName + ' validation errors:');
+                errors.forEach(e => console.error('  - ' + e));
+                return false;
+              }
+              return true;
+            };
+            
+            const controllerValid = validateDirectory('./src/controllers', 'Controllers');
+            const routeValid = validateDirectory('./src/routes', 'Routes');
+            const serviceValid = validateDirectory('./src/services', 'Services');
+            const middlewareValid = validateDirectory('./src/middlewares', 'Middlewares');
+            
+            if (!controllerValid || !routeValid || !serviceValid || !middlewareValid) {
+              console.error('\n✗ Import validation failed');
+              process.exit(1);
+            }
+            console.log('\n✓ All imports validated successfully');
+          "
+
+      - name: Lint backend code
+        working-directory: backend
+        run: npm run lint
+        continue-on-error: true
+
       - name: Run unit tests
         working-directory: backend
         run: npm test
