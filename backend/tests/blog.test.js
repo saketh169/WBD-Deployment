@@ -270,7 +270,6 @@ describe('Blog Model - Virtual & Middleware', () => {
   });
 });
 
-
 // // 1. Title Too Short
 // test('CI Fail: blog title minimum length enforced', async () => {
 //   await expect(Blog.create(createValidBlog({ title: 'Hi' })))
