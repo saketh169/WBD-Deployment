@@ -68,6 +68,7 @@ app.use(cors({
   origin: ALLOWED_ORIGINS,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['X-Cache', 'X-Cache-Key', 'X-Cache-Tags', 'X-Response-Time'],
   credentials: true,
 }));
 

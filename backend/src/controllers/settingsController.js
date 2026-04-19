@@ -17,6 +17,7 @@ const getSettings = async (req, res) => {
     res.set({
       'X-Cache': cacheStatus,
       'X-Cache-Key': 'settings:global',
+      'X-Cache-Tags': 'settings,global',
       'X-Response-Time': `${duration}ms`
     });
     
