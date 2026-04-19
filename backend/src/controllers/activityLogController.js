@@ -1,5 +1,5 @@
-//const ActivityLog = require('../models/activityLogModel');
-//const { Employee } = require('../models/userModel');
+const ActivityLog = require('../models/activityLogModel');
+const { Employee } = require('../models/userModel');
 
 /**
  * POST /api/organization/log-activity
