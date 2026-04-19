@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install all dependencies (including devDependencies for build)
-RUN npm ci
+RUN npm cache clean --force && npm ci --legacy-peer-deps
 
 # Copy source code and env file
 COPY .env* ./
