@@ -12,5 +12,19 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:5000'
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'recharts-bundle': ['recharts', 'react-is']
+        }
+      }
+    }
+  },
+  resolve: {
+    alias: {
+      'react-is': 'react-is'
+    }
   }
 })
