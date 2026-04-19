@@ -700,8 +700,19 @@ describe('Analytics Controller - GET Revenue Analytics', () => {
       monthlyTiers: [],
       yearlyTiers: []
     });
-    Payment.find = jest.fn().mockResolvedValue([]);
-    Booking.find = jest.fn().mockResolvedValue([]);
+    Payment.find = jest.fn().mockReturnValue({
+      populate: jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue([])
+      }),
+      select: jest.fn().mockReturnValue({
+        sort: jest.fn().mockResolvedValue([])
+      })
+    });
+    Booking.find = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue([])
+      })
+    });
     
     await analyticsController.getRevenueAnalytics(mockReq, mockRes);
     expect(mockRes.json).toHaveBeenCalled();
@@ -712,8 +723,19 @@ describe('Analytics Controller - GET Revenue Analytics', () => {
     const mockRes = { json: jest.fn() };
     
     Settings.findOne = jest.fn().mockResolvedValue(null);
-    Payment.find = jest.fn().mockResolvedValue([]);
-    Booking.find = jest.fn().mockResolvedValue([]);
+    Payment.find = jest.fn().mockReturnValue({
+      populate: jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue([])
+      }),
+      select: jest.fn().mockReturnValue({
+        sort: jest.fn().mockResolvedValue([])
+      })
+    });
+    Booking.find = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue([])
+      })
+    });
     
     await analyticsController.getRevenueAnalytics(mockReq, mockRes);
     expect(mockRes.json).toHaveBeenCalled();
@@ -739,8 +761,19 @@ describe('Analytics Controller - GET Revenue Analytics', () => {
       monthlyTiers: [],
       yearlyTiers: []
     });
-    Payment.find = jest.fn().mockResolvedValue([]);
-    Booking.find = jest.fn().mockResolvedValue([]);
+    Payment.find = jest.fn().mockReturnValue({
+      populate: jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue([])
+      }),
+      select: jest.fn().mockReturnValue({
+        sort: jest.fn().mockResolvedValue([])
+      })
+    });
+    Booking.find = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue([])
+      })
+    });
     
     await analyticsController.getRevenueAnalytics(mockReq, mockRes);
     expect(mockRes.json).toHaveBeenCalled();
@@ -761,8 +794,19 @@ describe('Analytics Controller - GET Revenue Analytics', () => {
       monthlyTiers: [],
       yearlyTiers: []
     });
-    Payment.find = jest.fn().mockResolvedValue(mockPayments);
-    Booking.find = jest.fn().mockResolvedValue([]);
+    Payment.find = jest.fn().mockReturnValue({
+      populate: jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue(mockPayments)
+      }),
+      select: jest.fn().mockReturnValue({
+        sort: jest.fn().mockResolvedValue(mockPayments)
+      })
+    });
+    Booking.find = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue([])
+      })
+    });
     
     await analyticsController.getRevenueAnalytics(mockReq, mockRes);
     expect(mockRes.json).toHaveBeenCalled();
@@ -780,8 +824,19 @@ describe('Analytics Controller - GET Revenue Analytics', () => {
       monthlyTiers: [],
       yearlyTiers: []
     });
-    Payment.find = jest.fn().mockResolvedValue(mockPayments);
-    Booking.find = jest.fn().mockResolvedValue(mockBookings);
+    Payment.find = jest.fn().mockReturnValue({
+      populate: jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue(mockPayments)
+      }),
+      select: jest.fn().mockReturnValue({
+        sort: jest.fn().mockResolvedValue(mockPayments)
+      })
+    });
+    Booking.find = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue(mockBookings)
+      })
+    });
     
     await analyticsController.getRevenueAnalytics(mockReq, mockRes);
     expect(mockRes.json).toHaveBeenCalled();
@@ -800,8 +855,19 @@ describe('Analytics Controller - GET Revenue Analytics', () => {
       monthlyTiers: [],
       yearlyTiers: []
     });
-    Payment.find = jest.fn().mockResolvedValue(mockPayments);
-    Booking.find = jest.fn().mockResolvedValue([]);
+    Payment.find = jest.fn().mockReturnValue({
+      populate: jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue(mockPayments)
+      }),
+      select: jest.fn().mockReturnValue({
+        sort: jest.fn().mockResolvedValue(mockPayments)
+      })
+    });
+    Booking.find = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue([])
+      })
+    });
     
     await analyticsController.getRevenueAnalytics(mockReq, mockRes);
     expect(mockRes.json).toHaveBeenCalled();
@@ -817,8 +883,19 @@ describe('Analytics Controller - GET Revenue Analytics', () => {
       monthlyTiers: [{ name: 'Basic', price: 99 }],
       yearlyTiers: [{ name: 'Premium', price: 999 }]
     });
-    Payment.find = jest.fn().mockResolvedValue([]);
-    Booking.find = jest.fn().mockResolvedValue([]);
+    Payment.find = jest.fn().mockReturnValue({
+      populate: jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue([])
+      }),
+      select: jest.fn().mockReturnValue({
+        sort: jest.fn().mockResolvedValue([])
+      })
+    });
+    Booking.find = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue([])
+      })
+    });
     
     await analyticsController.getRevenueAnalytics(mockReq, mockRes);
     expect(mockRes.json).toHaveBeenCalled();
