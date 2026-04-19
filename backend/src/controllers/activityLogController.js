@@ -1,4 +1,4 @@
-const ActivityLog = require('../models/activityLogModel');
+//const ActivityLog = require('../models/activityLogModel');
 const { Employee } = require('../models/userModel');
 
 /**
