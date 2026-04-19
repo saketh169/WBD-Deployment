@@ -1,4 +1,12 @@
-# WBD - BackendDev
+# WBD - Deployment
+
+## Deployment
+
+### Verce
+- **Frontend**: [https://nutri-connect-wbd-frontend.vercel.app/]
+  
+### Render
+- **Backend**: [https://nutri-connect-wbd-backend.onrender.com/]
 
 This project consists of a backend and frontend setup. The backend is a Node.js-based server, while the frontend is a React application.
 
