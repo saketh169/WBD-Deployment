@@ -14,6 +14,7 @@
     "seed:images": "node scripts/seedImages.js",
     "benchmark:db": "node scripts/queryBenchmark.js",
     "benchmark:cache": "node scripts/cachePerformanceReport.js",
+    "benchmark:redis": "node scripts/redisBenchmark.js",
     "elastic:sync": "node src/scripts/syncElastic.js"
   },
   "jest": {
