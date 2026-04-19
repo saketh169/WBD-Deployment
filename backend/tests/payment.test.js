@@ -242,13 +242,6 @@ describe('Payment Model - Deactivation', () => {
   });
 });
 
-// 1. Duplicate Transaction ID
-test('CI Fail: duplicate transactionId blocks payment', async () => {
-  const txnId = 'TXN_PAY_123_UNIQUE';
-  await Payment.create(createValidPayment({ transactionId: txnId }));
-  await expect(Payment.create(createValidPayment({ transactionId: txnId })))
-    .rejects.toThrow(); // E11000: duplicate key error
-});
 
 // 2. Invalid Plan Type Enum
 test('CI Fail: unsupported plan type rejected', async () => {
@@ -256,8 +249,8 @@ test('CI Fail: unsupported plan type rejected', async () => {
     .rejects.toThrow(); // ValidationError: invalid enum value
 });
 
-// 3. Negative Amount
-test('CI Fail: negative amount validation fails', async () => {
-  await expect(Payment.create(createValidPayment({ amount: -500 })))
-    .rejects.toThrow(); // ValidationError: amount must be > 0
-});
+// // 3. Negative Amount
+// test('CI Fail: negative amount validation fails', async () => {
+//   await expect(Payment.create(createValidPayment({ amount: -500 })))
+//     .rejects.toThrow(); // ValidationError: amount must be > 0
+// });

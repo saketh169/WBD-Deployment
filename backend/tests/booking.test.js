@@ -245,7 +245,7 @@ describe('BlockedSlot Model', () => {
 //   }))).rejects.toThrow(); // ValidationError: date must be future
 // });
 
-// // 3. Duplicate Payment ID
+// 3. Duplicate Payment ID
 // test('CI Fail: unique payment ID constraint', async () => {
 //   const paymentId = 'PAY_UNIQUE_123';
 //   await Booking.create(createValidBooking({ paymentId }));
