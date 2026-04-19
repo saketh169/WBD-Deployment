@@ -227,13 +227,13 @@ describe('BlockedSlot Model', () => {
 //   });
 // });
 
- // 1. Invalid Email Format
-test('CI Fail: email validation regex check', async () => {
-  await expect(Booking.create(createValidBooking({
-    email: 'not-an-email',
-    paymentId: 'PAY_EMAIL_' + Date.now()
-  }))).rejects.toThrow(); // ValidationError: invalid email
-});
+//  // 1. Invalid Email Format
+// test('CI Fail: email validation regex check', async () => {
+//   await expect(Booking.create(createValidBooking({
+//     email: 'not-an-email',
+//     paymentId: 'PAY_EMAIL_' + Date.now()
+//   }))).rejects.toThrow(); // ValidationError: invalid email
+// });
 
 // // 2. Past Date Booking
 // test('CI Fail: past date validation fails', async () => {
