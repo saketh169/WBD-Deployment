@@ -99,7 +99,7 @@ router.get('/dietitians', async (req, res) => {
 
     const cacheKey = `public:dietitians:${specialization || ''}:${location || ''}:${parsedPage}:${parsedLimit}`;
 
-    const result = await cacheOrFetch(cacheKey, 300, async () => {
+    const { data: result, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
       const dietitians = await Dietitian.find(filter)
         .select('name specialization experience fees location rating languages about profileImage')
         .skip((parsedPage - 1) * parsedLimit)
@@ -116,6 +116,12 @@ router.get('/dietitians', async (req, res) => {
           pages: Math.ceil(total / parsedLimit)
         }
       };
+    });
+
+    res.set({
+      'X-Cache': cacheStatus,
+      'X-Cache-Key': cacheKey,
+      'X-Response-Time': `${duration}ms`
     });
 
     res.status(200).json({ success: true, ...result });
@@ -207,7 +213,7 @@ router.get('/blogs', async (req, res) => {
 
     const cacheKey = `public:blogs:${category || 'all'}:${parsedPage}:${parsedLimit}`;
 
-    const result = await cacheOrFetch(cacheKey, 300, async () => {
+    const { data: result, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
       const blogs = await Blog.find(filter)
         .select('title excerpt category author.name tags createdAt views likesCount featuredImage')
         .sort({ createdAt: -1 })
@@ -225,6 +231,12 @@ router.get('/blogs', async (req, res) => {
           pages: Math.ceil(total / parsedLimit)
         }
       };
+    });
+
+    res.set({
+      'X-Cache': cacheStatus,
+      'X-Cache-Key': cacheKey,
+      'X-Response-Time': `${duration}ms`
     });
 
     res.status(200).json({ success: true, ...result });
@@ -265,7 +277,7 @@ router.get('/blogs', async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
   try {
-    const result = await cacheOrFetch('public:stats', 600, async () => {
+    const { data: stats, cacheStatus, duration } = await cacheOrFetch('public:stats', 600, async () => {
       const [totalDietitians, totalBlogs] = await Promise.all([
         Dietitian.countDocuments({ isDeleted: { $ne: true } }),
         Blog.countDocuments({ isPublished: true, status: 'active' })
@@ -281,7 +293,13 @@ router.get('/stats', async (req, res) => {
       };
     });
 
-    res.status(200).json({ success: true, stats: result });
+    res.set({
+      'X-Cache': cacheStatus,
+      'X-Cache-Key': 'public:stats',
+      'X-Response-Time': `${duration}ms`
+    });
+
+    res.status(200).json({ success: true, stats });
   } catch (error) {
     console.error('Public API - Get stats error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch stats', error: error.message });
