@@ -162,6 +162,7 @@ exports.getAllBlogs = async (req, res) => {
         res.set({
             'X-Cache': cacheStatus,
             'X-Cache-Key': cacheKey,
+            'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
             'X-Response-Time': `${duration}ms`
         });
 

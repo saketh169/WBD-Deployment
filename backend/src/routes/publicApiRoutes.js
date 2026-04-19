@@ -121,6 +121,7 @@ router.get('/dietitians', async (req, res) => {
     res.set({
       'X-Cache': cacheStatus,
       'X-Cache-Key': cacheKey,
+      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
       'X-Response-Time': `${duration}ms`
     });
 
@@ -236,6 +237,7 @@ router.get('/blogs', async (req, res) => {
     res.set({
       'X-Cache': cacheStatus,
       'X-Cache-Key': cacheKey,
+      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
       'X-Response-Time': `${duration}ms`
     });
 
@@ -296,6 +298,7 @@ router.get('/stats', async (req, res) => {
     res.set({
       'X-Cache': cacheStatus,
       'X-Cache-Key': 'public:stats',
+      'X-Cache-Tags': 'public,stats',
       'X-Response-Time': `${duration}ms`
     });
 
