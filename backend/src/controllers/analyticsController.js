@@ -1,4 +1,4 @@
-const { User, Dietitian, Organization } = require('../models/userModel');
+//const { User, Dietitian, Organization } = require('../models/userModel');
 const Booking = require('../models/bookingModel');
 const MealPlan = require('../models/mealPlanModel');
 const Payment = require('../models/paymentModel');
