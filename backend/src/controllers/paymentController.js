@@ -1,5 +1,20 @@
+const mongoose = require('mongoose');
 const paymentService = require('../services/paymentService');
 const Payment = require('../models/paymentModel');
+
+function getAuthenticatedPaymentUserId(req) {
+  const userId = req.user?.roleId || req.user?.employeeId || req.user?.userId;
+
+  if (!userId) {
+    return { error: 'User ID not found in token' };
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return { error: 'Invalid user ID in token' };
+  }
+
+  return { userId: String(userId) };
+}
 
 /**
  * Initialize a payment
@@ -47,19 +62,16 @@ exports.initializePayment = async (req, res) => {
       });
     }
 
-    // Get user details from authenticated request
-    // IMPORTANT: Use roleId (User profile ID) to match how bookings store userId
-    // req.user.userId = AuthUser table ID
-    // req.user.roleId = User/Dietitian/etc profile ID (this is what bookings use)
-    const userId = req.user.roleId || req.user.employeeId || req.user.userId;
-    const userRole = req.user.role;
-
-    if (!userId) {
+    const authUserIdResult = getAuthenticatedPaymentUserId(req);
+    if (authUserIdResult.error) {
       return res.status(400).json({
         success: false,
-        message: 'User ID not found in token'
+        message: authUserIdResult.error
       });
     }
+
+    const userId = authUserIdResult.userId;
+    const userRole = req.user.role;
 
     // Prevent duplicate active subscriptions
     const existingSubscription = await Payment.findActiveSubscription(userId);
@@ -181,7 +193,15 @@ exports.processPayment = async (req, res) => {
       });
     }
 
-    const userIdToCheck = req.user.roleId || req.user.employeeId || req.user.userId;
+    const authUserIdResult = getAuthenticatedPaymentUserId(req);
+    if (authUserIdResult.error) {
+      return res.status(400).json({
+        success: false,
+        message: authUserIdResult.error
+      });
+    }
+
+    const userIdToCheck = authUserIdResult.userId;
 
     if (payment.userId.toString() !== userIdToCheck) {
       return res.status(403).json({
@@ -251,7 +271,15 @@ exports.verifyPayment = async (req, res) => {
 
     // Verify that the payment belongs to the authenticated user
     // Check both roleId and userId for backwards compatibility
-    const userIdToCheck = req.user.roleId || req.user.employeeId || req.user.userId;
+    const authUserIdResult = getAuthenticatedPaymentUserId(req);
+    if (authUserIdResult.error) {
+      return res.status(400).json({
+        success: false,
+        message: authUserIdResult.error
+      });
+    }
+
+    const userIdToCheck = authUserIdResult.userId;
 
     if (result.payment.userId.toString() !== userIdToCheck) {
       return res.status(403).json({
@@ -290,7 +318,15 @@ exports.verifyPayment = async (req, res) => {
  */
 exports.getActiveSubscription = async (req, res) => {
   try {
-    const userId = req.user.roleId || req.user.employeeId || req.user.userId;
+    const authUserIdResult = getAuthenticatedPaymentUserId(req);
+    if (authUserIdResult.error) {
+      return res.status(400).json({
+        success: false,
+        message: authUserIdResult.error
+      });
+    }
+
+    const userId = authUserIdResult.userId;
 
     const result = await paymentService.getActiveSubscription(userId);
 
@@ -331,7 +367,15 @@ exports.getActiveSubscription = async (req, res) => {
  */
 exports.getPaymentHistory = async (req, res) => {
   try {
-    const userId = req.user.roleId || req.user.employeeId || req.user.userId;
+    const authUserIdResult = getAuthenticatedPaymentUserId(req);
+    if (authUserIdResult.error) {
+      return res.status(400).json({
+        success: false,
+        message: authUserIdResult.error
+      });
+    }
+
+    const userId = authUserIdResult.userId;
     const limit = parseInt(req.query.limit) || 10;
 
     const result = await paymentService.getPaymentHistory(userId, limit);
@@ -378,7 +422,15 @@ exports.getPaymentHistory = async (req, res) => {
  */
 exports.cancelSubscription = async (req, res) => {
   try {
-    const userId = req.user.roleId || req.user.employeeId || req.user.userId;
+    const authUserIdResult = getAuthenticatedPaymentUserId(req);
+    if (authUserIdResult.error) {
+      return res.status(400).json({
+        success: false,
+        message: authUserIdResult.error
+      });
+    }
+
+    const userId = authUserIdResult.userId;
 
     const result = await paymentService.cancelSubscription(userId);
 
@@ -413,7 +465,15 @@ exports.cancelSubscription = async (req, res) => {
 exports.getPaymentAnalytics = async (req, res) => {
   try {
     // Use roleId (profile ID) to match how payments are stored, fallback to userId
-    const userId = req.user.roleId || req.user.employeeId || req.user.userId;
+    const authUserIdResult = getAuthenticatedPaymentUserId(req);
+    if (authUserIdResult.error) {
+      return res.status(400).json({
+        success: false,
+        message: authUserIdResult.error
+      });
+    }
+
+    const userId = authUserIdResult.userId;
 
     const result = await paymentService.getPaymentAnalytics(userId);
 

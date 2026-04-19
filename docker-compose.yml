@@ -23,6 +23,8 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - ADMIN_SIGNIN_KEY=${ADMIN_SIGNIN_KEY}
       - JWT_SECRET=${JWT_SECRET}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
     volumes:
       - ./backend:/app
       - /app/node_modules
