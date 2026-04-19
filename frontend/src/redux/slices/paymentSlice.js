@@ -183,16 +183,25 @@ export const initializePayment = createAsyncThunk(
 // Process payment
 export const processPayment = createAsyncThunk(
   'payment/processPayment',
-  async ({ paymentId }, { rejectWithValue }) => {
+  async ({ paymentId, paymentMethod, razorpayOrderId, razorpayPaymentId, razorpaySignature }, { rejectWithValue }) => {
     try {
       const config = getAuthConfig('user');
       if (!config.headers?.Authorization) {
         return rejectWithValue('Not authenticated');
       }
+
+      if (!paymentId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+        return rejectWithValue('Missing Razorpay payment verification fields');
+      }
       
       const response = await axios.post(
         `${API_BASE_URL}/process/${paymentId}`,
-        {},
+        {
+          paymentMethod,
+          razorpayOrderId,
+          razorpayPaymentId,
+          razorpaySignature
+        },
         {
           headers: {
             ...config.headers,

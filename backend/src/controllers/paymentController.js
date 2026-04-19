@@ -134,9 +134,17 @@ exports.initializePayment = async (req, res) => {
         id: result.payment._id,
         transactionId: result.payment.transactionId,
         orderId: result.payment.orderId,
+        planType: result.payment.planType,
+        billingCycle: result.payment.billingCycle,
         amount: result.payment.amount,
         currency: result.payment.currency,
-        paymentStatus: result.payment.paymentStatus
+        paymentStatus: result.payment.paymentStatus,
+        razorpay: {
+          keyId: process.env.RAZORPAY_KEY_ID,
+          orderId: result.razorpayOrder.id,
+          amount: result.razorpayOrder.amount,
+          currency: result.razorpayOrder.currency
+        }
       }
     });
   } catch (error) {
@@ -196,8 +204,12 @@ exports.processPayment = async (req, res) => {
       success: true,
       message: 'Payment processed successfully',
       payment: {
+        id: result.payment._id,
         transactionId: result.payment.transactionId,
         orderId: result.payment.orderId,
+        planType: result.payment.planType,
+        billingCycle: result.payment.billingCycle,
+        amount: result.payment.amount,
         paymentStatus: result.payment.paymentStatus,
         subscriptionStartDate: result.payment.subscriptionStartDate,
         subscriptionEndDate: result.payment.subscriptionEndDate,

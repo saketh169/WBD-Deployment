@@ -6,6 +6,7 @@ const {
   sendBookingConfirmationToUser,
   sendBookingNotificationToDietitian,
 } = require("../services/bookingService");
+const razorpayService = require("../services/razorpayService");
 const { notifyDietitianNewBooking, notifyBookingUpdate, notifyUserUpdate, notifySlotLockChange } = require("../utils/socket");
 const crypto = require("crypto");
 
@@ -36,6 +37,68 @@ function buildICS({ uid, start, end, title, description, location, url }) {
   ].filter(Boolean).join("\r\n");
 }
 
+// Create a Razorpay order for consultation booking payment
+exports.createBookingPaymentOrder = async (req, res) => {
+  try {
+    const {
+      amount,
+      currency = 'INR',
+      dietitianId,
+      date,
+      time,
+      consultationType
+    } = req.body;
+
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid amount for booking payment'
+      });
+    }
+
+    if (!razorpayService.isConfigured()) {
+      return res.status(500).json({
+        success: false,
+        message: 'Payment gateway is not configured'
+      });
+    }
+
+    const amountInPaise = Math.round(numericAmount * 100);
+    const receipt = `BK${Date.now()}${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+
+    const order = await razorpayService.createOrder({
+      amount: amountInPaise,
+      currency,
+      receipt,
+      notes: {
+        userId: String(req.user.roleId || req.user.employeeId || req.user.userId || ''),
+        dietitianId: String(dietitianId || ''),
+        date: String(date || ''),
+        time: String(time || ''),
+        consultationType: String(consultationType || '')
+      }
+    });
+
+    return res.status(201).json({
+      success: true,
+      order: {
+        id: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        receipt: order.receipt
+      },
+      keyId: razorpayService.getPublicKey()
+    });
+  } catch (error) {
+    console.error('Error creating booking payment order:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create booking payment order'
+    });
+  }
+};
+
 // Create a new booking
 exports.createBooking = async (req, res) => {
   try {
@@ -55,7 +118,12 @@ exports.createBooking = async (req, res) => {
       amount,
       paymentMethod,
       paymentId,
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
     } = req.body;
+
+    const normalizedPaymentId = paymentId || razorpayPaymentId;
 
     // Use authenticated user ID from JWT — never trust userId from body
     const userId = req.user.roleId || req.user.employeeId || req.user.userId;
@@ -73,7 +141,10 @@ exports.createBooking = async (req, res) => {
       !consultationType ||
       !amount ||
       !paymentMethod ||
-      !paymentId
+      !normalizedPaymentId ||
+      !razorpayOrderId ||
+      !razorpayPaymentId ||
+      !razorpaySignature
     ) {
       // Log which fields are missing
       const missingFields = [];
@@ -88,7 +159,10 @@ exports.createBooking = async (req, res) => {
       if (!consultationType) missingFields.push("consultationType");
       if (!amount) missingFields.push("amount");
       if (!paymentMethod) missingFields.push("paymentMethod");
-      if (!paymentId) missingFields.push("paymentId");
+      if (!normalizedPaymentId) missingFields.push("paymentId");
+      if (!razorpayOrderId) missingFields.push("razorpayOrderId");
+      if (!razorpayPaymentId) missingFields.push("razorpayPaymentId");
+      if (!razorpaySignature) missingFields.push("razorpaySignature");
 
       return res.status(400).json({
         success: false,
@@ -102,6 +176,26 @@ exports.createBooking = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Invalid email format",
+      });
+    }
+
+    if (!razorpayService.isConfigured()) {
+      return res.status(500).json({
+        success: false,
+        message: "Payment gateway is not configured",
+      });
+    }
+
+    const isSignatureValid = razorpayService.verifySignature({
+      orderId: razorpayOrderId,
+      paymentId: razorpayPaymentId,
+      signature: razorpaySignature
+    });
+
+    if (!isSignatureValid) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed. Invalid Razorpay signature.",
       });
     }
 
@@ -180,7 +274,7 @@ exports.createBooking = async (req, res) => {
     }
 
     // Check if payment ID is unique
-    const existingPayment = await Booking.findOne({ paymentId });
+    const existingPayment = await Booking.findOne({ paymentId: normalizedPaymentId });
     if (existingPayment) {
       return res.status(400).json({
         success: false,
@@ -205,7 +299,7 @@ exports.createBooking = async (req, res) => {
       consultationType,
       amount,
       paymentMethod,
-      paymentId,
+      paymentId: normalizedPaymentId,
       paymentStatus: "completed",
       status: "confirmed",
     });
@@ -236,7 +330,7 @@ exports.createBooking = async (req, res) => {
         time,
         consultationType,
         amount,
-        paymentId,
+        paymentId: normalizedPaymentId,
         bookingId: savedBooking._id,
       };
 

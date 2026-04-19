@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import axios from "axios";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import SubscriptionAlert from '../../middleware/SubscriptionAlert';
+import { loadRazorpayCheckout } from "../../utils/razorpayCheckout";
 import {
   createBooking,
   selectSubscriptionAlertData,
@@ -143,49 +145,8 @@ const PaymentNotificationModal = ({
       errors.email = "Please enter a valid email address";
     }
 
-    // Validate based on selected payment method
-    if (selectedMethod === 'card') {
-      if (!cardDetails.cardNumber) {
-        errors.cardNumber = "Card number is required";
-      } else if (!validateCardNumber(cardDetails.cardNumber)) {
-        errors.cardNumber = "Card number must be 16 digits (e.g., 1111 1111 1111 1111)";
-      }
-
-      if (!cardDetails.validThrough) {
-        errors.validThrough = "Expiry date is required";
-      } else if (!validateExpiry(cardDetails.validThrough)) {
-        errors.validThrough = "Card has expired or invalid date";
-      }
-
-      if (!cardDetails.cvv) {
-        errors.cvv = "CVV is required";
-      } else if (cardDetails.cvv.length < 3) {
-        errors.cvv = "CVV must be 3 or 4 digits";
-      }
-
-      if (!cardDetails.cardName) {
-        errors.cardName = "Cardholder name is required";
-      } else if (cardDetails.cardName.trim().length < 3) {
-        errors.cardName = "Name must be at least 3 characters";
-      }
-
-    } else if (selectedMethod === 'netbanking') {
-      if (!selectedBank) {
-        errors.bank = "Please select a bank";
-      }
-      if (!netbankingCredentials.username || netbankingCredentials.username.length < 3) {
-        errors.netbankingUsername = "Username must be at least 3 characters";
-      }
-      if (!netbankingCredentials.password || netbankingCredentials.password.length < 6) {
-        errors.netbankingPassword = "Password must be at least 6 characters";
-      }
-
-    } else if (selectedMethod === 'upi') {
-      if (!upiId && !selectedUpiApp) {
-        errors.upi = "Please enter a UPI ID or select a UPI app";
-      } else if (upiId && !validateUpiId(upiId)) {
-        errors.upi = "Invalid UPI ID. Use format: name@upi or 9876543210@paytm";
-      }
+    if (!selectedMethod) {
+      errors.paymentMethod = "Please select a payment method";
     }
 
     setValidationErrors(errors);
@@ -196,10 +157,12 @@ const PaymentNotificationModal = ({
       return;
     }
 
+    let checkoutOpened = false;
     setIsProcessing(true);
     try {
       // ALWAYS use userId from AuthContext - never trust paymentDetails.userId to avoid stale data
       const userId = user?.id;
+      const authToken = localStorage.getItem('authToken_user');
 
       if (!userId) {
         alert('User session not found. Please log in again.');
@@ -207,12 +170,16 @@ const PaymentNotificationModal = ({
         return;
       }
 
-      // Generate payment ID
-      const paymentId = "PAY_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+      if (!authToken) {
+        alert('Authentication token missing. Please log in again.');
+        setIsProcessing(false);
+        return;
+      }
 
-      // Prepare booking data - ENSURE ALL REQUIRED FIELDS ARE PRESENT
-      // Always use current user's data from AuthContext for user-related fields
-      const bookingData = {
+      const consultationType = paymentDetails?.consultationType || paymentDetails?.type;
+
+      // Prepare booking data (without payment IDs; those are added after Razorpay success)
+      const bookingBaseData = {
         userId: userId,
         username: user?.name || paymentDetails?.userName,
         email: email,
@@ -225,20 +192,19 @@ const PaymentNotificationModal = ({
         dietitianSpecialization: paymentDetails?.dietitianSpecialization || '',
         date: paymentDetails?.date,
         time: paymentDetails?.time,
-        consultationType: paymentDetails?.consultationType || paymentDetails?.type,
+        consultationType,
         amount: paymentDetails?.amount,
         paymentMethod: selectedMethod,
-        paymentId: paymentId,
       };
 
-      // Validate all required fields before sending
+      // Validate all required fields before creating order
       const requiredFields = [
         'userId', 'username', 'email', 'dietitianId', 'dietitianName', 
         'dietitianEmail', 'date', 'time', 'consultationType', 'amount', 
-        'paymentMethod', 'paymentId'
+        'paymentMethod'
       ];
       
-      const missingFields = requiredFields.filter(field => !bookingData[field]);
+      const missingFields = requiredFields.filter(field => !bookingBaseData[field]);
       if (missingFields.length > 0) {
         console.error('Missing required fields:', missingFields);
         alert(`Missing required information: ${missingFields.join(', ')}. Please close and try booking again.`);
@@ -246,36 +212,133 @@ const PaymentNotificationModal = ({
         return;
       }
 
-      // Create booking using Redux thunk
-      const result = await dispatch(createBooking(bookingData)).unwrap();
-
-      if (result) {
-        // Call parent onSubmit for UI updates
-        if (onSubmit) {
-          onSubmit({ 
-            email, 
-            paymentMethod: selectedMethod, 
-            amount: paymentDetails?.amount, 
-            transactionId: paymentId,
-            bookingId: result._id
-          });
-        }
-
-        // Close modal
-        onClose();
-
-        // Reset form
-        setEmail("");
-        setSelectedMethod(null);
-        setCardDetails({ cardNumber: "", validThrough: "", cvv: "", cardName: "" });
-        setSelectedBank("");
-        setNetbankingCredentials({ username: "", password: "" });
-        setNetbankingVerified(false);
-        setUpiId("");
-        setSelectedUpiApp("");
-        setUpiVerified(false);
-        setValidationErrors({});
+      const razorpayLoaded = await loadRazorpayCheckout();
+      if (!razorpayLoaded || !window.Razorpay) {
+        alert('Unable to load Razorpay checkout. Please check your internet and try again.');
+        setIsProcessing(false);
+        return;
       }
+
+      const orderResponse = await axios.post(
+        '/api/bookings/payment/order',
+        {
+          amount: Number(paymentDetails?.amount),
+          date: paymentDetails?.date,
+          time: paymentDetails?.time,
+          consultationType,
+          dietitianId: paymentDetails?.dietitianId
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!orderResponse?.data?.success || !orderResponse?.data?.order?.id) {
+        throw new Error(orderResponse?.data?.message || 'Failed to create booking payment order');
+      }
+
+      const keyId = import.meta.env.VITE_RAZORPAY_KEY_ID || orderResponse?.data?.keyId;
+      if (!keyId) {
+        throw new Error('Razorpay key is not configured in frontend environment');
+      }
+
+      const order = orderResponse.data.order;
+
+      const methodConfig = {
+        card: selectedMethod === 'card',
+        netbanking: selectedMethod === 'netbanking',
+        upi: selectedMethod === 'upi',
+        emi: selectedMethod === 'emi',
+        wallet: false,
+        paylater: false
+      };
+
+      const razorpay = new window.Razorpay({
+        key: keyId,
+        amount: order.amount,
+        currency: order.currency || 'INR',
+        name: 'NutriConnect',
+        description: 'Consultation Booking',
+        order_id: order.id,
+        method: methodConfig,
+        prefill: {
+          name: bookingBaseData.username,
+          email: bookingBaseData.email
+        },
+        notes: {
+          dietitianId: String(bookingBaseData.dietitianId),
+          date: String(bookingBaseData.date),
+          time: String(bookingBaseData.time),
+          consultationType: String(bookingBaseData.consultationType)
+        },
+        theme: {
+          color: '#27AE60'
+        },
+        handler: async (response) => {
+          try {
+            const bookingPayload = {
+              ...bookingBaseData,
+              paymentId: response.razorpay_payment_id,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature
+            };
+
+            const result = await dispatch(createBooking(bookingPayload)).unwrap();
+
+            if (result) {
+              if (onSubmit) {
+                onSubmit({
+                  email,
+                  paymentMethod: selectedMethod,
+                  amount: paymentDetails?.amount,
+                  transactionId: response.razorpay_payment_id,
+                  bookingId: result._id
+                });
+              }
+
+              onClose();
+              setEmail("");
+              setSelectedMethod(null);
+              setCardDetails({ cardNumber: "", validThrough: "", cvv: "", cardName: "" });
+              setSelectedBank("");
+              setNetbankingCredentials({ username: "", password: "" });
+              setNetbankingVerified(false);
+              setUpiId("");
+              setSelectedUpiApp("");
+              setUpiVerified(false);
+              setValidationErrors({});
+            }
+          } catch (bookingError) {
+            console.error('Booking confirmation error after payment:', bookingError);
+            if (!reduxShowSubscriptionAlert) {
+              const errorMessage = typeof bookingError === 'string'
+                ? bookingError
+                : (bookingError?.message || 'Payment succeeded but booking failed. Please contact support with your payment ID.');
+              alert(errorMessage);
+            }
+          } finally {
+            setIsProcessing(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setIsProcessing(false);
+          }
+        }
+      });
+
+      razorpay.on('payment.failed', (response) => {
+        const message = response?.error?.description || 'Payment failed. Please try again.';
+        alert(message);
+        setIsProcessing(false);
+      });
+
+      checkoutOpened = true;
+      razorpay.open();
 
     } catch (error) {
       console.error("Payment/Booking error:", error);
@@ -286,7 +349,9 @@ const PaymentNotificationModal = ({
         alert(errorMessage);
       }
     } finally {
-      setIsProcessing(false);
+      if (!checkoutOpened) {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -822,7 +887,11 @@ const PaymentNotificationModal = ({
                   />
                   <label className="ml-3 font-medium" style={{ color: '#2F4F4F' }}>{method.title}</label>
                 </div>
-                {selectedMethod === key && method.content}
+                {selectedMethod === key && (
+                  <div className="p-4 bg-emerald-50 border-t border-emerald-200 text-sm" style={{ color: '#1A4A40' }}>
+                    Details will be entered securely on Razorpay checkout.
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -848,11 +917,11 @@ const PaymentNotificationModal = ({
             <button
               type="button"
               onClick={handleFormSubmit}
-              disabled={isProcessing || !selectedMethod || (selectedMethod === 'upi' && !upiVerified)}
-              className={`flex-1 px-4 py-3 rounded-lg transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${(!selectedMethod || (selectedMethod === 'upi' && !upiVerified)) ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'text-white'}`}
-              style={selectedMethod && !(selectedMethod === 'upi' && !upiVerified) ? { backgroundColor: '#27AE60' } : {}}
-              onMouseEnter={(e) => selectedMethod && !(selectedMethod === 'upi' && !upiVerified) && !isProcessing && (e.target.style.backgroundColor = '#1A4A40')}
-              onMouseLeave={(e) => selectedMethod && !(selectedMethod === 'upi' && !upiVerified) && !isProcessing && (e.target.style.backgroundColor = '#27AE60')}
+              disabled={isProcessing || !selectedMethod}
+              className={`flex-1 px-4 py-3 rounded-lg transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${(!selectedMethod) ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'text-white'}`}
+              style={selectedMethod ? { backgroundColor: '#27AE60' } : {}}
+              onMouseEnter={(e) => selectedMethod && !isProcessing && (e.target.style.backgroundColor = '#1A4A40')}
+              onMouseLeave={(e) => selectedMethod && !isProcessing && (e.target.style.backgroundColor = '#27AE60')}
             >
               {isProcessing ? (
                 <>
