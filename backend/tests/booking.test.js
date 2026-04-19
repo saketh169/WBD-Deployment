@@ -221,11 +221,11 @@ describe('BlockedSlot Model', () => {
   });
 });
 
-describe('Intentional CI Failure Demo', () => {
-  test('should fail intentionally for pipeline validation', () => {
-    expect(1).toBe(2);
-  });
-});
+// describe('Intentional CI Failure Demo', () => {
+//   test('should fail intentionally for pipeline validation', () => {
+//     expect(1).toBe(2);
+//   });
+// });
 
 //  // 1. Invalid Email Format
 // test('CI Fail: email validation regex check', async () => {

@@ -242,3 +242,15 @@ describe('Payment Model - Deactivation', () => {
   });
 });
 
+
+// 2. Invalid Plan Type Enum
+test('CI Fail: unsupported plan type rejected', async () => {
+  await expect(Payment.create(createValidPayment({ planType: 'gold' })))
+    .rejects.toThrow(); // ValidationError: invalid enum value
+});
+
+// // 3. Negative Amount
+// test('CI Fail: negative amount validation fails', async () => {
+//   await expect(Payment.create(createValidPayment({ amount: -500 })))
+//     .rejects.toThrow(); // ValidationError: amount must be > 0
+// });
