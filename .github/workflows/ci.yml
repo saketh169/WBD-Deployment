@@ -43,83 +43,149 @@ jobs:
             const fs = require('fs');
             const path = require('path');
             
-            // Common patterns to detect missing imports
-            const commonModels = ['User', 'Admin', 'Dietitian', 'Employee', 'Booking', 'Payment', 'Blog', 'ActivityLog'];
+            // All possible models and dependencies
+            const allModels = ['User', 'Admin', 'Dietitian', 'Employee', 'Booking', 'Payment', 'Blog', 'ActivityLog', 'Progress', 'MealPlan', 'HealthReport', 'LabReport', 'Message', 'Conversation', 'FAQ', 'ChatHistory', 'Query', 'EmployeeQuery', 'TeamBoard', 'Settings', 'NutritionCache', 'HardcodedResponse', 'BlockedSlot', 'Organization'];
+            const allControllers = ['authController', 'blogController', 'bookingController', 'chatController', 'chatbotController', 'contactusController', 'crudController', 'employeeController', 'forgotPasswordController', 'healthReportController', 'labReportController', 'mealPlanController', 'notificationController', 'paymentController', 'profileController', 'progressController', 'settingsController', 'statusController', 'teamBoardController', 'verifyController', 'analyticsController', 'activityLogController'];
+            const allServices = ['otpService', 'paymentService', 'razorpayService', 'bookingService', 'emailService', 'contactService'];
+            const allPackages = ['bcrypt', 'jwt', 'mongoose', 'multer', 'csv', 'nodemailer', 'axios', 'crypto', 'morgan', 'helmet', 'rateLimit', 'cloudinary', 'Razorpay', 'GoogleGenerativeAI', 'Readable', 'OAuth2Client'];
             
-            const validateDirectory = (dirPath, dirName) => {
-              if (!fs.existsSync(dirPath)) {
-                console.warn('⚠ ' + dirName + ' directory not found');
-                return true;
-              }
-              
+            const validateControllers = () => {
+              const dirPath = './src/controllers';
               const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.js'));
               let errors = [];
-              let validCount = 0;
               
               files.forEach(file => {
                 try {
                   const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
                   const lines = content.split('\n');
                   
-                  // Extract ONLY ACTIVE (uncommented) imported variables
+                  // Extract ACTIVE imports
                   const importedVars = new Set();
-                  
-                  lines.forEach((line, idx) => {
-                    // Skip commented lines - they are MISSING
+                  lines.forEach((line) => {
                     if (line.trim().startsWith('//')) return;
-                    
                     const requireMatch = line.match(/(?:const|let|var)\s+(\w+|\{[^}]+\})\s*=\s*require\(['\"]([^'\"]+)['\"]\)/);
                     if (requireMatch) {
                       const varPart = requireMatch[1];
-                      
-                      // Extract variable names
                       if (varPart.includes('{')) {
                         const extracted = varPart.match(/\{([^}]+)\}/)[1];
                         extracted.split(',').forEach(v => importedVars.add(v.trim()));
                       } else {
                         importedVars.add(varPart.trim());
                       }
-                      
-                      console.log('✓ ' + file + ' imports: ' + varPart);
-                      validCount++;
                     }
                   });
                   
-                  // Check if code uses models that aren't in ACTIVE imports
+                  // Find what controller NEEDS
                   const codeContent = lines.join('\n');
+                  const needed = new Set();
                   
-                  commonModels.forEach(model => {
-                    // Check if model is used in code
+                  // Check models
+                  allModels.forEach(model => {
                     const regex = new RegExp('\\b' + model + '\\b(?!:)', 'g');
-                    const usages = codeContent.match(regex) || [];
-                    
-                    if (usages.length > 0 && !importedVars.has(model)) {
-                      errors.push('❌ ' + file + ' - USES \"' + model + '\" but NO ACTIVE IMPORT FOUND (may be commented out)!');
+                    if (codeContent.match(regex)) needed.add(model);
+                  });
+                  
+                  // Check services
+                  allServices.forEach(service => {
+                    const regex = new RegExp('\\b' + service + '\\b', 'g');
+                    if (codeContent.match(regex)) needed.add(service);
+                  });
+                  
+                  // Check packages
+                  allPackages.forEach(pkg => {
+                    const regex = new RegExp('\\b' + pkg + '\\b', 'g');
+                    if (codeContent.match(regex)) needed.add(pkg);
+                  });
+                  
+                  // Verify all needed imports are present
+                  needed.forEach(item => {
+                    if (!importedVars.has(item)) {
+                      errors.push('❌ CONTROLLER: ' + file + ' - USES \"' + item + '\" but NOT IMPORTED!');
                     }
                   });
+                  
+                  if (needed.size > 0) {
+                    console.log('✓ ' + file + ' needs: ' + Array.from(needed).join(', '));
+                  }
                   
                 } catch (err) {
-                  errors.push(file + ': ' + err.message);
+                  errors.push('Controller: ' + file + ': ' + err.message);
                 }
               });
               
-              console.log('✓ ' + dirName + ' validated: ' + files.length + ' files, ' + validCount + ' active imports');
-              
-              if (errors.length > 0) {
-                console.error('\n❌ MISSING IMPORTS DETECTED:');
-                errors.forEach(e => console.error(e));
-                return false;
-              }
-              return true;
+              console.log('✓ Controllers validated: ' + files.length + ' files');
+              return errors;
             };
             
-            const controllerValid = validateDirectory('./src/controllers', 'Controllers');
-            const routeValid = validateDirectory('./src/routes', 'Routes');
-            const serviceValid = validateDirectory('./src/services', 'Services');
-            const middlewareValid = validateDirectory('./src/middlewares', 'Middlewares');
+            const validateRoutes = () => {
+              const dirPath = './src/routes';
+              const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.js'));
+              let errors = [];
+              
+              files.forEach(file => {
+                try {
+                  const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
+                  const lines = content.split('\n');
+                  
+                  // Extract ACTIVE imports
+                  const importedVars = new Set();
+                  lines.forEach((line) => {
+                    if (line.trim().startsWith('//')) return;
+                    const requireMatch = line.match(/(?:const|let|var)\s+(\w+|\{[^}]+\})\s*=\s*require\(['\"]([^'\"]+)['\"]\)/);
+                    if (requireMatch) {
+                      const varPart = requireMatch[1];
+                      if (varPart.includes('{')) {
+                        const extracted = varPart.match(/\{([^}]+)\}/)[1];
+                        extracted.split(',').forEach(v => importedVars.add(v.trim()));
+                      } else {
+                        importedVars.add(varPart.trim());
+                      }
+                    }
+                  });
+                  
+                  // Find what route NEEDS
+                  const codeContent = lines.join('\n');
+                  const needed = new Set();
+                  
+                  // Check controllers
+                  allControllers.forEach(controller => {
+                    const regex = new RegExp('\\b' + controller + '\\b', 'g');
+                    if (codeContent.match(regex)) needed.add(controller);
+                  });
+                  
+                  // Check models
+                  allModels.forEach(model => {
+                    const regex = new RegExp('\\b' + model + '\\b(?!:)', 'g');
+                    if (codeContent.match(regex)) needed.add(model);
+                  });
+                  
+                  // Verify all needed imports are present
+                  needed.forEach(item => {
+                    if (!importedVars.has(item)) {
+                      errors.push('❌ ROUTE: ' + file + ' - USES \"' + item + '\" but NOT IMPORTED!');
+                    }
+                  });
+                  
+                  if (needed.size > 0) {
+                    console.log('✓ ' + file + ' needs: ' + Array.from(needed).join(', '));
+                  }
+                  
+                } catch (err) {
+                  errors.push('Route: ' + file + ': ' + err.message);
+                }
+              });
+              
+              console.log('✓ Routes validated: ' + files.length + ' files');
+              return errors;
+            };
             
-            if (!controllerValid || !routeValid || !serviceValid || !middlewareValid) {
-              console.error('\n❌ CRITICAL: Missing required imports detected (may be commented out)!');
+            const allErrors = [];
+            allErrors.push(...validateControllers());
+            allErrors.push(...validateRoutes());
+            
+            if (allErrors.length > 0) {
+              console.error('\n❌ IMPORT VALIDATION FAILED:');
+              allErrors.forEach(e => console.error(e));
               process.exit(1);
             }
             console.log('\n✓ All imports validated successfully');
