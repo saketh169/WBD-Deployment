@@ -283,10 +283,10 @@ describe('Blog Model - Virtual & Middleware', () => {
 //     .rejects.toThrow(); // ValidationError: content min 50 chars
 // });
 
-// // 3. Missing Required Category
-// test('CI Fail: category field is required', async () => {
-//   const data = createValidBlog();
-//   delete data.category;
-//   await expect(Blog.create(data))
-//     .rejects.toThrow(); // ValidationError: category required
-// });
+// 3. Missing Required Category
+test('CI Fail: category field is required', async () => {
+  const data = createValidBlog();
+  delete data.category;
+  await expect(Blog.create(data))
+    .rejects.toThrow(); // ValidationError: category required
+});
