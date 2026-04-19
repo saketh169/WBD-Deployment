@@ -220,3 +220,9 @@ describe('BlockedSlot Model', () => {
       .rejects.toThrow();
   });
 });
+
+describe('Intentional CI Failure Demo', () => {
+  test('should fail intentionally for pipeline validation', () => {
+    expect(1).toBe(2);
+  });
+});
