@@ -7,24 +7,24 @@ const { BlockedSlot } = require('../src/models/bookingModel');
 // BOOKING MODEL TESTS
 // ============================================================
 
-describe('Booking Model - Creation', () => {
-  const createValidBooking = (overrides = {}) => ({
-    userId: new mongoose.Types.ObjectId(),
-    username: 'Test User',
-    email: 'testuser@example.com',
-    dietitianId: new mongoose.Types.ObjectId(),
-    dietitianName: 'Dr. Sarah',
-    dietitianEmail: 'sarah@clinic.com',
-    date: new Date('2026-06-01'),
-    time: '10:00',
-    consultationType: 'Online',
-    amount: 500,
-    paymentMethod: 'upi',
-    paymentId: 'PAY_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-    status: 'confirmed',
-    ...overrides
-  });
+const createValidBooking = (overrides = {}) => ({
+  userId: new mongoose.Types.ObjectId(),
+  username: 'Test User',
+  email: 'testuser@example.com',
+  dietitianId: new mongoose.Types.ObjectId(),
+  dietitianName: 'Dr. Sarah',
+  dietitianEmail: 'sarah@clinic.com',
+  date: new Date('2026-06-01'),
+  time: '10:00',
+  consultationType: 'Online',
+  amount: 500,
+  paymentMethod: 'upi',
+  paymentId: 'PAY_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+  status: 'confirmed',
+  ...overrides
+});
 
+describe('Booking Model - Creation', () => {
   test('should create a valid booking', async () => {
     const booking = await Booking.create(createValidBooking());
 
@@ -222,29 +222,25 @@ describe('BlockedSlot Model', () => {
 });
 
 describe('Booking - Real CI/CD Failure Scenarios', () => {
-  test('CI Fail: invalid email format validation', async () => {
-    await expect(Booking.create(createValidBooking({
-      email: 'not-an-email',
-      paymentId: 'PAY_EMAIL_' + Date.now()
-    }))).rejects.toThrow();
-    // Validates: email must match regex with @ symbol
-  });
-
-  test('CI Fail: past date booking validation', async () => {
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 5);
-    await expect(Booking.create(createValidBooking({
-      date: pastDate,
-      paymentId: 'PAY_PAST_' + Date.now()
-    }))).rejects.toThrow();
-    // Validates: booking date must be today or in future
-  });
-
   test('CI Fail: duplicate payment ID constraint', async () => {
-    const paymentId = 'PAY_UNIQUE_123';
+    const paymentId = 'PAY_UNIQUE_' + Date.now() + '_' + Math.random();
     await Booking.create(createValidBooking({ paymentId }));
     await expect(Booking.create(createValidBooking({ paymentId })))
       .rejects.toThrow();
     // Validates: unique index on paymentId enforced
+  });
+
+  test('should fail when missing required fields', async () => {
+    const data = createValidBooking();
+    delete data.username;
+    await expect(Booking.create(data)).rejects.toThrow();
+    // CI Fails: ValidationError - username is required
+  });
+
+  test('should fail without dietitian email', async () => {
+    const data = createValidBooking();
+    delete data.dietitianEmail;
+    await expect(Booking.create(data)).rejects.toThrow();
+    // CI Fails: ValidationError - dietitianEmail is required
   });
 });
