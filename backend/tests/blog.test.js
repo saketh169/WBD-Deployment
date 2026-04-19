@@ -269,3 +269,24 @@ describe('Blog Model - Virtual & Middleware', () => {
     expect(blog.excerpt).not.toContain('</');
   });
 });
+
+
+// 1. Title Too Short
+test('CI Fail: blog title minimum length enforced', async () => {
+  await expect(Blog.create(createValidBlog({ title: 'Hi' })))
+    .rejects.toThrow(); // ValidationError: title min 5 chars
+});
+
+// 2. Content Too Short
+test('CI Fail: blog content minimum length enforced', async () => {
+  await expect(Blog.create(createValidBlog({ content: 'Too short' })))
+    .rejects.toThrow(); // ValidationError: content min 50 chars
+});
+
+// 3. Missing Required Category
+test('CI Fail: category field is required', async () => {
+  const data = createValidBlog();
+  delete data.category;
+  await expect(Blog.create(data))
+    .rejects.toThrow(); // ValidationError: category required
+});
