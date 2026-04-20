@@ -226,13 +226,15 @@ describe('BlockedSlot Model', () => {
 // ============================================================
 
 // SHORT TEST 1: Invalid email format
-// test('should reject invalid email - EXPECTED TO FAIL', async () => {
+// test('should reject invalid email', async () => {
+//   console.warn('❌ Email format validation not enforced - accepts invalid emails like notanemail');
 //   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'notanemail', dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T1_' + Date.now(), status: 'confirmed' });
 //   expect(b.email).toMatch(/@.*\./);
 // });
 
 // LONG TEST 2: Empty username validation
-// test('should fail when username is empty - EXPECTED TO FAIL', async () => {
+// test('should fail when username is empty', async () => {
+//   console.warn('❌ Username empty string validation missing - allows empty usernames');
 //   const createBooking = (overrides = {}) => ({
 //     userId: new mongoose.Types.ObjectId(),
 //     username: 'Default',
@@ -252,13 +254,15 @@ describe('BlockedSlot Model', () => {
 // });
 
 // SHORT TEST 3: Zero amount
-// test('should reject zero amount - EXPECTED TO FAIL', async () => {
+// test('should reject zero amount', async () => {
+//   console.warn('❌ Zero amount validation missing - accepts zero amounts');
 //   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'test@test.com', amount: 0, dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T3_' + Date.now(), status: 'confirmed' });
 //   expect(b.amount).toBeGreaterThan(0);
 // });
 
 // LONG TEST 4: Bad time format validation
-// test('should reject malformed time format - EXPECTED TO FAIL', async () => {
+// test('should reject malformed time format', async () => {
+//   console.warn('❌ Time format validation not strict - accepts invalid times like 25:61');
 //   const createBooking = (overrides = {}) => ({
 //     userId: new mongoose.Types.ObjectId(),
 //     username: 'Time Test',
@@ -281,13 +285,15 @@ describe('BlockedSlot Model', () => {
 // });
 
 // SHORT TEST 5: Past date
-// test('should reject past date - EXPECTED TO FAIL', async () => {
+// test('should reject past date', async () => {
+//   console.warn('❌ Past date validation missing - allows bookings with dates from 2020');
 //   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'test@test.com', date: new Date('2020-01-01'), dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T5_' + Date.now(), status: 'confirmed' });
 //   expect(b.date).toBeGreaterThan(new Date());
 // });
 
 // LONG TEST 6: Invalid dietitian email validation
-// test('should fail when dietitian email is invalid - EXPECTED TO FAIL', async () => {
+// test('should fail when dietitian email is invalid', async () => {
+//   console.warn('❌ Dietitian email format validation missing - accepts invalid emails');
 //   const createBooking = (overrides = {}) => ({
 //     userId: new mongoose.Types.ObjectId(),
 //     username: 'Email Test User',
@@ -309,13 +315,15 @@ describe('BlockedSlot Model', () => {
 // });
 
 // SHORT TEST 7: Huge amount
-// test('should reject huge amount - EXPECTED TO FAIL', async () => {
+// test('should reject huge amount', async () => {
+//   console.warn('❌ Amount upper limit validation missing - accepts amounts up to 999999999');
 //   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'test@test.com', amount: 999999999, dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T7_' + Date.now(), status: 'confirmed' });
 //   expect(b.amount).toBeLessThan(1000000);
 // });
 
 // LONG TEST 8: Invalid consultation type validation
-// test('should validate consultation type consistency - EXPECTED TO FAIL', async () => {
+// test('should validate consultation type consistency', async () => {
+//   console.warn('❌ Consultation type validation missing - accepts invalid types like Hybrid');
 //   const createBooking = (overrides = {}) => ({
 //     userId: new mongoose.Types.ObjectId(),
 //     username: 'Consult Test',
@@ -336,14 +344,16 @@ describe('BlockedSlot Model', () => {
 //   expect(['Online', 'In-person']).toContain(booking.consultationType);
 // });
 
-//SHORT TEST 9: Case sensitive payment method
-test('should normalize payment method case - EXPECTED TO FAIL', async () => {
+SHORT TEST 9: Case sensitive payment method
+test('should normalize payment method case', async () => {
+  console.warn('❌ Payment method case sensitivity - model does not normalize UPI to upi');
   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'test@test.com', paymentMethod: 'UPI', dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T9_' + Date.now(), status: 'confirmed' });
   expect(b.paymentMethod).toBe('upi');
 });
 
 // LONG TEST 10: Invalid booking status validation
-// test('should transition through valid states only - EXPECTED TO FAIL', async () => {
+// test('should transition through valid states only', async () => {
+//   console.warn('❌ Status validation missing - accepts invalid status pending');
 //   const createBooking = (overrides = {}) => ({
 //     userId: new mongoose.Types.ObjectId(),
 //     username: 'Status Test User',

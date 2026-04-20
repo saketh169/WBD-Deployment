@@ -192,7 +192,8 @@ describe('User Profile', () => {
 // ============================================================
 
 // SHORT TEST 1: Invalid email format
-// it('should reject invalid email format - EXPECTED TO FAIL', () => {
+// it('should reject invalid email format', () => {
+//   console.warn('❌ Email format validation not enforced in BookingForm component');
 //   const { getByLabelText, getByText } = render(<BookingForm />);
 //   fireEvent.change(getByLabelText('Email'), { target: { value: 'notanemail' } });
 //   fireEvent.click(getByText('Submit'));
@@ -200,7 +201,8 @@ describe('User Profile', () => {
 // });
 
 // LONG TEST 2: User session restoration from localStorage
-// it('should restore user session from localStorage on mount - EXPECTED TO FAIL', () => {
+// it('should restore user session from localStorage on mount', () => {
+//   console.warn('❌ Session restoration from localStorage not implemented in App component');
 //   localStorage.setItem('authToken', 'valid_token_123');
 //   localStorage.setItem('userRole', 'user');
 //   const { store } = renderWithRedux(<App />);
@@ -210,14 +212,16 @@ describe('User Profile', () => {
 // });
 
 // SHORT TEST 3: Empty form fields validation
-// it('should require mandatory fields - EXPECTED TO FAIL', () => {
+// it('should require mandatory fields', () => {
+//   console.warn('❌ Required field validation missing in RegistrationForm');
 //   const { getByText } = render(<RegistrationForm />);
 //   fireEvent.click(getByText('Register'));
 //   expect(getByText('Username is required')).toBeInTheDocument();
 // });
 
 // LONG TEST 4: Password strength validation
-// it('should validate password strength - EXPECTED TO FAIL', () => {
+// it('should validate password strength', () => {
+//   console.warn('❌ Password strength validation not implemented in PasswordField');
 //   const { getByLabelText, getByText } = render(<PasswordField />);
 //   const passwordInput = getByLabelText('Password');
 //   fireEvent.change(passwordInput, { target: { value: '123' } });
@@ -227,7 +231,8 @@ describe('User Profile', () => {
 // });
 
 // SHORT TEST 5: File upload validation
-// it('should reject invalid file types - EXPECTED TO FAIL', () => {
+// it('should reject invalid file types', () => {
+//   console.warn('❌ File type validation missing in FileUpload component');
 //   const { getByLabelText } = render(<FileUpload />);
 //   const file = new File(['content'], 'test.exe', { type: 'application/x-msdownload' });
 //   fireEvent.change(getByLabelText('Upload'), { target: { files: [file] } });
@@ -235,7 +240,8 @@ describe('User Profile', () => {
 // });
 
 // LONG TEST 6: Numeric input validation with feedback
-// it('should only accept numeric input in amount field - EXPECTED TO FAIL', () => {
+// it('should only accept numeric input in amount field', () => {
+//   console.warn('❌ Numeric validation and feedback missing in AmountInput');
 //   const { getByLabelText, getByText } = render(<AmountInput />);
 //   const input = getByLabelText('Amount');
 //   fireEvent.change(input, { target: { value: 'abc' } });
@@ -244,7 +250,8 @@ describe('User Profile', () => {
 // });
 
 // SHORT TEST 7: Phone number format validation
-// it('should validate phone number format - EXPECTED TO FAIL', () => {
+// it('should validate phone number format', () => {
+//   console.warn('❌ Phone format validation not implemented in PhoneInput');
 //   const { getByLabelText } = render(<PhoneInput />);
 //   fireEvent.change(getByLabelText('Phone'), { target: { value: '123' } });
 //   fireEvent.blur(getByLabelText('Phone'));
@@ -252,7 +259,8 @@ describe('User Profile', () => {
 // });
 
 // LONG TEST 8: Date picker past date prevention
-// it('should prevent selecting past dates in date picker - EXPECTED TO FAIL', () => {
+// it('should prevent selecting past dates in date picker', () => {
+//   console.warn('❌ Past date prevention not implemented in DatePicker component');
 //   const { getByLabelText } = render(<DatePicker />);
 //   const datePicker = getByLabelText('Select Date');
 //   fireEvent.change(datePicker, { target: { value: '2020-01-01' } });
@@ -262,14 +270,16 @@ describe('User Profile', () => {
 // });
 
 // SHORT TEST 9: Dropdown placeholder validation
-// it('should display placeholder text in dropdown - EXPECTED TO FAIL', () => {
+// it('should display placeholder text in dropdown', () => {
+//   console.warn('❌ Dropdown placeholder missing in SelectDropdown component');
 //   const { getByLabelText } = render(<SelectDropdown />);
 //   const select = getByLabelText('Choose Option');
 //   expect(select.textContent).toContain('-- Select an option --');
 // });
 
 // LONG TEST 10: Character limit and counter
-// it('should enforce character limit on textarea - EXPECTED TO FAIL', () => {
+// it('should enforce character limit on textarea', () => {
+//   console.warn('❌ Character limit and counter not enforced in TextArea component');
 //   const { getByLabelText } = render(<TextArea maxLength={100} />);
 //   const textarea = getByLabelText('Comments');
 //   const longText = 'a'.repeat(150);
