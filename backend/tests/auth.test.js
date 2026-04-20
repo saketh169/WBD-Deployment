@@ -281,17 +281,17 @@ describe('Organization Model - Validation', () => {
 });
 
 
-// // 1. Name Too Short
-// test('CI Fail: short username rejected', async () => {
-//   await expect(User.create({
-//     name: 'AB',
-//     email: 'short@example.com',
-//     phone: '9876543210',
-//     dob: new Date('1995-05-15'),
-//     gender: 'male',
-//     address: 'Chennai, India'
-//   })).rejects.toThrow(); // ValidationError: name must be min 5 chars
-// });
+// 1. Name Too Short
+test('CI Fail: short username rejected', async () => {
+  await expect(User.create({
+    name: 'AB',
+    email: 'short@example.com',
+    phone: '9876543210',
+    dob: new Date('1995-05-15'),
+    gender: 'male',
+    address: 'Chennai, India'
+  })).rejects.toThrow(); // ValidationError: name must be min 5 chars
+});
 
 // // 2. Invalid Gender Value
 // test('CI Fail: invalid gender enum fails', async () => {
