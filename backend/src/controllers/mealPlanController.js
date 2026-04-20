@@ -92,7 +92,7 @@ exports.getUserMealPlans = async (req, res) => {
 
     const cacheKey = `mealplans:user:${userId}:${date || 'all'}`;
 
-    const plansData = await cacheOrFetch(cacheKey, 300, async () => {
+    const { data: plansData, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
       const mealPlans = await MealPlan.find(query)
         .populate('dietitianId', 'name specialization')
         .exec();
@@ -102,6 +102,13 @@ exports.getUserMealPlans = async (req, res) => {
         ...plan.toObject(),
         id: plan._id
       }));
+    });
+
+    res.set({
+      'X-Cache': cacheStatus,
+      'X-Cache-Key': cacheKey,
+      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
+      'X-Response-Time': `${duration}ms`
     });
 
     res.status(200).json({
@@ -135,13 +142,20 @@ exports.getDietitianMealPlanTemplates = async (req, res) => {
 
     const cacheKey = `mealplans:dietitian:${dietitianId}:templates`;
 
-    const mealPlans = await cacheOrFetch(cacheKey, 300, async () => {
+    const { data: mealPlans, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
       return await MealPlan.find({
         dietitianId,
         isActive: true
       })
         .sort({ createdAt: -1 })
         .exec();
+    });
+
+    res.set({
+      'X-Cache': cacheStatus,
+      'X-Cache-Key': cacheKey,
+      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
+      'X-Response-Time': `${duration}ms`
     });
 
     res.status(200).json({
@@ -175,7 +189,7 @@ exports.getDietitianClientMealPlans = async (req, res) => {
 
     const cacheKey = `mealplans:dietitian:${dietitianId}:client:${userId}`;
 
-    const plansData = await cacheOrFetch(cacheKey, 300, async () => {
+    const { data: plansData, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
       // Get all active meal plans for the dietitian and client
       const mealPlans = await MealPlan.find({
         dietitianId,
@@ -188,6 +202,13 @@ exports.getDietitianClientMealPlans = async (req, res) => {
         ...plan.toObject(),
         id: plan._id
       }));
+    });
+
+    res.set({
+      'X-Cache': cacheStatus,
+      'X-Cache-Key': cacheKey,
+      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
+      'X-Response-Time': `${duration}ms`
     });
 
     res.status(200).json({

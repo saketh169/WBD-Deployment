@@ -25,7 +25,7 @@ router.get('/dietitians', async (req, res) => {
     // Redis cache key depends on search query
     const cacheKey = search ? `dietitians:search:${search}` : 'dietitians:list:verified';
 
-    const dietitiansWithImages = await cacheOrFetch(cacheKey, 3600, async () => {
+    const { data: dietitiansWithImages, cacheStatus, duration } = await cacheOrFetch(cacheKey, 3600, async () => {
       let filter = {
         'verificationStatus.finalReport': 'Verified',
         isDeleted: false
@@ -70,6 +70,13 @@ router.get('/dietitians', async (req, res) => {
         }
         return dietitianObj;
       });
+    });
+
+    res.set({
+      'X-Cache': cacheStatus,
+      'X-Cache-Key': cacheKey,
+      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
+      'X-Response-Time': `${duration}ms`
     });
 
     res.json({
@@ -117,7 +124,7 @@ router.get('/dietitians/:id', async (req, res) => {
 
     const cacheKey = `dietitians:profile:${req.params.id}`;
     
-    const dietitianObjCache = await cacheOrFetch(cacheKey, 900, async () => {
+    const { data: dietitianObjCache, cacheStatus, duration } = await cacheOrFetch(cacheKey, 900, async () => {
       const dietitian = await Dietitian.findOne({
         _id: req.params.id,
         'verificationStatus.finalReport': 'Verified',
@@ -150,6 +157,13 @@ router.get('/dietitians/:id', async (req, res) => {
         message: 'Dietitian not found'
       });
     }
+
+    res.set({
+      'X-Cache': cacheStatus,
+      'X-Cache-Key': cacheKey,
+      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
+      'X-Response-Time': `${duration}ms`
+    });
 
     res.json({
       success: true,

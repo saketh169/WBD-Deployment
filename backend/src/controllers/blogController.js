@@ -138,7 +138,7 @@ exports.getAllBlogs = async (req, res) => {
         // Redis cache key based on query parameters
         const cacheKey = `blogs:list:${category || 'all'}:${search || ''}:${sortBy}:${order}:${page}:${limit}`;
 
-        const result = await cacheOrFetch(cacheKey, 300, async () => {
+        const { data: result, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
             const blogs = await Blog.find(filter)
                 .sort(sortOptions)
                 .limit(parseInt(limit))
@@ -156,6 +156,14 @@ exports.getAllBlogs = async (req, res) => {
                     pages: Math.ceil(total / parseInt(limit))
                 }
             };
+        });
+
+        // Add cache headers for network inspection
+        res.set({
+            'X-Cache': cacheStatus,
+            'X-Cache-Key': cacheKey,
+            'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
+            'X-Response-Time': `${duration}ms`
         });
 
         res.status(200).json({

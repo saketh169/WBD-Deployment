@@ -280,38 +280,9 @@ describe('Organization Model - Validation', () => {
   });
 });
 
-
-// // 1. Name Too Short
-// test('CI Fail: short username rejected', async () => {
-//   await expect(User.create({
-//     name: 'AB',
-//     email: 'short@example.com',
-//     phone: '9876543210',
-//     dob: new Date('1995-05-15'),
-//     gender: 'male',
-//     address: 'Chennai, India'
-//   })).rejects.toThrow(); // ValidationError: name must be min 5 chars
-// });
-
-// // 2. Invalid Gender Value
-// test('CI Fail: invalid gender enum fails', async () => {
-//   await expect(User.create({
-//     name: 'Valid User Name',
-//     email: 'gender@example.com',
-//     phone: '9876543210',
-//     dob: new Date('1995-05-15'),
-//     gender: 'unknown',
-//     address: 'Chennai, India'
-//   })).rejects.toThrow(); // ValidationError: invalid gender
-// });
-
-// // 3. Missing Required Email
-// test('CI Fail: email is required field', async () => {
-//   await expect(User.create({
-//     name: 'No Email User',
-//     phone: '9876543210',
-//     dob: new Date('1995-05-15'),
-//     gender: 'male',
-//     address: 'Chennai, India'
-//   })).rejects.toThrow(); // ValidationError: email required
+// SHORT TEST 1: Invalid email format
+// test('should reject invalid email', async () => {
+//   console.warn('❌ Email format validation not enforced - accepts invalid emails like notanemail');
+//   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'notanemail', dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T1_' + Date.now(), status: 'confirmed' });
+//   expect(b.email).toMatch(/@.*\./);
 // });
