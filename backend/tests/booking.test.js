@@ -344,7 +344,8 @@ describe('BlockedSlot Model', () => {
 //   expect(['Online', 'In-person']).toContain(booking.consultationType);
 // });
 
-SHORT TEST 9: Case sensitive payment method
+//SHORT TEST 9: Case sensitive payment method
+
 test('should normalize payment method case', async () => {
   console.warn('❌ Payment method case sensitivity - model does not normalize UPI to upi');
   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'test@test.com', paymentMethod: 'UPI', dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T9_' + Date.now(), status: 'confirmed' });
