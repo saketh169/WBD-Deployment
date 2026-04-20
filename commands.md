@@ -153,6 +153,51 @@ docker exec -it wbd-backend node -c "require('mongodb').MongoClient.connect('mon
 
 ---
 
-**Last Updated:** April 17, 2026  
+## 🧹 Clear Redis (Reset to Initial State)
+
+### Clear Current Database (DB 0)
+```bash
+redis-cli FLUSHDB
+```
+
+### Clear All Redis Databases
+```bash
+redis-cli FLUSHALL
+```
+
+### Delete Specific Keys by Pattern
+```bash
+redis-cli KEYS "pattern*" | xargs redis-cli DEL
+
+# Examples:
+redis-cli KEYS "booking*" | xargs redis-cli DEL
+redis-cli KEYS "session*" | xargs redis-cli DEL
+redis-cli KEYS "cache*" | xargs redis-cli DEL
+```
+
+### Clear Redis from Docker Container
+```bash
+docker exec -it wbd-redis redis-cli FLUSHDB
+```
+
+### Clear Redis via Node.js
+```javascript
+const redis = require('redis');
+const client = redis.createClient();
+
+// Clear current database
+client.flushdb((err, reply) => {
+  console.log('Redis DB cleared:', reply);
+});
+
+// Or clear all databases
+client.flushall((err, reply) => {
+  console.log('All Redis data cleared:', reply);
+});
+```
+
+---
+
+**Last Updated:** April 20, 2026  
 **Project:** WBD - Docker Setup  
 **Configuration:** 5 Containers + MongoDB Atlas + Swagger UI
