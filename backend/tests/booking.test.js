@@ -222,118 +222,144 @@ describe('BlockedSlot Model', () => {
 });
 
 // ============================================================
-// FAILING TEST CASES - Intentional failures for CI validation
+// MIXED FAILING TEST CASES (Long & Short - comment out one at a time)
 // ============================================================
-// Uncomment to test: These tests are designed to FAIL and catch issues
 
-// describe('Booking Model - Failing Validation Tests', () => {
-//   const createValidBooking = (overrides = {}) => ({
+// SHORT TEST 1: Invalid email format
+// test('should reject invalid email - EXPECTED TO FAIL', async () => {
+//   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'notanemail', dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T1_' + Date.now(), status: 'confirmed' });
+//   expect(b.email).toMatch(/@.*\./);
+// });
+
+// LONG TEST 2: Empty username validation
+// test('should fail when username is empty - EXPECTED TO FAIL', async () => {
+//   const createBooking = (overrides = {}) => ({
 //     userId: new mongoose.Types.ObjectId(),
-//     username: 'Fail Test User',
-//     email: 'failtest@example.com',
+//     username: 'Default',
+//     email: 'test@example.com',
 //     dietitianId: new mongoose.Types.ObjectId(),
-//     dietitianName: 'Dr. Fail',
-//     dietitianEmail: 'fail@clinic.com',
-//     date: new Date('2026-06-01'),
-//     time: '10:00',
-//     consultationType: 'Online',
+//     dietitianName: 'Dr. Test',
+//     dietitianEmail: 'dr@clinic.com',
 //     amount: 500,
-//     paymentMethod: 'upi',
-//     paymentId: 'PAY_FAIL_' + Date.now(),
+//     paymentMethod: 'card',
+//     paymentId: 'PAY_' + Date.now(),
 //     status: 'confirmed',
 //     ...overrides
 //   });
+//   const booking = await Booking.create(createBooking({ username: '' }));
+//   expect(booking.username).not.toBe('');
+//   expect(booking.username.length).toBeGreaterThan(0);
+// });
 
-//   // FAILING TEST 1: Invalid email format should be rejected
-//   test('should reject invalid email format - EXPECTED TO FAIL', async () => {
-//     const booking = await Booking.create(createValidBooking({
-//       email: 'not-an-email',
-//       paymentId: 'PAY_INVALID_EMAIL_' + Date.now()
-//     }));
-//     expect(booking.email).toMatch(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
-//   });
+// SHORT TEST 3: Zero amount
+// test('should reject zero amount - EXPECTED TO FAIL', async () => {
+//   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'test@test.com', amount: 0, dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T3_' + Date.now(), status: 'confirmed' });
+//   expect(b.amount).toBeGreaterThan(0);
+// });
 
-//   // FAILING TEST 2: Missing username should be caught
-//   test('should fail when username is empty - EXPECTED TO FAIL', async () => {
-//     const booking = await Booking.create(createValidBooking({
-//       username: '',
-//       paymentId: 'PAY_EMPTY_USERNAME_' + Date.now()
-//     }));
-//     expect(booking.username).not.toBe('');
-//     expect(booking.username.length).toBeGreaterThan(0);
+// LONG TEST 4: Bad time format validation
+// test('should reject malformed time format - EXPECTED TO FAIL', async () => {
+//   const createBooking = (overrides = {}) => ({
+//     userId: new mongoose.Types.ObjectId(),
+//     username: 'Time Test',
+//     email: 'timetest@example.com',
+//     dietitianId: new mongoose.Types.ObjectId(),
+//     dietitianName: 'Dr. Clock',
+//     dietitianEmail: 'clock@clinic.com',
+//     date: new Date('2026-06-01'),
+//     consultationType: 'Online',
+//     amount: 300,
+//     paymentMethod: 'upi',
+//     paymentId: 'PAY_TIME_' + Date.now(),
+//     status: 'confirmed',
+//     ...overrides
 //   });
+//   const booking = await Booking.create(createBooking({ time: '25:61' }));
+//   const [h, m] = booking.time.split(':').map(Number);
+//   expect(h).toBeLessThan(24);
+//   expect(m).toBeLessThan(60);
+// });
 
-//   // FAILING TEST 3: Zero amount should not be accepted
-//   test('should reject zero amount - EXPECTED TO FAIL', async () => {
-//     const booking = await Booking.create(createValidBooking({
-//       amount: 0,
-//       paymentId: 'PAY_ZERO_AMOUNT_' + Date.now()
-//     }));
-//     expect(booking.amount).toBeGreaterThan(0);
-//   });
+// SHORT TEST 5: Past date
+// test('should reject past date - EXPECTED TO FAIL', async () => {
+//   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'test@test.com', date: new Date('2020-01-01'), dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T5_' + Date.now(), status: 'confirmed' });
+//   expect(b.date).toBeGreaterThan(new Date());
+// });
 
-//   // FAILING TEST 4: Time format validation should fail
-//   test('should reject malformed time format - EXPECTED TO FAIL', async () => {
-//     const booking = await Booking.create(createValidBooking({
-//       time: '25:61',
-//       paymentId: 'PAY_BAD_TIME_' + Date.now()
-//     }));
-//     const timeParts = booking.time.split(':');
-//     expect(parseInt(timeParts[0])).toBeLessThan(24);
-//     expect(parseInt(timeParts[1])).toBeLessThan(60);
+// LONG TEST 6: Invalid dietitian email validation
+// test('should fail when dietitian email is invalid - EXPECTED TO FAIL', async () => {
+//   const createBooking = (overrides = {}) => ({
+//     userId: new mongoose.Types.ObjectId(),
+//     username: 'Email Test User',
+//     email: 'emailtest@example.com',
+//     dietitianId: new mongoose.Types.ObjectId(),
+//     dietitianName: 'Dr. Email',
+//     dietitianEmail: 'valid@clinic.com',
+//     date: new Date('2026-06-15'),
+//     time: '10:00',
+//     consultationType: 'Online',
+//     amount: 400,
+//     paymentMethod: 'card',
+//     paymentId: 'PAY_EMAIL_' + Date.now(),
+//     status: 'confirmed',
+//     ...overrides
 //   });
+//   const booking = await Booking.create(createBooking({ dietitianEmail: 'invalidemail' }));
+//   expect(booking.dietitianEmail).toMatch(/@/);
+// });
 
-//   // FAILING TEST 5: Past date should be rejected
-//   test('should reject booking with past date - EXPECTED TO FAIL', async () => {
-//     const booking = await Booking.create(createValidBooking({
-//       date: new Date('2020-01-01'),
-//       paymentId: 'PAY_PAST_DATE_' + Date.now()
-//     }));
-//     expect(booking.date).toBeGreaterThan(new Date());
-//   });
+// SHORT TEST 7: Huge amount
+// test('should reject huge amount - EXPECTED TO FAIL', async () => {
+//   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'test@test.com', amount: 999999999, dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T7_' + Date.now(), status: 'confirmed' });
+//   expect(b.amount).toBeLessThan(1000000);
+// });
 
-//   // FAILING TEST 6: Missing dietitian info should fail
-//   test('should fail when dietitian email is invalid - EXPECTED TO FAIL', async () => {
-//     const booking = await Booking.create(createValidBooking({
-//       dietitianEmail: 'invalid-email-format',
-//       paymentId: 'PAY_DIETITIAN_EMAIL_' + Date.now()
-//     }));
-//     expect(booking.dietitianEmail).toMatch(/@/);
+// LONG TEST 8: Invalid consultation type validation
+// test('should validate consultation type consistency - EXPECTED TO FAIL', async () => {
+//   const createBooking = (overrides = {}) => ({
+//     userId: new mongoose.Types.ObjectId(),
+//     username: 'Consult Test',
+//     email: 'consult@example.com',
+//     dietitianId: new mongoose.Types.ObjectId(),
+//     dietitianName: 'Dr. Consult',
+//     dietitianEmail: 'consult@clinic.com',
+//     date: new Date('2026-06-20'),
+//     time: '14:00',
+//     consultationType: 'Online',
+//     amount: 550,
+//     paymentMethod: 'netbanking',
+//     paymentId: 'PAY_CONSULT_' + Date.now(),
+//     status: 'confirmed',
+//     ...overrides
 //   });
+//   const booking = await Booking.create(createBooking({ consultationType: 'Hybrid' }));
+//   expect(['Online', 'In-person']).toContain(booking.consultationType);
+// });
 
-//   // FAILING TEST 7: Very large amount should be flagged
-//   test('should reject unreasonably large amount - EXPECTED TO FAIL', async () => {
-//     const booking = await Booking.create(createValidBooking({
-//       amount: 999999999,
-//       paymentId: 'PAY_LARGE_AMOUNT_' + Date.now()
-//     }));
-//     expect(booking.amount).toBeLessThan(1000000);
-//   });
+//SHORT TEST 9: Case sensitive payment method
+test('should normalize payment method case - EXPECTED TO FAIL', async () => {
+  const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'test@test.com', paymentMethod: 'UPI', dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T9_' + Date.now(), status: 'confirmed' });
+  expect(b.paymentMethod).toBe('upi');
+});
 
-//   // FAILING TEST 8: Consultation type mismatch
-//   test('should validate consultation type consistency - EXPECTED TO FAIL', async () => {
-//     const booking = await Booking.create(createValidBooking({
-//       consultationType: 'Hybrid',
-//       paymentId: 'PAY_HYBRID_' + Date.now()
-//     }));
-//     expect(['Online', 'In-person']).toContain(booking.consultationType);
+// LONG TEST 10: Invalid booking status validation
+// test('should transition through valid states only - EXPECTED TO FAIL', async () => {
+//   const createBooking = (overrides = {}) => ({
+//     userId: new mongoose.Types.ObjectId(),
+//     username: 'Status Test User',
+//     email: 'status@example.com',
+//     dietitianId: new mongoose.Types.ObjectId(),
+//     dietitianName: 'Dr. Status',
+//     dietitianEmail: 'status@clinic.com',
+//     date: new Date('2026-07-01'),
+//     time: '09:30',
+//     consultationType: 'In-person',
+//     amount: 600,
+//     paymentMethod: 'card',
+//     paymentId: 'PAY_STATUS_' + Date.now(),
+//     status: 'confirmed',
+//     ...overrides
 //   });
-
-//   // FAILING TEST 9: Payment method case sensitivity
-//   test('should normalize payment method case - EXPECTED TO FAIL', async () => {
-//     const booking = await Booking.create(createValidBooking({
-//       paymentMethod: 'UPI',
-//       paymentId: 'PAY_CASE_' + Date.now()
-//     }));
-//     expect(booking.paymentMethod).toBe('upi');
-//   });
-
-//   // FAILING TEST 10: Booking status validation
-//   test('should transition through valid states only - EXPECTED TO FAIL', async () => {
-//     const booking = await Booking.create(createValidBooking({
-//       status: 'pending',
-//       paymentId: 'PAY_STATUS_' + Date.now()
-//     }));
-//     expect(['confirmed', 'cancelled', 'completed', 'no-show']).toContain(booking.status);
-//   });
+//   const booking = await Booking.create(createBooking({ status: 'pending' }));
+//   expect(['confirmed', 'cancelled', 'completed', 'no-show']).toContain(booking.status);
 // });
