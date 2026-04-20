@@ -5,7 +5,7 @@ const { cacheOrFetch, invalidateCache } = require('../utils/redisClient');
 // Get settings
 const getSettings = async (req, res) => {
   try {
-    const settings = await cacheOrFetch('settings:global', 600, async () => {
+    const { data: settings, cacheStatus, duration } = await cacheOrFetch('settings:global', 600, async () => {
       let s = await Settings.findOne();
       if (!s) {
         s = new Settings();
@@ -13,6 +13,14 @@ const getSettings = async (req, res) => {
       }
       return s;
     });
+    
+    res.set({
+      'X-Cache': cacheStatus,
+      'X-Cache-Key': 'settings:global',
+      'X-Cache-Tags': 'settings,global',
+      'X-Response-Time': `${duration}ms`
+    });
+    
     res.status(200).json(settings);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching settings' });

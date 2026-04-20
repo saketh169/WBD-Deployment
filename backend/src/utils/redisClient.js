@@ -64,20 +64,25 @@ try {
  * @param {string} key - Cache key
  * @param {number} ttl - Time to live in seconds
  * @param {Function} fetchFn - Async function that returns data from DB
- * @returns {Promise<any>} - Cached or freshly fetched data
+ * @returns {Promise<Object>} - { data, cacheStatus: 'HIT'|'MISS'|'BYPASS', duration }
  */
 const cacheOrFetch = async (key, ttl, fetchFn) => {
+  const startTime = Date.now();
+
   // If Redis is not connected, go straight to DB
   if (!isRedisConnected) {
-    return await fetchFn();
+    const data = await fetchFn();
+    const duration = Date.now() - startTime;
+    return { data, cacheStatus: 'BYPASS', duration }; // Redis not available
   }
 
   try {
     const namespacedKey = `${DATABASE_PREFIX}:${key}`;
     const cached = await redis.get(namespacedKey);
     if (cached) {
-      console.log(`[CACHE HIT] ${key}`);
-      return JSON.parse(cached);
+      const duration = Date.now() - startTime;
+      console.log(`[CACHE HIT] ${key} (${duration}ms)`);
+      return { data: JSON.parse(cached), cacheStatus: 'HIT', duration };
     }
   } catch (err) {
     console.warn(`[CACHE READ ERROR] ${key}:`, err.message);
@@ -85,10 +90,9 @@ const cacheOrFetch = async (key, ttl, fetchFn) => {
 
   // Cache miss — fetch from DB
   console.log(`[CACHE MISS] ${key} — fetching from DB`);
-  const startTime = Date.now();
   const data = await fetchFn();
-  const fetchDuration = Date.now() - startTime;
-  console.log(`[DB FETCH] ${key} took ${fetchDuration}ms`);
+  const dbFetchDuration = Date.now() - startTime;
+  console.log(`[DB FETCH] ${key} took ${dbFetchDuration}ms`);
 
   // Store in cache (non-blocking, don't await)
   try {
@@ -99,7 +103,7 @@ const cacheOrFetch = async (key, ttl, fetchFn) => {
     console.warn(`[CACHE WRITE ERROR] ${key}:`, err.message);
   }
 
-  return data;
+  return { data, cacheStatus: 'MISS', duration: dbFetchDuration };
 };
 
 /**

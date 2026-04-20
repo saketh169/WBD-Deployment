@@ -188,172 +188,103 @@ describe('User Profile', () => {
 // ============================================================
 // REALISTIC FAILING TEST CASES (TO BE COMMENTED OUT)
 // ============================================================
+// MIXED FAILING TEST CASES (Long & Short - comment out one at a time)
+// ============================================================
 
-// describe('Realistic Failing Tests - Frontend Logic', () => {
-//   // Test 1: User authentication token should persist after page refresh
-//   it('should restore user session from localStorage on mount', () => {
-//     localStorage.setItem('authToken', 'valid_token_123');
-//     const { store } = renderWithRedux(<App />);
-//     expect(store.getState().auth.isLoggedIn).toBe(true); // State not restored from localStorage
-//   });
-
-//   // Test 2: Booking form should validate future date only
-//   it('should prevent booking past dates', () => {
-//     const pastDate = new Date('2020-01-01');
-//     const { getByText } = render(<BookingForm />);
-//     fireEvent.change(screen.getByLabelText('Date'), { target: { value: pastDate } });
-//     expect(getByText('Date must be in future')).toBeInTheDocument(); // Validation not shown
-//   });
-
-//   // Test 3: Payment modal should close after successful transaction
-//   it('should close payment modal on successful payment', async () => {
-//     mockPaymentAPI.success = true;
-//     const { queryByText } = render(<PaymentModal />);
-//     fireEvent.click(screen.getByText('Pay Now'));
-//     await waitFor(() => expect(queryByText('Payment Modal')).not.toBeInTheDocument()); // Modal stays open
-//   });
-
-//   // Test 4: Blog post should display author information
-//   it('should render author name and avatar in blog post', () => {
-//     const blog = { title: 'Nutrition Tips', author: 'Dr. John', avatar: 'url' };
-//     const { getByText } = render(<BlogPost blog={blog} />);
-//     expect(getByText('Dr. John')).toBeInTheDocument(); // Author info missing
-//   });
-
-//   // Test 5: Search should debounce API calls
-//   it('should debounce search queries to avoid excessive API calls', async () => {
-//     mockAPI.searchDietitians = vi.fn();
-//     const { getByPlaceholderText } = render(<GlobalSearch />);
-//     const input = getByPlaceholderText('Search dietitians');
-//     fireEvent.change(input, { target: { value: 'John' } });
-//     fireEvent.change(input, { target: { value: 'Johnny' } });
-//     await waitFor(() => expect(mockAPI.searchDietitians).toHaveBeenCalledTimes(1)); // Called multiple times
-//   });
-
-//   // Test 6: Sidebar should highlight active navigation item
-//   it('should highlight current active page in sidebar', () => {
-//     mockRouter.pathname = '/dashboard/bookings';
-//     const { getByText } = render(<Sidebar />);
-//     expect(getByText('My Bookings')).toHaveClass('active'); // Active class not applied
-//   });
-
-//   // Test 7: Form should show validation errors on submit
-//   it('should display validation errors on form submission', () => {
-//     const { getByText, getByLabelText } = render(<LoginForm />);
-//     fireEvent.click(getByText('Sign In'));
-//     expect(getByText('Email is required')).toBeInTheDocument(); // Error not displayed
-//   });
-
-//   // Test 8: Redux store should update user profile on API response
-//   it('should update user profile in Redux store after API call', async () => {
-//     mockAPI.updateProfile = vi.fn().mockResolvedValue({ name: 'Updated Name' });
-//     const { store } = renderWithRedux(<ProfilePage />);
-//     fireEvent.click(screen.getByText('Save Profile'));
-//     await waitFor(() => expect(store.getState().user.name).toBe('Updated Name')); // Store not updated
-//   });
-
-//   // Test 9: Modal backdrop click should close modal
-//   it('should close modal when clicking outside (backdrop)', () => {
-//     const { container, queryByText } = render(<Modal isOpen={true}><p>Modal Content</p></Modal>);
-//     const backdrop = container.querySelector('.modal-backdrop');
-//     fireEvent.click(backdrop);
-//     expect(queryByText('Modal Content')).not.toBeInTheDocument(); // Modal doesn't close
-//   });
-
-//   // Test 10: Protected routes should redirect unauthenticated users to login
-//   it('should redirect to login when accessing protected route without auth', () => {
-//     mockAuth.isLoggedIn = false;
-//     const { history } = render(<BrowserRouter><ProtectedRoute path="/dashboard" component={Dashboard} /></BrowserRouter>);
-//     expect(history.location.pathname).toBe('/login'); // Redirect not happening
-//   });
+// SHORT TEST 1: Invalid email format
+// it('should reject invalid email format', () => {
+//   console.warn('❌ Email format validation not enforced in BookingForm component');
+//   const { getByLabelText, getByText } = render(<BookingForm />);
+//   fireEvent.change(getByLabelText('Email'), { target: { value: 'notanemail' } });
+//   fireEvent.click(getByText('Submit'));
+//   expect(getByText('Invalid email format')).toBeInTheDocument();
 // });
 
-// ============================================================
-// FAILING TEST CASES - Intentional failures for CI validation
-// ============================================================
-// Uncomment to test: These tests are designed to FAIL and catch issues
+// LONG TEST 2: User session restoration from localStorage
+// it('should restore user session from localStorage on mount', () => {
+//   console.warn('❌ Session restoration from localStorage not implemented in App component');
+//   localStorage.setItem('authToken', 'valid_token_123');
+//   localStorage.setItem('userRole', 'user');
+//   const { store } = renderWithRedux(<App />);
+//   expect(store.getState().auth.isLoggedIn).toBe(true);
+//   expect(store.getState().auth.token).toBe('valid_token_123');
+//   expect(store.getState().user.role).toBe('user');
+// });
 
-// describe('Frontend - Failing Component Tests', () => {
-//   // FAILING TEST 1: Form email validation should reject invalid format
-//   it('should reject invalid email format in form - EXPECTED TO FAIL', () => {
-//     const { getByLabelText, getByText } = render(<BookingForm />);
-//     const emailInput = getByLabelText('Email');
-//     fireEvent.change(emailInput, { target: { value: 'not-an-email' } });
-//     fireEvent.click(getByText('Submit'));
-//     expect(getByText('Invalid email format')).toBeInTheDocument(); // Error not shown
-//   });
+// SHORT TEST 3: Empty form fields validation
+// it('should require mandatory fields', () => {
+//   console.warn('❌ Required field validation missing in RegistrationForm');
+//   const { getByText } = render(<RegistrationForm />);
+//   fireEvent.click(getByText('Register'));
+//   expect(getByText('Username is required')).toBeInTheDocument();
+// });
 
-//   // FAILING TEST 2: Required fields should show validation errors
-//   it('should require all mandatory fields - EXPECTED TO FAIL', () => {
-//     const { getByText } = render(<RegistrationForm />);
-//     fireEvent.click(getByText('Register'));
-//     expect(getByText('Username is required')).toBeInTheDocument(); // Validation missing
-//     expect(getByText('Password is required')).toBeInTheDocument(); // Validation missing
-//   });
+// LONG TEST 4: Password strength validation
+// it('should validate password strength', () => {
+//   console.warn('❌ Password strength validation not implemented in PasswordField');
+//   const { getByLabelText, getByText } = render(<PasswordField />);
+//   const passwordInput = getByLabelText('Password');
+//   fireEvent.change(passwordInput, { target: { value: '123' } });
+//   fireEvent.blur(passwordInput);
+//   expect(getByText('Password must be at least 8 characters')).toBeInTheDocument();
+//   expect(getByText('Password must contain uppercase and numbers')).toBeInTheDocument();
+// });
 
-//   // FAILING TEST 3: Password strength should be validated
-//   it('should validate password strength - EXPECTED TO FAIL', () => {
-//     const { getByLabelText, getByText } = render(<PasswordField />);
-//     fireEvent.change(getByLabelText('Password'), { target: { value: '123' } });
-//     expect(getByText('Password must be at least 8 characters')).toBeInTheDocument(); // Not validated
-//   });
+// SHORT TEST 5: File upload validation
+// it('should reject invalid file types', () => {
+//   console.warn('❌ File type validation missing in FileUpload component');
+//   const { getByLabelText } = render(<FileUpload />);
+//   const file = new File(['content'], 'test.exe', { type: 'application/x-msdownload' });
+//   fireEvent.change(getByLabelText('Upload'), { target: { files: [file] } });
+//   expect(screen.getByText('Invalid file type')).toBeInTheDocument();
+// });
 
-//   // FAILING TEST 4: File upload should validate file type
-//   it('should reject invalid file formats - EXPECTED TO FAIL', () => {
-//     const { getByLabelText } = render(<FileUpload />);
-//     const file = new File(['content'], 'test.exe', { type: 'application/x-msdownload' });
-//     fireEvent.change(getByLabelText('Upload'), { target: { files: [file] } });
-//     expect(screen.getByText('Invalid file type')).toBeInTheDocument(); // Validation missing
-//   });
+// LONG TEST 6: Numeric input validation with feedback
+// it('should only accept numeric input in amount field', () => {
+//   console.warn('❌ Numeric validation and feedback missing in AmountInput');
+//   const { getByLabelText, getByText } = render(<AmountInput />);
+//   const input = getByLabelText('Amount');
+//   fireEvent.change(input, { target: { value: 'abc' } });
+//   expect(input.value).toBe('');
+//   expect(getByText('Amount must be numeric')).toBeInTheDocument();
+// });
 
-//   // FAILING TEST 5: Numeric input should reject non-numeric values
-//   it('should only accept numeric input in amount field - EXPECTED TO FAIL', () => {
-//     const { getByLabelText } = render(<AmountInput />);
-//     const input = getByLabelText('Amount');
-//     fireEvent.change(input, { target: { value: 'abc' } });
-//     expect(input.value).toBe(''); // Non-numeric accepted
-//   });
+// SHORT TEST 7: Phone number format validation
+// it('should validate phone number format', () => {
+//   console.warn('❌ Phone format validation not implemented in PhoneInput');
+//   const { getByLabelText } = render(<PhoneInput />);
+//   fireEvent.change(getByLabelText('Phone'), { target: { value: '123' } });
+//   fireEvent.blur(getByLabelText('Phone'));
+//   expect(screen.getByText('Invalid phone format')).toBeInTheDocument();
+// });
 
-//   // FAILING TEST 6: Phone number should validate correct format
-//   it('should validate phone number format - EXPECTED TO FAIL', () => {
-//     const { getByLabelText } = render(<PhoneInput />);
-//     const phone = getByLabelText('Phone Number');
-//     fireEvent.change(phone, { target: { value: '123' } });
-//     fireEvent.blur(phone);
-//     expect(screen.getByText('Invalid phone format')).toBeInTheDocument(); // Not validated
-//   });
+// LONG TEST 8: Date picker past date prevention
+// it('should prevent selecting past dates in date picker', () => {
+//   console.warn('❌ Past date prevention not implemented in DatePicker component');
+//   const { getByLabelText } = render(<DatePicker />);
+//   const datePicker = getByLabelText('Select Date');
+//   fireEvent.change(datePicker, { target: { value: '2020-01-01' } });
+//   fireEvent.blur(datePicker);
+//   expect(screen.getByText('Cannot select past dates')).toBeInTheDocument();
+//   expect(screen.getByText('Please select a future date')).toBeInTheDocument();
+// });
 
-//   // FAILING TEST 7: Date picker should only allow future dates
-//   it('should prevent selecting past dates in date picker - EXPECTED TO FAIL', () => {
-//     const { getByLabelText } = render(<DatePicker />);
-//     const datePicker = getByLabelText('Select Date');
-//     fireEvent.change(datePicker, { target: { value: '2020-01-01' } });
-//     expect(screen.getByText('Cannot select past dates')).toBeInTheDocument(); // Past dates allowed
-//   });
+// SHORT TEST 9: Dropdown placeholder validation
+// it('should display placeholder text in dropdown', () => {
+//   console.warn('❌ Dropdown placeholder missing in SelectDropdown component');
+//   const { getByLabelText } = render(<SelectDropdown />);
+//   const select = getByLabelText('Choose Option');
+//   expect(select.textContent).toContain('-- Select an option --');
+// });
 
-//   // FAILING TEST 8: Dropdown should have default placeholder
-//   it('should display placeholder text in dropdown - EXPECTED TO FAIL', () => {
-//     const { getByLabelText } = render(<SelectDropdown />);
-//     const select = getByLabelText('Choose Option');
-//     expect(select.value).toBe(''); // Empty selection allowed
-//     expect(select.textContent).toContain('-- Select an option --'); // Placeholder missing
-//   });
-
-//   // FAILING TEST 9: Checkbox validation should enforce minimum selection
-//   it('should enforce minimum checkbox selections - EXPECTED TO FAIL', () => {
-//     const { getByLabelText, getByText } = render(<CheckboxGroup minRequired={2} />);
-//     fireEvent.click(getByLabelText('Option 1'));
-//     fireEvent.click(getByText('Submit'));
-//     expect(screen.getByText('Select at least 2 options')).toBeInTheDocument(); // No validation
-//   });
-
-//   // FAILING TEST 10: Character limit should be enforced on textarea
-//   it('should enforce character limit on textarea - EXPECTED TO FAIL', () => {
-//     const { getByLabelText } = render(<TextArea maxLength={100} />);
-//     const textarea = getByLabelText('Comments');
-//     const longText = 'a'.repeat(150);
-//     fireEvent.change(textarea, { target: { value: longText } });
-//     expect(textarea.value.length).toBeLessThanOrEqual(100); // Character limit not enforced
-//     expect(screen.getByText('100 characters remaining')).toBeInTheDocument(); // Counter missing
-//   });
+// LONG TEST 10: Character limit and counter
+// it('should enforce character limit on textarea', () => {
+//   console.warn('❌ Character limit and counter not enforced in TextArea component');
+//   const { getByLabelText } = render(<TextArea maxLength={100} />);
+//   const textarea = getByLabelText('Comments');
+//   const longText = 'a'.repeat(150);
+//   fireEvent.change(textarea, { target: { value: longText } });
+//   expect(textarea.value.length).toBeLessThanOrEqual(100);
+//   expect(screen.getByText('100 characters remaining')).toBeInTheDocument();
+//   expect(screen.getByText(/0 characters remaining/)).toBeInTheDocument();
 // });
