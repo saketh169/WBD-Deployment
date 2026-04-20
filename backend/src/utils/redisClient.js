@@ -12,10 +12,11 @@ const DATABASE_PREFIX = getDbIdentifier();
 console.log(`[Redis] Using isolation prefix: ${DATABASE_PREFIX}`);
 
 // Redis configuration — gracefully degrades if Redis is not available
-const redisConfig = {
-  host: process.env.REDIS_HOST || '127.0.0.1',
-  port: parseInt(process.env.REDIS_PORT) || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
+// Using REDIS_URL for better performance and cloud compatibility
+const redisConfig = process.env.REDIS_URL || 'redis://127.0.0.1:6379/0';
+
+const clientConfig = {
+  url: redisConfig,
   maxRetriesPerRequest: 3,
   retryStrategy(times) {
     if (times > 3) {
@@ -31,7 +32,7 @@ let redis;
 let isRedisConnected = false;
 
 try {
-  redis = new Redis(redisConfig);
+  redis = new Redis(clientConfig);
 
   redis.on('connect', () => {
     isRedisConnected = true;
