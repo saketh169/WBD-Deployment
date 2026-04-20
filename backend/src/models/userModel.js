@@ -42,7 +42,7 @@ const AdminSchema = new Schema({
 const DietitianSchema = new Schema({
     name: { type: String, required: true, minlength: 5, unique: true, trim: true }, // ROLE-SPECIFIC UNIQUE
     email: { type: String, required: true, lowercase: true, trim: true }, // Email from UserAuth
-    age: { type: Number, required: true, min: 18 },
+    age: { type: Number, required: true, min: 9 },
     phone: { type: String, minlength: 10, maxlength: 10 }, // Optional field
     licenseNumber: { type: String, required: true, unique: true, match: /^DLN[0-9]{6}$/ }, // ROLE-SPECIFIC UNIQUE
     interestedField: { type: String },
