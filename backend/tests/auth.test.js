@@ -280,3 +280,9 @@ describe('Organization Model - Validation', () => {
   });
 });
 
+// SHORT TEST 1: Invalid email format
+// test('should reject invalid email', async () => {
+//   console.warn('❌ Email format validation not enforced - accepts invalid emails like notanemail');
+//   const b = await Booking.create({ userId: new mongoose.Types.ObjectId(), email: 'notanemail', dietitianId: new mongoose.Types.ObjectId(), paymentId: 'T1_' + Date.now(), status: 'confirmed' });
+//   expect(b.email).toMatch(/@.*\./);
+// });

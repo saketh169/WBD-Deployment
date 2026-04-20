@@ -3,11 +3,6 @@ const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 
-// Set Redis to localhost for benchmarking
-process.env.REDIS_HOST = 'localhost';
-process.env.REDIS_PORT = '6379';
-process.env.REDIS_PASSWORD = '';
-
 const connectDB = async () => {
 	const MONGODB_URI = process.env.MONGODB_URL || 'mongodb://localhost:27017/NutriConnectDatabase';
 	await mongoose.connect(MONGODB_URI);
