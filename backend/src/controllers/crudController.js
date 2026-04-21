@@ -94,10 +94,47 @@ exports.getUsersByRole = async (req, res) => {
             Model.countDocuments(query)
         ]);
 
+        // Add consultation counts for each user/dietitian
+        const Booking = require('../models/bookingModel');
+        const usersWithCounts = await Promise.all(
+            users.map(async (user) => {
+                const userData = user.toObject ? user.toObject() : user;
+                
+                if (actualRole === 'user') {
+                    // For users: count consultations
+                    const consultationCount = await Booking.countDocuments({ userId: user._id });
+                    return {
+                        ...userData,
+                        consultationCount
+                    };
+                } else if (actualRole === 'dietitian') {
+                    // For dietitians: count unique clients (distinct userId)
+                    const clientIds = await Booking.distinct('userId', { dietitianId: user._id });
+                    const clientCount = clientIds.length;
+                    return {
+                        ...userData,
+                        clientCount
+                    };
+                } else if (actualRole === 'organization') {
+                    // For organization, count employees
+                    const { Employee } = require('../models/userModel');
+                    const employeeCount = await Employee.countDocuments({
+                        organizationId: user._id,
+                        isDeleted: false
+                    });
+                    return {
+                        ...userData,
+                        employeeCount
+                    };
+                }
+                return userData;
+            })
+        );
+
         res.status(200).json({
             success: true,
-            data: users,
-            count: users.length,
+            data: usersWithCounts,
+            count: usersWithCounts.length,
             total,
             page: pageNumber,
             limit: pageSize,

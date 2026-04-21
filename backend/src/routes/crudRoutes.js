@@ -206,4 +206,216 @@ router.post('/crud/removed-accounts/:id/restore', ...adminAuth, restoreAccount);
 // Permanently delete a removed account
 router.delete('/crud/removed-accounts/:id', ...adminAuth, permanentDeleteAccount);
 
+// Get all consultations for a dietitian (admin view)
+router.get('/crud/admin/dietitian/:dietitianId/consultations', ...adminAuth, async (req, res) => {
+  try {
+    const { dietitianId } = req.params;
+    const mongoose = require('mongoose');
+    const BookingModel = require('../models/bookingModel');
+    
+    // Validate if dietitianId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(dietitianId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid dietitian ID'
+      });
+    }
+
+    const consultations = await BookingModel.find({ dietitianId: new mongoose.Types.ObjectId(dietitianId) })
+      .select('-__v')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!consultations || consultations.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No consultations found for this dietitian'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: consultations,
+      count: consultations.length
+    });
+  } catch (error) {
+    console.error('Error fetching dietitian consultations:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching consultations'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/crud/admin/user/{userId}/consultations:
+ *   get:
+ *     tags: ['Crud Admin']
+ *     summary: Get all consultations for a user (Admin view)
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: User consultations retrieved
+ *       403:
+ *         description: Admin access required
+ */
+// Get all consultations for a user (admin view)
+router.get('/crud/admin/user/:userId/consultations', ...adminAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const mongoose = require('mongoose');
+    const BookingModel = require('../models/bookingModel');
+    
+    // Validate if userId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID'
+      });
+    }
+
+    const consultations = await BookingModel.find({ userId: new mongoose.Types.ObjectId(userId) })
+      .select('-__v')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!consultations || consultations.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No consultations found for this user'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: consultations,
+      count: consultations.length
+    });
+  } catch (error) {
+    console.error('Error fetching user consultations:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching consultations'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/crud/admin/organization/{organizationId}/employees:
+ *   get:
+ *     tags: ['Crud Admin']
+ *     summary: Get all employees for an organization (Admin view)
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: organizationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Organization employees retrieved
+ *       403:
+ *         description: Admin access required
+ */
+// Get all employees for an organization (admin view)
+router.get('/crud/admin/organization/:organizationId/employees', ...adminAuth, async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    const mongoose = require('mongoose');
+    const { Employee } = require('../models/userModel');
+    const BookingModel = require('../models/bookingModel');
+    const { Blog } = require('../models/blogModel');
+    
+    // Validate if organizationId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(organizationId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid organization ID'
+      });
+    }
+    
+    // Get all employees for this organization
+    const employees = await Employee.find({ 
+      organizationId: new mongoose.Types.ObjectId(organizationId),
+      isDeleted: false 
+    })
+      .select('name email contact licenseNumber status')
+      .lean();
+
+    if (!employees || employees.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No employees found for this organization'
+      });
+    }
+
+    // Get ActivityLog for tracking employee work
+    const ActivityLog = require('../models/activityLogModel');
+
+    // Get detailed info for each employee including their verification and blog moderation work
+    const employeeDetails = await Promise.all(
+      employees.map(async (employee) => {
+        try {
+          // Count verifications done by this employee (verification_approved + verification_rejected)
+          const verificationsCount = await ActivityLog.countDocuments({
+            employeeId: employee._id,
+            activityType: { $in: ['verification_approved', 'verification_rejected'] }
+          });
+          
+          // Count blog moderations done by this employee (blog_approved + blog_rejected + blog_flagged)
+          const blogModerationsCount = await ActivityLog.countDocuments({
+            employeeId: employee._id,
+            activityType: { $in: ['blog_approved', 'blog_rejected', 'blog_flagged'] }
+          });
+
+          return {
+            ...employee,
+            verificationsCount,
+            blogModerationsCount,
+            verificationStatus: {
+              finalReport: employee.status === 'active' ? 'Verified' : employee.status === 'inactive' ? 'Rejected' : 'Pending'
+            }
+          };
+        } catch (err) {
+          console.error('Error fetching employee details:', err);
+          return {
+            ...employee,
+            verificationsCount: 0,
+            blogModerationsCount: 0,
+            verificationStatus: {
+              finalReport: 'Unknown'
+            }
+          };
+        }
+      })
+    );
+
+    return res.json({
+      success: true,
+      data: employeeDetails,
+      count: employeeDetails.length
+    });
+  } catch (error) {
+    console.error('Error fetching organization employees:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching employees'
+    });
+  }
+});
+
 module.exports = router;

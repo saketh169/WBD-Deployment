@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -15,6 +15,9 @@ import {
     setConfirmAction,
     setRemoveReason,
     clearConfirmAction,
+    fetchDietitianConsultations,
+    fetchUserConsultations,
+    fetchOrganizationEmployees,
 } from '../../redux/slices/adminSlice';
 
 // --- Global Constants ---
@@ -91,7 +94,7 @@ const exportToCSV = (data, filename) => {
 // --- UI Components ---
 
 // Component for rendering a single table row's actions
-const UserActions = ({ id, type, onView, onShowRemove, onSoftDelete }) => (
+const UserActions = ({ id, type, onView, onShowRemove, onSoftDelete, onViewConsultations, onViewEmployees }) => (
     <td className="text-center px-4">
         <div className="flex items-center justify-center space-x-2">
             {/* View Button */}
@@ -105,6 +108,34 @@ const UserActions = ({ id, type, onView, onShowRemove, onSoftDelete }) => (
                     View Details
                 </div>
             </button>
+
+            {/* View Consultations Button - for Dietitian and User */}
+            {(type === 'dietitian' || type === 'user') && (
+                <button
+                    className="group relative p-2 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 transition-all duration-200 shadow-sm hover:shadow-md"
+                    onClick={() => onViewConsultations(id, type)}
+                    title={type === 'dietitian' ? 'View Consultations' : 'View My Consultations'}
+                >
+                    <i className="fas fa-calendar-check text-blue-600 group-hover:text-blue-700 text-sm"></i>
+                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+                        {type === 'dietitian' ? 'View Consultations' : 'View Consultations'}
+                    </div>
+                </button>
+            )}
+
+            {/* View Employees Button - for Organization */}
+            {type === 'organization' && (
+                <button
+                    className="group relative p-2 rounded-lg bg-purple-50 hover:bg-purple-100 border border-purple-200 hover:border-purple-300 transition-all duration-200 shadow-sm hover:shadow-md"
+                    onClick={() => onViewEmployees(id)}
+                    title="View Employees"
+                >
+                    <i className="fas fa-users text-purple-600 group-hover:text-purple-700 text-sm"></i>
+                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+                        View Employees
+                    </div>
+                </button>
+            )}
 
             {/* Soft Delete Button */}
             <button
@@ -168,6 +199,119 @@ const RemovedActions = ({ id, type, onView, onShowRestore }) => (
     </td>
 );
 
+// Component for displaying consultations
+const ConsultationsDetail = ({ consultations, type }) => {
+    if (!consultations || consultations.length === 0) {
+        return (
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-blue-700 text-sm">No consultations found for this {type}.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-semibold text-blue-900 mb-3">
+                {type === 'dietitian' ? 'Dietitian Consultations' : 'User Consultations'} ({consultations.length})
+            </h3>
+            <div className="max-h-96 overflow-y-auto">
+                <table className="w-full text-xs border-collapse">
+                    <thead className="bg-blue-200">
+                        <tr>
+                            <th className="px-3 py-2 text-left">{type === 'dietitian' ? 'Patient' : 'Dietitian'}</th>
+                            <th className="px-3 py-2 text-left">Date</th>
+                            <th className="px-3 py-2 text-left">Type</th>
+                            <th className="px-3 py-2 text-left">Amount</th>
+                            <th className="px-3 py-2 text-left">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-blue-100">
+                        {consultations.map((consultation, idx) => (
+                            <tr key={consultation._id || idx} className="hover:bg-blue-100">
+                                <td className="px-3 py-2">{type === 'dietitian' ? consultation.username : consultation.dietitianName}</td>
+                                <td className="px-3 py-2">{new Date(consultation.date).toLocaleDateString()}</td>
+                                <td className="px-3 py-2">{consultation.consultationType}</td>
+                                <td className="px-3 py-2">₹{consultation.amount}</td>
+                                <td className="px-3 py-2">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                        consultation.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                        consultation.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                                        consultation.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                        'bg-gray-100 text-gray-800'
+                                    }`}>
+                                        {consultation.status}
+                                    </span>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+// Component for displaying employees
+const EmployeesDetail = ({ employees, sortBy = 'name' }) => {
+    if (!employees || employees.length === 0) {
+        return (
+            <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <p className="text-purple-700 text-sm">No employees found for this organization.</p>
+            </div>
+        );
+    }
+
+    // Sort employees based on sortBy parameter
+    const sortedEmployees = [...employees].sort((a, b) => {
+        if (sortBy === 'verifications') {
+            return (b.verificationsCount || 0) - (a.verificationsCount || 0);
+        } else if (sortBy === 'moderations') {
+            return (b.blogModerationsCount || 0) - (a.blogModerationsCount || 0);
+        } else {
+            return a.name.localeCompare(b.name);
+        }
+    });
+
+    return (
+        <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+            <h3 className="font-semibold text-purple-900 mb-3">Organization Employees ({employees.length})</h3>
+            <div className="max-h-96 overflow-y-auto">
+                <table className="w-full text-xs border-collapse">
+                    <thead className="bg-purple-200">
+                        <tr>
+                            <th className="px-3 py-2 text-left">Name</th>
+                            <th className="px-3 py-2 text-left">Email</th>
+                            <th className="px-3 py-2 text-left">Status</th>
+                            <th className="px-3 py-2 text-center">Verifications Done</th>
+                            <th className="px-3 py-2 text-center">Blog Moderations Done</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-purple-100">
+                        {sortedEmployees.map((employee, idx) => (
+                            <tr key={employee._id || idx} className="hover:bg-purple-100">
+                                <td className="px-3 py-2 font-medium">{employee.name}</td>
+                                <td className="px-3 py-2 text-gray-600">{employee.email}</td>
+                                <td className="px-3 py-2">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                        employee.verificationStatus?.finalReport === 'Verified' ? 'bg-green-100 text-green-800' :
+                                        employee.verificationStatus?.finalReport === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                                        employee.verificationStatus?.finalReport === 'Rejected' ? 'bg-red-100 text-red-800' :
+                                        'bg-gray-100 text-gray-800'
+                                    }`}>
+                                        {employee.verificationStatus?.finalReport || 'Pending'}
+                                    </span>
+                                </td>
+                                <td className="px-3 py-2 text-center font-medium text-blue-600">{employee.verificationsCount || 0}</td>
+                                <td className="px-3 py-2 text-center font-medium text-green-600">{employee.blogModerationsCount || 0}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
 // Pagination Component extracted for reuse
 const Pagination = ({ currentPage, totalPages, onPageChange, theme }) => {
     if (totalPages <= 1) return null;
@@ -177,10 +321,20 @@ const Pagination = ({ currentPage, totalPages, onPageChange, theme }) => {
         pageNumbers.push(i);
     }
 
+    const handlePageChange = (newPage) => {
+        // Scroll to top of the table
+        const tableContainer = document.querySelector('.overflow-x-auto');
+        if (tableContainer) {
+            tableContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        onPageChange(newPage);
+    };
+
     return (
         <div className="flex justify-center items-center space-x-2 mt-4 pb-4">
             <button
-                onClick={() => onPageChange(currentPage - 1)}
+                onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
                 className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
             >
@@ -190,7 +344,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, theme }) => {
             {pageNumbers.map(number => (
                 <button
                     key={number}
-                    onClick={() => onPageChange(number)}
+                    onClick={() => handlePageChange(number)}
                     className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${currentPage === number ? 'text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
                     style={currentPage === number ? { backgroundColor: theme } : {}}
                 >
@@ -199,7 +353,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, theme }) => {
             ))}
 
             <button
-                onClick={() => onPageChange(currentPage + 1)}
+                onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
                 className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${currentPage === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
             >
@@ -229,19 +383,37 @@ const AdminManagement = () => {
         removeReason,
         isLoading,
         error,
+        dietitianConsultations,
+        userConsultations,
+        organizationEmployees,
     } = useSelector((state) => state.admin);
 
     const activeRolesList = useMemo(() => ['user', 'dietitian', 'organization'], []);
     const removedRolesList = useMemo(() => ['user', 'dietitian', 'organization'], []);
 
+    // Local state for sorting and pagination display
+    const [sortConfig, setSortConfig] = useState({
+        user: 'name',
+        dietitian: 'name',
+        organization: 'name'
+    });
+
+    // Local state for display pagination (not API pagination)
+    const [displayPage, setDisplayPage] = useState({
+        user: 1,
+        dietitian: 1,
+        organization: 1
+    });
+
     // --- Data Fetching Logic ---
 
     // Fetch all active users (real API calls)
     const fetchAllActiveUsers = useCallback(async () => {
+        // Fetch with high limit to get ALL records for proper sorting across pages
         await Promise.all([
-            dispatch(fetchUsersByRole({ role: 'user', page: 1, limit: 10 })),
-            dispatch(fetchUsersByRole({ role: 'dietitian', page: 1, limit: 10 })),
-            dispatch(fetchUsersByRole({ role: 'organization', page: 1, limit: 10 })),
+            dispatch(fetchUsersByRole({ role: 'user', page: 1, limit: 1000 })),
+            dispatch(fetchUsersByRole({ role: 'dietitian', page: 1, limit: 1000 })),
+            dispatch(fetchUsersByRole({ role: 'organization', page: 1, limit: 1000 })),
         ]);
     }, [dispatch]);
 
@@ -302,7 +474,87 @@ const AdminManagement = () => {
         handleActionConfirm(id, type, 'remove');
     };
 
+    const handleViewConsultations = async (id, type) => {
+        if (type === 'dietitian') {
+            await dispatch(fetchDietitianConsultations(id));
+            dispatch(setExpandedDetails(`${type}-consultations-${id}`));
+        } else if (type === 'user') {
+            await dispatch(fetchUserConsultations(id));
+            dispatch(setExpandedDetails(`${type}-consultations-${id}`));
+        }
+    };
+
+    const handleViewEmployees = async (id) => {
+        await dispatch(fetchOrganizationEmployees(id));
+        dispatch(setExpandedDetails(`organization-employees-${id}`));
+    };
+
     // --- Search and Filter Logic ---
+
+    // Sort users based on sortConfig
+    const getSortedUsers = (userList, role) => {
+        if (!userList || !Array.isArray(userList)) return [];
+        
+        const sortBy = sortConfig[role] || 'name';
+        const sorted = [...userList];
+
+        if (sortBy === 'name') {
+            sorted.sort((a, b) => a.name.localeCompare(b.name));
+        } else if (sortBy === 'consultations') {
+            // Sort by consultation count (DESCENDING - highest count FIRST)
+            sorted.sort((a, b) => {
+                const aCount = Number(a.consultationCount ?? 0);
+                const bCount = Number(b.consultationCount ?? 0);
+                // For descending: if b > a, return negative (b comes first)
+                // if b < a, return positive (a comes first)
+                // if b = a, return 0 (no change)
+                return bCount - aCount;
+            });
+        } else if (sortBy === 'clients') {
+            // Sort by client count (DESCENDING - highest count FIRST, push 0s to end)
+            const withClients = [];
+            const noClients = [];
+            
+            sorted.forEach(item => {
+                const count = Number(item.clientCount ?? 0);
+                if (count > 0) {
+                    withClients.push(item);
+                } else {
+                    noClients.push(item);
+                }
+            });
+            
+            // Sort items with clients in descending order
+            withClients.sort((a, b) => {
+                const aCount = Number(a.clientCount ?? 0);
+                const bCount = Number(b.clientCount ?? 0);
+                return bCount - aCount;
+            });
+            
+            // Sort items with no clients by name
+            noClients.sort((a, b) => a.name.localeCompare(b.name));
+            
+            // Combine: clients first, then no clients
+            return [...withClients, ...noClients];
+        } else if (sortBy === 'employees') {
+            // Sort by employee count (DESCENDING - highest count FIRST)
+            sorted.sort((a, b) => {
+                const aCount = Number(a.employeeCount ?? 0);
+                const bCount = Number(b.employeeCount ?? 0);
+                return bCount - aCount;
+            });
+        }
+
+        return sorted;
+    };
+
+    // Handle sort change for active users
+    const handleSortChange = (role, sortType) => {
+        setSortConfig(prev => ({
+            ...prev,
+            [role]: sortType
+        }));
+    };
 
     // Handle search for active users
     const handleActiveSearch = async () => {
@@ -325,11 +577,12 @@ const AdminManagement = () => {
 
     // Handle page change for active users
     const handleActivePageChange = (newPage) => {
-        if (users._isSearchResult && searchTerm.trim()) {
-            dispatch(searchUsersByRole({ role: activeRole, query: searchTerm, page: newPage, limit: 10 }));
-        } else {
-            dispatch(fetchUsersByRole({ role: activeRole, page: newPage, limit: 10 }));
-        }
+        // Just update the display page - don't re-fetch from API
+        // This keeps the global sort intact across all pages
+        setDisplayPage(prev => ({
+            ...prev,
+            [activeRole]: newPage
+        }));
     };
 
     // Handle page change for removed accounts
@@ -370,6 +623,8 @@ const AdminManagement = () => {
                     ) : (
                         data.map((user) => {
                             const isExpanded = expandedDetails === `${type}-${user._id}`;
+                            const isConsultationsExpanded = expandedDetails === `${type}-consultations-${user._id}`;
+                            const isEmployeesExpanded = expandedDetails === `organization-employees-${user._id}`;
                             const isConfirm = confirmAction && confirmAction.id === user._id && confirmAction.type === type;
                             return (
                                 <React.Fragment key={user._id}>
@@ -381,10 +636,27 @@ const AdminManagement = () => {
                                             onView={handleViewDetails}
                                             onShowRemove={(id, type) => handleActionConfirm(id, type, 'remove')}
                                             onSoftDelete={handleSoftDelete}
+                                            onViewConsultations={handleViewConsultations}
+                                            onViewEmployees={handleViewEmployees}
                                         />
                                     </tr>
                                     {isExpanded && (
                                         <tr><td colSpan="2" className="px-6 py-0"><RoleDetails user={user} /></td></tr>
+                                    )}
+                                    {isConsultationsExpanded && type === 'dietitian' && (
+                                        <tr><td colSpan="2" className="px-6 py-0">
+                                            <ConsultationsDetail consultations={dietitianConsultations[user._id] || []} type="dietitian" />
+                                        </td></tr>
+                                    )}
+                                    {isConsultationsExpanded && type === 'user' && (
+                                        <tr><td colSpan="2" className="px-6 py-0">
+                                            <ConsultationsDetail consultations={userConsultations[user._id] || []} type="user" />
+                                        </td></tr>
+                                    )}
+                                    {isEmployeesExpanded && type === 'organization' && (
+                                        <tr><td colSpan="2" className="px-6 py-0">
+                                            <EmployeesDetail employees={organizationEmployees[user._id] || []} />
+                                        </td></tr>
                                     )}
                                     {isConfirm && confirmAction?.action === 'remove' && (
                                         <tr>
@@ -582,6 +854,10 @@ const AdminManagement = () => {
                                     key={role}
                                     onClick={() => {
                                         dispatch(setActiveRole(role));
+                                        setDisplayPage(prev => ({
+                                            ...prev,
+                                            [role]: 1
+                                        }));
                                     }}
                                     style={activeRole === role ? {
                                         backgroundColor: THEME.primary,
@@ -612,7 +888,7 @@ const AdminManagement = () => {
                             <span key={role} className="mx-2">
                                 Total {role.charAt(0).toUpperCase() + role.slice(1)}s:
                                 <span className="font-bold text-gray-900 ml-1">
-                                    {usersPagination[role]?.total || 0}
+                                    {(filteredActiveUsers[role] || []).length}
                                 </span>
                                 {users._isSearchResult && searchTerm && (
                                     <span className="text-sm text-blue-600 ml-1">(filtered)</span>
@@ -621,18 +897,87 @@ const AdminManagement = () => {
                         ))}
                     </div>
 
+                    {/* Sort Controls */}
+                    <div className="flex flex-wrap gap-2 mb-4 items-center justify-center">
+                        <span className="text-sm font-medium text-gray-600">Sort by:</span>
+                        <button
+                            onClick={() => handleSortChange(activeRole, 'name')}
+                            className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                                sortConfig[activeRole] === 'name'
+                                    ? 'bg-green-500 text-white'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            <i className="fas fa-sort-alpha-down mr-1"></i> Name
+                        </button>
+                        {activeRole === 'user' && (
+                            <button
+                                onClick={() => handleSortChange(activeRole, 'consultations')}
+                                className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                                    sortConfig[activeRole] === 'consultations'
+                                        ? 'bg-blue-500 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                            >
+                                <i className="fas fa-chart-bar mr-1"></i> Consultations
+                            </button>
+                        )}
+                        {activeRole === 'dietitian' && (
+                            <button
+                                onClick={() => handleSortChange(activeRole, 'clients')}
+                                className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                                    sortConfig[activeRole] === 'clients'
+                                        ? 'bg-blue-500 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                            >
+                                <i className="fas fa-users mr-1"></i> Clients
+                            </button>
+                        )}
+                        {activeRole === 'organization' && (
+                            <button
+                                onClick={() => handleSortChange(activeRole, 'employees')}
+                                className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                                    sortConfig[activeRole] === 'employees'
+                                        ? 'bg-purple-500 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                            >
+                                <i className="fas fa-users mr-1"></i> Employees
+                            </button>
+                        )}
+                    </div>
+
                     {/* Dynamic Active User Table */}
                     {isLoading ? (
                         <div className="text-center p-10 text-xl text-gray-500"><i className="fas fa-spinner fa-spin mr-2"></i> Loading Active Accounts...</div>
                     ) : (
                         <div className="overflow-x-auto">
-                            {renderUserTable(filteredActiveUsers[activeRole] || [], activeRole)}
-                            <Pagination
-                                currentPage={usersPagination[activeRole]?.page || 1}
-                                totalPages={usersPagination[activeRole]?.pages || 1}
-                                onPageChange={handleActivePageChange}
-                                theme={THEME.primary}
-                            />
+                            {(() => {
+                                // Get full sorted list
+                                const fullSortedList = getSortedUsers(filteredActiveUsers[activeRole] || [], activeRole);
+                                const itemsPerPage = 10;
+                                const currentPage = displayPage[activeRole] || 1;
+                                const totalItems = fullSortedList.length;
+                                const totalPages = Math.ceil(totalItems / itemsPerPage);
+                                
+                                // Slice for current page
+                                const startIdx = (currentPage - 1) * itemsPerPage;
+                                const endIdx = startIdx + itemsPerPage;
+                                const paginatedList = fullSortedList.slice(startIdx, endIdx);
+                                
+                                return (
+                                    <>
+                                        {renderUserTable(paginatedList, activeRole)}
+                                        <Pagination
+                                            currentPage={currentPage}
+                                            totalPages={totalPages}
+                                            onPageChange={handleActivePageChange}
+                                            theme={THEME.primary}
+                                        />
+                                    </>
+                                );
+                            })()}
                         </div>
                     )}
                 </div>
