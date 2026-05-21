@@ -1,4 +1,3 @@
-
 services:
   # ── Backend API Server ──
   backend:
@@ -9,9 +8,7 @@ services:
     environment:
       - PORT=${PORT:-5000}
       - MONGODB_URL=${MONGODB_URL}
-      - REDIS_HOST=${REDIS_HOST:-redis}
-      - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - ELASTICSEARCH_URL=${ELASTICSEARCH_URL:-http://elasticsearch:9200}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:3000}
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
@@ -42,7 +39,7 @@ services:
     ports:
       - "80:80"
     environment:
-      - VITE_API_URL=http://backend:5000
+      - VITE_API_URL=${VITE_API_URL:-http://backend:5000}
     volumes:
       - ./frontend:/app
       - /app/node_modules

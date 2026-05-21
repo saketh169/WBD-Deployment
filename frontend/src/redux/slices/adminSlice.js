@@ -4,15 +4,15 @@ import axios from 'axios';
 // Mock data for fallback
 const mockAllUsers = {
   'user': [
-    { _id: 'u1', name: 'Alice Johnson', email: 'alice@client.com', phone: '1234567890', dob: '1990-05-15T00:00:00.000Z', gender: 'female', address: '101 Main St' },
-    { _id: 'u2', name: 'Bob Smith', email: 'bob@client.com', phone: '9876543210', dob: '1985-11-22T00:00:00.000Z', gender: 'male', address: '202 Oak Ave' },
+    { _id: 'u1', name: 'Alice Johnson', email: 'alice@client.com', phone: '1234567890', dob: '1990-05-15T00:00:00.000Z', gender: 'female', address: '101 Main St', consultationCount: 12 },
+    { _id: 'u2', name: 'Bob Smith', email: 'bob@client.com', phone: '9876543210', dob: '1985-11-22T00:00:00.000Z', gender: 'male', address: '202 Oak Ave', consultationCount: 5 },
   ],
   'dietitian': [
-    { _id: 'd1', name: 'Dr. Jane Doe', email: 'jane@dietitian.com', phone: '5551234567', age: 40, licenseNumber: 'DLN123456', verificationStatus: 'Verified' },
-    { _id: 'd2', name: 'Mark Wilson', email: 'mark@dietitian.com', phone: '5559876543', age: 35, licenseNumber: 'DLN654321', verificationStatus: 'Pending' },
+    { _id: 'd1', name: 'Dr. Jane Doe', email: 'jane@dietitian.com', phone: '5551234567', age: 40, licenseNumber: 'DLN123456', verificationStatus: 'Verified', clientCount: 45 },
+    { _id: 'd2', name: 'Mark Wilson', email: 'mark@dietitian.com', phone: '5559876543', age: 35, licenseNumber: 'DLN654321', verificationStatus: 'Pending', clientCount: 8 },
   ],
   'organization': [
-    { _id: 'o1', name: 'Wellness Corp', email: 'admin@wellness.com', phone: '9991112222', licenseNumber: 'OLN000111', address: 'HQ Building' },
+    { _id: 'o1', name: 'Wellness Corp', email: 'admin@wellness.com', phone: '9991112222', licenseNumber: 'OLN000111', address: 'HQ Building', employeeCount: 15 },
   ],
 };
 
@@ -149,6 +149,69 @@ export const restoreAccount = createAsyncThunk(
   }
 );
 
+// Fetch dietitian's consultations (admin view)
+export const fetchDietitianConsultations = createAsyncThunk(
+  'admin/fetchDietitianConsultations',
+  async (dietitianId) => {
+    const token = localStorage.getItem('authToken_admin');
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+
+    const response = await axios.get(`/api/crud/admin/dietitian/${dietitianId}/consultations`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      withCredentials: true,
+    });
+    
+    return { dietitianId, consultations: response.data.data || [] };
+  }
+);
+
+// Fetch user's consultations (admin view)
+export const fetchUserConsultations = createAsyncThunk(
+  'admin/fetchUserConsultations',
+  async (userId) => {
+    const token = localStorage.getItem('authToken_admin');
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+
+    const response = await axios.get(`/api/crud/admin/user/${userId}/consultations`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      withCredentials: true,
+    });
+    
+    return { userId, consultations: response.data.data || [] };
+  }
+);
+
+// Fetch organization's employees (admin view)
+export const fetchOrganizationEmployees = createAsyncThunk(
+  'admin/fetchOrganizationEmployees',
+  async (organizationId) => {
+    const token = localStorage.getItem('authToken_admin');
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+
+    const response = await axios.get(`/api/crud/admin/organization/${organizationId}/employees`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      withCredentials: true,
+    });
+    
+    return { organizationId, employees: response.data.data || [] };
+  }
+);
+
 // --- Initial State ---
 const initialState = {
   users: {
@@ -164,6 +227,10 @@ const initialState = {
   },
   removedAccounts: [],
   removedAccountsPagination: { page: 1, limit: 10, total: 0, pages: 1 },
+  // New state for consultations and employees
+  dietitianConsultations: {},
+  userConsultations: {},
+  organizationEmployees: {},
   activeRole: 'user',
   removedRole: 'user',
   searchTerm: '',
@@ -294,6 +361,51 @@ const adminSlice = createSlice({
         state.isLoading = false;
         state.confirmAction = null;
         state.error = null;
+      })
+
+      // Fetch Dietitian Consultations
+      .addCase(fetchDietitianConsultations.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(fetchDietitianConsultations.fulfilled, (state, action) => {
+        const { dietitianId, consultations } = action.payload;
+        state.dietitianConsultations[dietitianId] = consultations;
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(fetchDietitianConsultations.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.error.message;
+      })
+
+      // Fetch User Consultations
+      .addCase(fetchUserConsultations.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(fetchUserConsultations.fulfilled, (state, action) => {
+        const { userId, consultations } = action.payload;
+        state.userConsultations[userId] = consultations;
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(fetchUserConsultations.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.error.message;
+      })
+
+      // Fetch Organization Employees
+      .addCase(fetchOrganizationEmployees.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(fetchOrganizationEmployees.fulfilled, (state, action) => {
+        const { organizationId, employees } = action.payload;
+        state.organizationEmployees[organizationId] = employees;
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(fetchOrganizationEmployees.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.error.message;
       });
   },
 });
