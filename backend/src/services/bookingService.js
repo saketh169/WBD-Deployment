@@ -1,20 +1,4 @@
-const nodemailer = require('nodemailer');
-
-// Create transporter for Gmail (singleton pattern)
-let transporter = null;
-
-const getTransporter = () => {
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
-  }
-  return transporter;
-};
+const { getEmailTransporter } = require('../utils/emailTransporter');
 
 // Send booking confirmation email to user
 const sendBookingConfirmationToUser = async (bookingData) => {
@@ -70,7 +54,7 @@ const sendBookingConfirmationToUser = async (bookingData) => {
   </div>`;
 
   try {
-    const transporter = getTransporter();
+    const transporter = getEmailTransporter();
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
@@ -143,7 +127,7 @@ const sendBookingNotificationToDietitian = async (bookingData) => {
   </div>`;
 
   try {
-    const transporter = getTransporter();
+    const transporter = getEmailTransporter();
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: dietitianEmail,
