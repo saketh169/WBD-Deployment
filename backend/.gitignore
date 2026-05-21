@@ -71,8 +71,10 @@ web_modules/
 
 # dotenv environment variables file
 .env
+.env.local
 .env.test
 .env.production
+.env.*.local
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -97,6 +99,22 @@ dist
 
 # Serverless directories
 .serverless/
+
+# IDE and Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+*.pem
+
+# User uploads
+uploads/
 
 # FuseBox cache
 .fusebox/
