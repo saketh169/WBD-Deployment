@@ -142,7 +142,6 @@ const sendBookingNotificationToDietitian = async (bookingData) => {
 };
 
 module.exports = {
-  getTransporter,
   sendBookingConfirmationToUser,
   sendBookingNotificationToDietitian
 };
