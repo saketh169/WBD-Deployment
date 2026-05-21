@@ -94,7 +94,6 @@ const sendContactReplyEmail = async (queryData, replyMessage) => {
 };
 
 module.exports = {
-  getTransporter,
   sendContactConfirmationEmail,
   sendContactReplyEmail
 };
