@@ -1,19 +1,8 @@
-const nodemailer = require('nodemailer');
+const { getEmailTransporter } = require('../utils/emailTransporter');
 
 // Create transporter for Gmail (singleton pattern)
-let transporter = null;
-
 const getTransporter = () => {
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
-  }
-  return transporter;
+  return getEmailTransporter();
 };
 
 // Send booking confirmation email to user
