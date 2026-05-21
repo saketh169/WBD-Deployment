@@ -1,5 +1,5 @@
+const nodemailer = require('nodemailer');
 const crypto = require('crypto');
-const { getEmailTransporter } = require('../utils/emailTransporter');
 
 // In-memory storage for OTPs (in production, use Redis or database)
 const otpStore = new Map();
@@ -10,8 +10,19 @@ const MAX_OTP_ATTEMPTS = 5;           // Max wrong attempts before lockout
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minute lockout after max attempts
 
 // Create transporter for Gmail (singleton pattern)
+let transporter = null;
+
 const getTransporter = () => {
-  return getEmailTransporter();
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+  }
+  return transporter;
 };
 
 // Generate a 6-digit random OTP using crypto for better randomness
