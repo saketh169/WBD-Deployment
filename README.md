@@ -2,7 +2,7 @@
 
 ## Deployment
 
-### Verce
+### Vercel
 - **Frontend**: [https://nutri-connect-wbd-frontend.vercel.app/]
   
 ### Render
