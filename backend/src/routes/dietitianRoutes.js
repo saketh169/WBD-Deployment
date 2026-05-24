@@ -459,8 +459,6 @@ router.post('/dietitian-profile-setup/:id', authenticateJWT, async (req, res) =>
   } catch (error) {
     console.error('Error setting up dietitian profile:', error);
     res.status(500).json({
-
-        await invalidateCache('dietitians:*');
       success: false,
       message: 'Error setting up dietitian profile'
     });
