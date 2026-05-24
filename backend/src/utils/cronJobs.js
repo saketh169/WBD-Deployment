@@ -51,16 +51,38 @@ const startCronJobs = () => {
 
       // Identify admins
       const adminUsers = await User.find({ role: 'admin' });
+      const emailResults = [];
+      
       if (adminUsers.length > 0) {
-        adminUsers.forEach(admin => {
-          sendEmail(admin.email, 'NutriConnect - Weekly Digest', htmlTemplate);
-        });
+        // Use Promise.all to wait for all emails to send
+        const sendPromises = adminUsers.map(admin => 
+          sendEmail(admin.email, 'NutriConnect - Weekly Digest', htmlTemplate)
+            .then(result => {
+              emailResults.push(result);
+              return result;
+            })
+            .catch(err => {
+              console.error(`Failed to send weekly digest to ${admin.email}:`, err);
+              emailResults.push({ success: false, to: admin.email, error: err.message });
+            })
+        );
+        
+        await Promise.all(sendPromises);
+        
+        const successCount = emailResults.filter(r => r.success).length;
+        const failureCount = emailResults.filter(r => !r.success).length;
+        console.log(`Weekly digest emails: ${successCount} sent, ${failureCount} failed`);
       } else if (process.env.EMAIL_USER) {
         // Fallback to process.env.EMAIL_USER if no admins found
-        await sendEmail(process.env.EMAIL_USER, 'NutriConnect - Weekly Digest', htmlTemplate);
+        const result = await sendEmail(process.env.EMAIL_USER, 'NutriConnect - Weekly Digest', htmlTemplate);
+        if (result.success) {
+          console.log('Weekly digest email sent to fallback admin email');
+        } else {
+          console.error('Failed to send weekly digest to fallback admin email:', result.error);
+        }
       }
 
-      console.log('Weekly digest emails queued.');
+      console.log('Weekly digest email batch completed.');
     } catch (error) {
       console.error('Error running weekly digest cron job:', error);
     }

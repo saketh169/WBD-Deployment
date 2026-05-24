@@ -1,5 +1,6 @@
-const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const { sendEmailWithRetry } = require('../utils/emailTransporter');
+const { sanitizeEmailText } = require('../utils/htmlEscaper');
 
 // In-memory storage for OTPs (in production, use Redis or database)
 const otpStore = new Map();
@@ -8,22 +9,6 @@ const otpStore = new Map();
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_OTP_ATTEMPTS = 5;           // Max wrong attempts before lockout
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minute lockout after max attempts
-
-// Create transporter for Gmail (singleton pattern)
-let transporter = null;
-
-const getTransporter = () => {
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
-  }
-  return transporter;
-};
 
 // Generate a 6-digit random OTP using crypto for better randomness
 const generateOTP = () => {
@@ -86,7 +71,7 @@ const sendOTPEmail = async (email, otp) => {
       <div style="background-color: white; padding: 20px; border-radius: 5px; margin: 20px 0; text-align: center; border: 2px solid #1E6F5C;">
         <h3 style="color: #1E6F5C; margin-bottom: 10px;">Your OTP Code</h3>
         <div style="font-size: 32px; font-weight: bold; color: #1E6F5C; letter-spacing: 5px; font-family: monospace;">
-          ${otp}
+          ${sanitizeEmailText(otp)}
         </div>
         <p style="margin-top: 15px; color: #666; font-size: 14px;">
           Please use this code to reset your password.
@@ -105,24 +90,23 @@ const sendOTPEmail = async (email, otp) => {
   </div>`;
 
   try {
-    const transporter = getTransporter();
-    await transporter.sendMail({
+    await sendEmailWithRetry({
       from: process.env.EMAIL_USER,
       to: email,
       subject: 'Password Reset OTP - NutriConnect',
       html: otpHtml
     });
-    console.log('Password reset OTP email sent successfully');
+    console.log('✅ Password reset OTP email sent successfully');
     return { success: true };
   } catch (error) {
-    console.error('Error sending password reset OTP email:', error);
+    console.error('❌ Error sending password reset OTP email:', error.message);
     return { success: false, error };
   }
 };
 
 // Send Login 2FA OTP email to user (includes role label)
 const sendLoginOTPEmail = async (email, otp, roleLabel = '') => {
-  const roleLine = roleLabel ? `<p style="margin-bottom: 15px; color: #555;"><strong>Account Type:</strong> ${roleLabel}</p>` : '';
+  const safeLabelLine = roleLabel ? `<p style="margin-bottom: 15px; color: #555;"><strong>Account Type:</strong> ${sanitizeEmailText(roleLabel)}</p>` : '';
   const otpHtml = `
   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <div style="background-color: #1E6F5C; color: white; padding: 20px; text-align: center;">
@@ -132,12 +116,12 @@ const sendLoginOTPEmail = async (email, otp, roleLabel = '') => {
       <h2>Two-Factor Authentication</h2>
       <p>A sign-in attempt has been made on your NutriConnect account. Please use the OTP below to complete your login.</p>
 
-      ${roleLine}
+      ${safeLabelLine}
 
       <div style="background-color: white; padding: 20px; border-radius: 5px; margin: 20px 0; text-align: center; border: 2px solid #1E6F5C;">
         <h3 style="color: #1E6F5C; margin-bottom: 10px;">Your Login OTP</h3>
         <div style="font-size: 32px; font-weight: bold; color: #1E6F5C; letter-spacing: 5px; font-family: monospace;">
-          ${otp}
+          ${sanitizeEmailText(otp)}
         </div>
         <p style="margin-top: 15px; color: #666; font-size: 14px;">
           Enter this code on the login page to verify your identity.
@@ -156,18 +140,17 @@ const sendLoginOTPEmail = async (email, otp, roleLabel = '') => {
   </div>`;
 
   try {
-    const transporter = getTransporter();
-    const subjectRole = roleLabel ? ` (${roleLabel})` : '';
-    await transporter.sendMail({
+    const subjectRole = roleLabel ? ` (${sanitizeEmailText(roleLabel)})` : '';
+    await sendEmailWithRetry({
       from: process.env.EMAIL_USER,
       to: email,
       subject: `Login Verification OTP${subjectRole} - NutriConnect`,
       html: otpHtml
     });
-    console.log('Login 2FA OTP email sent successfully');
+    console.log('✅ Login 2FA OTP email sent successfully');
     return { success: true };
   } catch (error) {
-    console.error('Error sending login OTP email:', error);
+    console.error('❌ Error sending login OTP email:', error.message);
     return { success: false, error };
   }
 };
