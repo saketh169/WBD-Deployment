@@ -1,4 +1,5 @@
-const { getEmailTransporter } = require('../utils/emailTransporter');
+const { getEmailTransporter, sendEmailWithRetry } = require('../utils/emailTransporter');
+const { sanitizeEmailText } = require('../utils/htmlEscaper');
 
 // Send booking confirmation email to user
 const sendBookingConfirmationToUser = async (bookingData) => {
@@ -15,25 +16,33 @@ const sendBookingConfirmationToUser = async (bookingData) => {
     bookingId
   } = bookingData;
 
+  // Escape user-supplied data to prevent HTML injection
+  const safeName = sanitizeEmailText(username);
+  const safeDietitianName = sanitizeEmailText(dietitianName);
+  const safeDietitianSpec = sanitizeEmailText(dietitianSpecialization);
+  const safeConsultationType = sanitizeEmailText(consultationType);
+  const safePaymentId = sanitizeEmailText(paymentId);
+  const safeBookingId = sanitizeEmailText(bookingId);
+
   const emailHtml = `
   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <div style="background-color: #28B463; color: white; padding: 20px; text-align: center;">
       <h1>🎉 Booking Confirmed - NutriConnect</h1>
     </div>
     <div style="padding: 20px; background-color: #f9f9f9;">
-      <h2>Hello ${username},</h2>
+      <h2>Hello ${safeName},</h2>
       <p>Great news! Your consultation has been successfully booked.</p>
 
       <div style="background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0;">
         <h3 style="color: #28B463;">Booking Details:</h3>
-        <p><strong>Dietitian:</strong> ${dietitianName}</p>
-        ${dietitianSpecialization ? `<p><strong>Specialization:</strong> ${dietitianSpecialization}</p>` : ''}
+        <p><strong>Dietitian:</strong> ${safeDietitianName}</p>
+        ${safeDietitianSpec ? `<p><strong>Specialization:</strong> ${safeDietitianSpec}</p>` : ''}
         <p><strong>Date:</strong> ${new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
         <p><strong>Time:</strong> ${time}</p>
-        <p><strong>Consultation Type:</strong> ${consultationType}</p>
+        <p><strong>Consultation Type:</strong> ${safeConsultationType}</p>
         <p><strong>Amount Paid:</strong> ₹${amount}</p>
-        <p><strong>Payment ID:</strong> ${paymentId}</p>
-        <p><strong>Booking ID:</strong> ${bookingId}</p>
+        <p><strong>Payment ID:</strong> ${safePaymentId}</p>
+        <p><strong>Booking ID:</strong> ${safeBookingId}</p>
       </div>
 
       <div style="background-color: #e8f7e8; padding: 15px; border-radius: 5px; margin: 20px 0;">
@@ -54,8 +63,7 @@ const sendBookingConfirmationToUser = async (bookingData) => {
   </div>`;
 
   try {
-    const transporter = getEmailTransporter();
-    await transporter.sendMail({
+    await sendEmailWithRetry({
       from: process.env.EMAIL_USER,
       to: email,
       subject: '✅ Booking Confirmed - NutriConnect',
@@ -84,30 +92,38 @@ const sendBookingNotificationToDietitian = async (bookingData) => {
     bookingId
   } = bookingData;
 
+  // Escape user-supplied data
+  const safeName = sanitizeEmailText(username);
+  const safeEmail = sanitizeEmailText(email);
+  const safePhone = sanitizeEmailText(userPhone);
+  const safeAddress = sanitizeEmailText(userAddress);
+  const safeConsultationType = sanitizeEmailText(consultationType);
+  const safeBookingId = sanitizeEmailText(bookingId);
+
   const emailHtml = `
   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <div style="background-color: #28B463; color: white; padding: 20px; text-align: center;">
       <h1>📅 New Booking Received - NutriConnect</h1>
     </div>
     <div style="padding: 20px; background-color: #f9f9f9;">
-      <h2>Hello ${dietitianName},</h2>
+      <h2>Hello ${sanitizeEmailText(dietitianName)},</h2>
       <p>You have received a new consultation booking!</p>
 
       <div style="background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0;">
         <h3 style="color: #28B463;">Client Details:</h3>
-        <p><strong>Name:</strong> ${username}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        ${userPhone ? `<p><strong>Phone:</strong> ${userPhone}</p>` : ''}
-        ${userAddress ? `<p><strong>Address:</strong> ${userAddress}</p>` : ''}
+        <p><strong>Name:</strong> ${safeName}</p>
+        <p><strong>Email:</strong> ${safeEmail}</p>
+        ${safePhone ? `<p><strong>Phone:</strong> ${safePhone}</p>` : ''}
+        ${safeAddress ? `<p><strong>Address:</strong> ${safeAddress}</p>` : ''}
       </div>
 
       <div style="background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0;">
         <h3 style="color: #28B463;">Consultation Details:</h3>
         <p><strong>Date:</strong> ${new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
         <p><strong>Time:</strong> ${time}</p>
-        <p><strong>Type:</strong> ${consultationType}</p>
+        <p><strong>Type:</strong> ${safeConsultationType}</p>
         <p><strong>Fee:</strong> ₹${amount}</p>
-        <p><strong>Booking ID:</strong> ${bookingId}</p>
+        <p><strong>Booking ID:</strong> ${safeBookingId}</p>
       </div>
 
       <div style="background-color: #e8f7e8; padding: 15px; border-radius: 5px; margin: 20px 0;">
@@ -127,8 +143,7 @@ const sendBookingNotificationToDietitian = async (bookingData) => {
   </div>`;
 
   try {
-    const transporter = getEmailTransporter();
-    await transporter.sendMail({
+    await sendEmailWithRetry({
       from: process.env.EMAIL_USER,
       to: dietitianEmail,
       subject: '📅 New Booking Received - NutriConnect',

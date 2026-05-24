@@ -1,10 +1,13 @@
 const { User, Dietitian, Organization } = require('../models/userModel');
-const { getEmailTransporter } = require('../utils/emailTransporter');
+const { getEmailTransporter, sendEmailWithRetry } = require('../utils/emailTransporter');
 
-// Send email function
+// Send email function with retry logic
 const sendEmail = async (to, subject, htmlMessage) => {
   try {
-    const transporter = getEmailTransporter();
+    if (!to || !subject || !htmlMessage) {
+      throw new Error('Missing required email fields: to, subject, htmlMessage');
+    }
+
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to,
@@ -12,11 +15,13 @@ const sendEmail = async (to, subject, htmlMessage) => {
       html: htmlMessage
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully');
+    await sendEmailWithRetry(mailOptions);
+    console.log('✅ Email sent successfully to:', to);
+    return { success: true, to };
   } catch (error) {
-    console.error('Error sending email:', error);
-    throw error;
+    console.error('❌ Error sending email to', to, ':', error.message);
+    // Return error info instead of throwing to allow graceful degradation
+    return { success: false, to, error: error.message };
   }
 };
 

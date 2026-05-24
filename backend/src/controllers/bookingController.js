@@ -432,11 +432,14 @@ exports.releaseSlot = async (req, res) => {
   try {
     const { dietitianId, date, time } = req.body;
     const userId = req.user.roleId || req.user.userId;
-    const lockKey = `lock:booking:${dietitianId}:${date}:${time}`;
-
-    const currentHolder = await redis.get(lockKey);
-    if (currentHolder === userId.toString()) {
-      await redis.del(lockKey);
+    
+    if (!isRedisConnected()) {
+      return res.status(503).json({ 
+        success: false, 
+        message: "Booking lock service is temporarily unavailable. Please try again later." 
+      });
+    }
+    
       try {
         notifySlotLockChange(dietitianId, { date, time, action: 'release', userId: userId.toString() });
       } catch (sockErr) {
@@ -460,6 +463,14 @@ exports.getDietitianHolds = async (req, res) => {
     
     if (!dietitianId || !date) {
       return res.status(400).json({ success: false, message: "Dietitian ID and date are required" });
+    }
+
+    if (!isRedisConnected()) {
+      return res.status(503).json({ 
+        success: false, 
+        message: "Lock service is temporarily unavailable. Please try again later.",
+        heldSlots: [] 
+      });
     }
 
     const pattern = `lock:booking:${dietitianId}:${date}:*`;

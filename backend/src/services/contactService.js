@@ -1,8 +1,14 @@
-const { getEmailTransporter } = require('../utils/emailTransporter');
+const { getEmailTransporter, sendEmailWithRetry } = require('../utils/emailTransporter');
+const { sanitizeEmailText } = require('../utils/htmlEscaper');
 
 // Send confirmation email to user after submitting contact query
 const sendContactConfirmationEmail = async (contactData) => {
   const { name, email, role, query } = contactData;
+
+  // Escape user input to prevent HTML injection
+  const safeName = sanitizeEmailText(name);
+  const safeRole = sanitizeEmailText(role);
+  const safeQuery = sanitizeEmailText(query);
 
   const confirmationHtml = `
   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -10,15 +16,15 @@ const sendContactConfirmationEmail = async (contactData) => {
       <h1>NutriConnect Support</h1>
     </div>
     <div style="padding: 20px; background-color: #f9f9f9;">
-      <h2>Hello ${name},</h2>
+      <h2>Hello ${safeName},</h2>
       <p>Thank you for reaching out to us! We have received your query and will get back to you within 24-48 hours.</p>
 
       <div style="background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0;">
         <h3>Your Query Details:</h3>
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Role:</strong> ${role}</p>
-        <p><strong>Query:</strong> ${query}</p>
+        <p><strong>Name:</strong> ${safeName}</p>
+        <p><strong>Email:</strong> ${sanitizeEmailText(email)}</p>
+        <p><strong>Role:</strong> ${safeRole}</p>
+        <p><strong>Query:</strong> ${safeQuery.replace(/\n/g, '<br>')}</p>
         <p><strong>Submitted:</strong> ${new Date().toLocaleString()}</p>
       </div>
 
@@ -32,8 +38,7 @@ const sendContactConfirmationEmail = async (contactData) => {
   </div>`;
 
   try {
-    const transporter = getEmailTransporter();
-    await transporter.sendMail({
+    await sendEmailWithRetry({
       from: process.env.EMAIL_USER,
       to: email,
       subject: 'Query Received - NutriConnect Support',
@@ -50,23 +55,28 @@ const sendContactConfirmationEmail = async (contactData) => {
 const sendContactReplyEmail = async (queryData, replyMessage) => {
   const { name, email, query: originalQuery } = queryData;
 
+  // Escape user input
+  const safeName = sanitizeEmailText(name);
+  const safeQuery = sanitizeEmailText(originalQuery);
+  const safeReply = sanitizeEmailText(replyMessage);
+
   const htmlTemplate = `
   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <div style="background-color: #28B463; color: white; padding: 20px; text-align: center;">
       <h1>NutriConnect Support</h1>
     </div>
     <div style="padding: 20px; background-color: #f9f9f9;">
-      <h2>Hello ${name},</h2>
+      <h2>Hello ${safeName},</h2>
       <p>Thank you for your patience. We have reviewed your query and here is our response:</p>
 
       <div style="background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #28B463;">
         <h3>Your Original Query:</h3>
-        <p style="font-style: italic; color: #666;">"${originalQuery}"</p>
+        <p style="font-style: italic; color: #666;">"${safeQuery}"</p>
       </div>
 
       <div style="background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #dc3545;">
         <h3>Our Response:</h3>
-        <p>${replyMessage}</p>
+        <p>${safeReply.replace(/\n/g, '<br>')}</p>
       </div>
 
       <p>If you have any further questions or need additional clarification, please don't hesitate to reply to this email.</p>
@@ -79,8 +89,7 @@ const sendContactReplyEmail = async (queryData, replyMessage) => {
   </div>`;
 
   try {
-    const transporter = getEmailTransporter();
-    await transporter.sendMail({
+    await sendEmailWithRetry({
       from: process.env.EMAIL_USER,
       to: email,
       subject: 'Reply to your query - NutriConnect Support',
