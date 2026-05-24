@@ -69,6 +69,8 @@ exports.createBlog = async (req, res) => {
 
         // Invalidate blog cache on create
         await invalidateCache('blogs:*');
+        await invalidateCache('public:blogs:*');
+        await invalidateCache('public:stats');
 
         res.status(201).json({
             success: true,
@@ -286,6 +288,8 @@ exports.updateBlog = async (req, res) => {
 
         // Invalidate blog cache on update
         await invalidateCache('blogs:*');
+        await invalidateCache('public:blogs:*');
+        await invalidateCache('public:stats');
 
         res.status(200).json({
             success: true,
@@ -340,6 +344,8 @@ exports.deleteBlog = async (req, res) => {
 
         // Invalidate blog cache on delete
         await invalidateCache('blogs:*');
+        await invalidateCache('public:blogs:*');
+        await invalidateCache('public:stats');
 
         res.status(200).json({
             success: true,
@@ -378,6 +384,9 @@ exports.toggleLike = async (req, res) => {
             blog.likes.splice(likeIndex, 1);
             await blog.save();
 
+            await invalidateCache('blogs:*');
+            await invalidateCache('public:blogs:*');
+
             return res.status(200).json({
                 success: true,
                 message: 'Blog post unliked',
@@ -388,6 +397,9 @@ exports.toggleLike = async (req, res) => {
             // Like
             blog.likes.push({ userId });
             await blog.save();
+
+            await invalidateCache('blogs:*');
+            await invalidateCache('public:blogs:*');
 
             return res.status(200).json({
                 success: true,
@@ -438,6 +450,9 @@ exports.addComment = async (req, res) => {
 
         blog.comments.push(newComment);
         await blog.save();
+
+        await invalidateCache('blogs:*');
+        await invalidateCache('public:blogs:*');
 
         res.status(201).json({
             success: true,
@@ -492,6 +507,9 @@ exports.deleteComment = async (req, res) => {
 
         blog.comments.pull(commentId);
         await blog.save();
+
+        await invalidateCache('blogs:*');
+        await invalidateCache('public:blogs:*');
 
         res.status(200).json({
             success: true,
@@ -556,6 +574,10 @@ exports.reportBlog = async (req, res) => {
         }
 
         await blog.save();
+
+        await invalidateCache('blogs:*');
+        await invalidateCache('public:blogs:*');
+        await invalidateCache('public:stats');
 
         res.status(200).json({
             success: true,
@@ -623,6 +645,10 @@ exports.dismissReports = async (req, res) => {
         blog.status = 'active'; // Reset status to active
 
         await blog.save();
+
+        await invalidateCache('blogs:*');
+        await invalidateCache('public:blogs:*');
+        await invalidateCache('public:stats');
 
         res.status(200).json({
             success: true,

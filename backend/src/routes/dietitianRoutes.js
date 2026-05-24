@@ -5,7 +5,7 @@ const { Dietitian, UserAuth } = require('../models/userModel');
 const Booking = require('../models/bookingModel');
 const { BlockedSlot } = require('../models/bookingModel');
 const { authenticateJWT } = require('../middlewares/authMiddleware');
-const { cacheOrFetch } = require('../utils/redisClient');
+const { cacheOrFetch, invalidateCache } = require('../utils/redisClient');
 
 // Get all verified dietitians
 /**
@@ -448,6 +448,9 @@ router.post('/dietitian-profile-setup/:id', authenticateJWT, async (req, res) =>
       });
     }
 
+    await invalidateCache('dietitians:*');
+    await invalidateCache('public:dietitians:*');
+
     res.json({
       success: true,
       data: dietitian,
@@ -456,6 +459,8 @@ router.post('/dietitian-profile-setup/:id', authenticateJWT, async (req, res) =>
   } catch (error) {
     console.error('Error setting up dietitian profile:', error);
     res.status(500).json({
+
+        await invalidateCache('dietitians:*');
       success: false,
       message: 'Error setting up dietitian profile'
     });
@@ -727,6 +732,8 @@ router.post('/dietitians/:id/testimonials', authenticateJWT, async (req, res) =>
     dietitian.markModified('testimonials');
 
     await dietitian.save();
+    await invalidateCache('dietitians:*');
+    await invalidateCache('public:dietitians:*');
 
     res.status(201).json({
       success: true,
@@ -737,6 +744,8 @@ router.post('/dietitians/:id/testimonials', authenticateJWT, async (req, res) =>
     });
   } catch (error) {
     console.error('Error adding testimonial:', error);
+    await invalidateCache('dietitians:*');
+    await invalidateCache('public:dietitians:*');
     res.status(500).json({
       success: false,
       message: 'Error adding review'
@@ -811,6 +820,8 @@ router.delete('/dietitians/:id/testimonials/:testimonialIndex', authenticateJWT,
     }
 
     await dietitian.save();
+
+    await invalidateCache('dietitians:*');
 
     res.json({
       success: true,

@@ -561,6 +561,7 @@ async function updateUserProfile(req, res) {
             const { invalidateCache } = require('../utils/redisClient');
             try {
                 await invalidateCache('dietitians:*');
+                await invalidateCache('public:dietitians:*');
             } catch(e) { console.error('Cache invalidation failed', e); }
         }
 
