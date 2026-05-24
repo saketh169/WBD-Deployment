@@ -11,6 +11,23 @@ const getDbIdentifier = () => {
 const DATABASE_PREFIX = getDbIdentifier();
 console.log(`[Redis] Using isolation prefix: ${DATABASE_PREFIX}`);
 
+const getCacheVersion = () => {
+  return (
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.VERCEL_DEPLOYMENT_ID ||
+    process.env.GIT_COMMIT_SHA ||
+    process.env.DEPLOYMENT_ID ||
+    ''
+  );
+};
+
+const CACHE_VERSION = getCacheVersion();
+const CACHE_NAMESPACE = CACHE_VERSION ? `${DATABASE_PREFIX}:${CACHE_VERSION}` : DATABASE_PREFIX;
+
+if (CACHE_VERSION) {
+  console.log(`[Redis] Using cache version: ${CACHE_VERSION}`);
+}
+
 // Redis configuration — gracefully degrades if Redis is not available
 const redisConfig = {
   host: process.env.REDIS_HOST || '127.0.0.1',
@@ -77,7 +94,7 @@ const cacheOrFetch = async (key, ttl, fetchFn) => {
   }
 
   try {
-    const namespacedKey = `${DATABASE_PREFIX}:${key}`;
+    const namespacedKey = `${CACHE_NAMESPACE}:${key}`;
     const cached = await redis.get(namespacedKey);
     if (cached) {
       const duration = Date.now() - startTime;
@@ -96,7 +113,7 @@ const cacheOrFetch = async (key, ttl, fetchFn) => {
 
   // Store in cache (non-blocking, don't await)
   try {
-    const namespacedKey = `${DATABASE_PREFIX}:${key}`;
+    const namespacedKey = `${CACHE_NAMESPACE}:${key}`;
     await redis.setex(namespacedKey, ttl, JSON.stringify(data));
     console.log(`[CACHE SET] ${key} (TTL: ${ttl}s)`);
   } catch (err) {
@@ -116,14 +133,14 @@ const invalidateCache = async (pattern) => {
 
   try {
     if (pattern.includes('*')) {
-      const namespacedPattern = `${DATABASE_PREFIX}:${pattern}`;
+      const namespacedPattern = `${CACHE_NAMESPACE}:${pattern}`;
       const keys = await redis.keys(namespacedPattern);
       if (keys.length > 0) {
         await redis.del(...keys);
         console.log(`[CACHE INVALIDATED] ${keys.length} keys matching: ${pattern}`);
       }
     } else {
-      const namespacedKey = `${DATABASE_PREFIX}:${pattern}`;
+      const namespacedKey = `${CACHE_NAMESPACE}:${pattern}`;
       await redis.del(namespacedKey);
       console.log(`[CACHE INVALIDATED] Key: ${pattern}`);
     }
