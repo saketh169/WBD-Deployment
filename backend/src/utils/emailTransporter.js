@@ -9,53 +9,32 @@ let transporter = null;
 const DEFAULT_TIME_MS = 20000;
 
 /**
- * Try to create and verify a transporter using multiple SMTP configs
- * Returns the first working transporter or throws the last error.
+ * Create and verify a Gmail transporter (uses Nodemailer `service: 'gmail'`).
+ * This file intentionally uses the Gmail service shortcut only.
  */
 const createTransporter = async () => {
-  const smtpConfigs = [
-    { host: 'smtp.gmail.com', port: 587, secure: false, requireTLS: true },
-    { host: 'smtp.gmail.com', port: 465, secure: true }
-  ];
+  const options = {
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+    family: 4, // force IPv4
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+    connectionTimeout: DEFAULT_TIME_MS,
+    greetingTimeout: Math.floor(DEFAULT_TIME_MS / 2),
+    socketTimeout: DEFAULT_TIME_MS,
+    logger: false,
+    debug: false,
+    tls: { rejectUnauthorized: false }
+  };
 
-  let lastErr;
-
-  for (const cfg of smtpConfigs) {
-    const options = {
-      host: cfg.host,
-      port: cfg.port,
-      secure: !!cfg.secure,
-      requireTLS: !!cfg.requireTLS,
-      family: 4, // force IPv4
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      },
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
-      connectionTimeout: DEFAULT_TIME_MS,
-      greetingTimeout: Math.floor(DEFAULT_TIME_MS / 2),
-      socketTimeout: DEFAULT_TIME_MS,
-      logger: false,
-      debug: false,
-      tls: { rejectUnauthorized: false }
-    };
-
-    try {
-      const t = nodemailer.createTransport(options);
-      // Verify immediately to fail fast if connection not allowed
-      // verify() returns a promise
-      // eslint-disable-next-line no-await-in-loop
-      await t.verify();
-      return t;
-    } catch (err) {
-      lastErr = err;
-      // continue to next config
-    }
-  }
-
-  throw lastErr;
+  const t = nodemailer.createTransport(options);
+  // verify to fail fast in runtime when SMTP access is blocked
+  await t.verify();
+  return t;
 };
 
 /**
