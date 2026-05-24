@@ -3,24 +3,68 @@ const nodemailer = require('nodemailer');
 let transporter = null;
 
 /**
- * Create email transporter with Nodemailer's built-in Gmail service
+ * Create email transporter for Gmail SMTP and force IPv4 (family: 4)
+ * This avoids environments that prefer IPv6 and may return ENETUNREACH.
  */
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
+const DEFAULT_TIME_MS = 20000;
+
+/**
+ * Try to create and verify a transporter using multiple SMTP configs
+ * Returns the first working transporter or throws the last error.
+ */
+const createTransporter = async () => {
+  const smtpConfigs = [
+    { host: 'smtp.gmail.com', port: 587, secure: false, requireTLS: true },
+    { host: 'smtp.gmail.com', port: 465, secure: true }
+  ];
+
+  let lastErr;
+
+  for (const cfg of smtpConfigs) {
+    const options = {
+      host: cfg.host,
+      port: cfg.port,
+      secure: !!cfg.secure,
+      requireTLS: !!cfg.requireTLS,
+      family: 4, // force IPv4
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      },
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      connectionTimeout: DEFAULT_TIME_MS,
+      greetingTimeout: Math.floor(DEFAULT_TIME_MS / 2),
+      socketTimeout: DEFAULT_TIME_MS,
+      logger: false,
+      debug: false,
+      tls: { rejectUnauthorized: false }
+    };
+
+    try {
+      const t = nodemailer.createTransport(options);
+      // Verify immediately to fail fast if connection not allowed
+      // verify() returns a promise
+      // eslint-disable-next-line no-await-in-loop
+      await t.verify();
+      return t;
+    } catch (err) {
+      lastErr = err;
+      // continue to next config
     }
-  });
+  }
+
+  throw lastErr;
 };
 
 /**
  * Get or create email transporter
  */
-const getEmailTransporter = () => {
+const getEmailTransporter = async () => {
   if (!transporter) {
-    transporter = createTransporter();
+    // createTransporter is async and verifies connection
+    transporter = await createTransporter();
   }
   return transporter;
 };
@@ -33,7 +77,7 @@ const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const emailTransporter = getEmailTransporter();
+      const emailTransporter = await getEmailTransporter();
       const result = await emailTransporter.sendMail(mailOptions);
       return result;
     } catch (error) {
