@@ -162,7 +162,7 @@ BlogSchema.virtual('authorLabel').get(function () {
 });
 
 // Pre-save middleware to generate excerpt from content if not provided
-BlogSchema.pre('save', function (next) {
+BlogSchema.pre('save', function () {
     if (!this.excerpt && this.content) {
         // Remove HTML tags and get first 200 characters
         const plainText = this.content.replace(/<[^>]*>/g, '');
@@ -175,8 +175,6 @@ BlogSchema.pre('save', function (next) {
 
     // Update reported status
     this.isReported = this.reports && this.reports.length > 0;
-
-    next();
 });
 
 const Blog = mongoose.model('Blog', BlogSchema);
