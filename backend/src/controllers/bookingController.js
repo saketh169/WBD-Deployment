@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Booking = require("../models/bookingModel");
 const { BlockedSlot } = require("../models/bookingModel");
-const { redis, isConnected: isRedisConnected } = require("../utils/redisClient");
+const { redis, isConnected: isRedisConnected, cacheOrFetch, invalidateCache } = require("../utils/redisClient");
 const {
   sendBookingConfirmationToUser,
   sendBookingNotificationToDietitian,
@@ -349,6 +349,14 @@ exports.createBooking = async (req, res) => {
       // Don't fail the request if email queuing fails
     }
 
+    // Invalidate booking list caches for this user and dietitian so next list call is MISS then becomes HIT
+    try {
+      await invalidateCache(`bookings:user:${userId}:*`);
+      await invalidateCache(`bookings:dietitian:${dietitianId}:*`);
+    } catch (invErr) {
+      console.error('Error invalidating booking caches:', invErr);
+    }
+
     res.status(201).json({
       success: true,
       message: "Booking created successfully",
@@ -518,12 +526,24 @@ exports.getUserBookings = async (req, res) => {
       query.status = status;
     }
 
-    const bookings = await Booking.find(query).sort(sort).exec();
+    const cacheKey = `bookings:user:${userId}:${status || 'all'}:${sort}`;
+
+    const { data: bookings, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
+      return await Booking.find(query).sort(sort).lean().exec();
+    });
+
+    // Add cache inspection headers so frontend schedule/consultation lists show MISS/HIT
+    res.set({
+      'X-Cache': cacheStatus,
+      'X-Cache-Key': cacheKey,
+      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
+      'X-Response-Time': `${duration}ms`
+    });
 
     res.status(200).json({
       success: true,
       data: bookings,
-      count: bookings.length,
+      count: Array.isArray(bookings) ? bookings.length : (bookings ? 1 : 0),
     });
   } catch (error) {
     console.error("Error fetching user bookings:", error);
@@ -558,12 +578,24 @@ exports.getDietitianBookings = async (req, res) => {
       query.status = status;
     }
 
-    const bookings = await Booking.find(query).sort(sort).exec();
+    const cacheKey = `bookings:dietitian:${dietitianId}:${status || 'all'}:${sort}`;
+
+    const { data: bookings, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
+      return await Booking.find(query).sort(sort).lean().exec();
+    });
+
+    // Add cache inspection headers so frontend schedule/consultation lists show MISS/HIT
+    res.set({
+      'X-Cache': cacheStatus,
+      'X-Cache-Key': cacheKey,
+      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
+      'X-Response-Time': `${duration}ms`
+    });
 
     res.status(200).json({
       success: true,
       data: bookings,
-      count: bookings.length,
+      count: Array.isArray(bookings) ? bookings.length : (bookings ? 1 : 0),
     });
   } catch (error) {
     console.error("Error fetching dietitian bookings:", error);
@@ -772,6 +804,13 @@ exports.updateBookingStatus = async (req, res) => {
     } catch (err) {
       console.error("Socket notification error:", err);
     }
+    // Invalidate booking lists cache for the affected user and dietitian
+    try {
+      await invalidateCache(`bookings:user:${booking.userId}:*`);
+      await invalidateCache(`bookings:dietitian:${booking.dietitianId}:*`);
+    } catch (invErr) {
+      console.error('Error invalidating booking caches after status update:', invErr);
+    }
   } catch (error) {
     console.error("Error updating booking status:", error);
     res.status(500).json({
@@ -831,6 +870,13 @@ exports.cancelBooking = async (req, res) => {
       notifyUserUpdate(booking.userId, booking);
     } catch (err) {
       console.error("Socket notification error:", err);
+    }
+    // Invalidate booking lists cache for the affected user and dietitian
+    try {
+      await invalidateCache(`bookings:user:${booking.userId}:*`);
+      await invalidateCache(`bookings:dietitian:${booking.dietitianId}:*`);
+    } catch (invErr) {
+      console.error('Error invalidating booking caches after cancellation:', invErr);
     }
   } catch (error) {
     console.error("Error cancelling booking:", error);
@@ -1067,6 +1113,13 @@ exports.rescheduleBooking = async (req, res) => {
       notifyUserUpdate(booking.userId, booking);
     } catch (err) {
       console.error("Socket notification error:", err);
+    }
+    // Invalidate booking lists cache for the affected user and dietitian
+    try {
+      await invalidateCache(`bookings:user:${booking.userId}:*`);
+      await invalidateCache(`bookings:dietitian:${booking.dietitianId}:*`);
+    } catch (invErr) {
+      console.error('Error invalidating booking caches after reschedule:', invErr);
     }
   } catch (error) {
     console.error("Error rescheduling booking:", error);
