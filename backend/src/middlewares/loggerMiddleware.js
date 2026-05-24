@@ -3,20 +3,29 @@ const path = require('path');
 const morgan = require('morgan');
 const rfs = require('rotating-file-stream');
 
+const isServerlessRuntime = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 const logsFolder = path.join(__dirname, '..', '..', 'logs');
 const requestLogsFolder = path.join(logsFolder, 'request');
 const errorLogsFolder = path.join(logsFolder, 'error');
 
-if (!fs.existsSync(logsFolder)) {
-  fs.mkdirSync(logsFolder, { recursive: true });
-}
+let fileLoggingEnabled = !isServerlessRuntime;
 
-if (!fs.existsSync(requestLogsFolder)) {
-  fs.mkdirSync(requestLogsFolder, { recursive: true });
-}
+if (fileLoggingEnabled) {
+  try {
+    if (!fs.existsSync(logsFolder)) {
+      fs.mkdirSync(logsFolder, { recursive: true });
+    }
 
-if (!fs.existsSync(errorLogsFolder)) {
-  fs.mkdirSync(errorLogsFolder, { recursive: true });
+    if (!fs.existsSync(requestLogsFolder)) {
+      fs.mkdirSync(requestLogsFolder, { recursive: true });
+    }
+
+    if (!fs.existsSync(errorLogsFolder)) {
+      fs.mkdirSync(errorLogsFolder, { recursive: true });
+    }
+  } catch (error) {
+    fileLoggingEnabled = false;
+  }
 }
 
 const formatDate = (time) => {
@@ -29,21 +38,27 @@ const formatDate = (time) => {
 
 const buildLogFileName = (prefix, time) => `${prefix}-${formatDate(time)}.txt`;
 
+const noopStream = { write: () => {} };
+
 // Create a rotating write stream for access logs
-const accessLogStream = rfs.createStream((time) => buildLogFileName('request', time), {
-  interval: '1d', // Rotate daily
-  maxFiles: 30, // Keep logs for up to 30 days
-  immutable: true,
-  path: requestLogsFolder
-});
+const accessLogStream = fileLoggingEnabled
+  ? rfs.createStream((time) => buildLogFileName('request', time), {
+      interval: '1d', // Rotate daily
+      maxFiles: 30, // Keep logs for up to 30 days
+      immutable: true,
+      path: requestLogsFolder
+    })
+  : noopStream;
 
 // Create a rotating write stream for error logs
-const errorLogStream = rfs.createStream((time) => buildLogFileName('error', time), {
-  interval: '1d', // Rotate daily
-  maxFiles: 30,
-  immutable: true,
-  path: errorLogsFolder
-});
+const errorLogStream = fileLoggingEnabled
+  ? rfs.createStream((time) => buildLogFileName('error', time), {
+      interval: '1d', // Rotate daily
+      maxFiles: 30,
+      immutable: true,
+      path: errorLogsFolder
+    })
+  : noopStream;
 
 // Morgan middleware for HTTP request logging
 const requestLogger = morgan('combined', { stream: accessLogStream });
@@ -56,7 +71,11 @@ const errorLogger = (err, req = null) => {
 
   const logMessage = `[${timestamp}] ERROR ${method} ${url} - ${errorMessage}\n`;
 
-  errorLogStream.write(logMessage);
+  if (fileLoggingEnabled) {
+    errorLogStream.write(logMessage);
+  } else {
+    console.error(logMessage.trim());
+  }
 };
 
 module.exports = {
