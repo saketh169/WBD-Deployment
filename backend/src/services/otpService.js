@@ -167,14 +167,17 @@ const sendLoginOTP = async (email, roleLabel = '') => {
       console.log(`\n\uD83D\uDD10 [DEV] LOGIN OTP for ${email} (${roleLabel || 'unknown role'}): ${otp}\n`);
     }
 
-    const emailResult = await sendLoginOTPEmail(email, otp, roleLabel);
+    // For now: do not send emails for login OTPs — just log the OTP and return success.
+    // Commenting out the email send so backend-only OTP display is used during testing.
+    // const emailResult = await sendLoginOTPEmail(email, otp, roleLabel);
+    // if (emailResult.success) {
+    //   return { success: true, message: 'Login OTP sent successfully' };
+    // } else {
+    //   removeOTP(email);
+    //   return { success: false, message: 'Failed to send login OTP email', error: emailResult.error };
+    // }
 
-    if (emailResult.success) {
-      return { success: true, message: 'Login OTP sent successfully' };
-    } else {
-      removeOTP(email);
-      return { success: false, message: 'Failed to send login OTP email', error: emailResult.error };
-    }
+    return { success: true, message: 'Login OTP generated and logged (email disabled)' };
   } catch (error) {
     console.error('Error in sendLoginOTP:', error);
     return { success: false, message: 'Internal server error', error };
