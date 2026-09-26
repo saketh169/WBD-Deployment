@@ -3,15 +3,19 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
-    const MONGODB_URI = process.env.MONGODB_URL|| "mongodb://localhost:27017/NutriConnectDatabase";
+    const MONGODB_URI = process.env.MONGODB_URL || process.env.MONGODB_URI || "mongodb://localhost:27017/NutriConnectDatabase";
     if (!MONGODB_URI) {
       throw new Error('MONGODB_URI is not defined');
     }
-    await mongoose.connect(MONGODB_URI);
+    await mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+    });
     console.log('✅ MongoDB Connected Successfully!');
   } catch (err) {
     console.error('❌ MongoDB Connection Failed:', err.message);
-    process.exit(1);
+    if (!process.env.VERCEL) {
+      process.exit(1);
+    }
   }
 }; 
 
