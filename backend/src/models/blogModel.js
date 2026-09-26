@@ -175,7 +175,9 @@ BlogSchema.pre('save', function (next) {
     // Update reported status
     this.isReported = this.reports && this.reports.length > 0;
 
-    next();
+    if (typeof next === 'function') {
+        return next();
+    }
 });
 
 const Blog = mongoose.model('Blog', BlogSchema);

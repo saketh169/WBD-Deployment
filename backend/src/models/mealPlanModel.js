@@ -81,7 +81,9 @@ mealPlanSchema.index({ dietitianId: 1, userId: 1, createdAt: -1 });
 // Middleware to update updatedAt
 mealPlanSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
-  next();
+  if (typeof next === 'function') {
+    return next();
+  }
 });
 
 module.exports = mongoose.model('MealPlan', mealPlanSchema);
