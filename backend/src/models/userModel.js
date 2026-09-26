@@ -25,6 +25,7 @@ const UserSchema = new Schema({
     gender: { type: String, enum: ['male', 'female', 'other'], required: true },
     address: { type: String, required: true, maxlength: 200 },
     profileImage: { type: Schema.Types.Mixed },
+    isDeleted: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // 2b. Admin Profile (adminKey REMOVED)
@@ -42,7 +43,7 @@ const AdminSchema = new Schema({
 const DietitianSchema = new Schema({
     name: { type: String, required: true, minlength: 5, unique: true, trim: true }, // ROLE-SPECIFIC UNIQUE
     email: { type: String, required: true, lowercase: true, trim: true }, // Email from UserAuth
-    age: { type: Number, required: true, min: 18},
+    age: { type: Number, required: true, min: 18 },
     phone: { type: String, minlength: 10, maxlength: 10 }, // Optional field
     licenseNumber: { type: String, required: true, unique: true, match: /^DLN[0-9]{6}$/ }, // ROLE-SPECIFIC UNIQUE
     interestedField: { type: String },
@@ -80,6 +81,8 @@ const DietitianSchema = new Schema({
     specialties: [{ type: String }],
     experience: { type: Number },
     fees: { type: Number },
+    onlineFee: { type: Number },
+    inPersonFee: { type: Number },
     languages: [{ type: String }],
     location: { type: String },
     rating: { type: Number },
@@ -179,6 +182,7 @@ const OrganizationSchema = new Schema({
     documentUploadStatus: { type: String, enum: ['pending', 'verified', 'rejected'], default: 'pending' },
     lastDocumentUpdate: { type: Date, default: null },
     profileImage: { type: Schema.Types.Mixed },
+    isDeleted: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // 2e. Employee Profile (Organization Employee)
@@ -205,14 +209,20 @@ const EmployeeSchema = new Schema({
 
 // Index for faster queries
 EmployeeSchema.index({ organizationId: 1, email: 1 }, { unique: true, sparse: true });
+EmployeeSchema.index({ isDeleted: 1, createdAt: -1 });
+EmployeeSchema.index({ name: 1, email: 1 });
 
-UserSchema.index({ createdAt: 1 });
-UserSchema.index({ name: 'text' }); // Text index for user search
+UserSchema.index({ isDeleted: 1, createdAt: -1 });
+UserSchema.index({ name: 1, email: 1 });
+
+DietitianSchema.index({ isDeleted: 1, createdAt: -1 });
+DietitianSchema.index({ name: 1, email: 1 });
 DietitianSchema.index({ 'verificationStatus.finalReport': 1, isDeleted: 1 });
-DietitianSchema.index({ createdAt: 1 });
-DietitianSchema.index({ name: 'text', specializationDomain: 'text', about: 'text', location: 'text' }); // Text index for dietitian search
+
+OrganizationSchema.index({ isDeleted: 1, createdAt: -1 });
+OrganizationSchema.index({ name: 1, email: 1 });
 OrganizationSchema.index({ documentUploadStatus: 1 });
-OrganizationSchema.index({ createdAt: 1 });
+
 UserAuthSchema.index({ role: 1 });
 
 module.exports = {

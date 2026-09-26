@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
-import axios from '../../axios';
+import { getEmployeeSupportDashboard, submitEmployeeQuery, createTeamboardPost, deleteTeamboardPost } from '../../services/organization/organizationService';
 import AuthContext from '../../contexts/AuthContext';
 
 const CATEGORIES = [
@@ -72,68 +72,33 @@ const EmployeeSupport = () => {
     return userColorMap[email];
   };
 
-  // Always fetch fresh user details on mount so name is never stale
-  useEffect(() => {
-    const refreshUser = async () => {
-      try {
-        const res = await axios.get('/api/getorganizationdetails', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.data.success) {
-          const { name, email, org_name } = res.data;
-          if (name)     setEmpName(name);
-          if (email)    setEmpEmail(email);
-          if (org_name) setOrgName(org_name);
-        }
-      } catch {
-        // silently ignore refresh failure
-      }
-    };
-    refreshUser();
-  }, [token]);
-
-  const fetchBoardPosts = useCallback(async (silent = false) => {
+  // Grouped initial fetch: loads org details, teamboard posts, and my queries in ONE call
+  const loadSupportDashboard = useCallback(async (silent = false) => {
+    if (!token) return;
     if (!silent) setBoardLoading(true);
     try {
-      const res = await axios.get(`/api/teamboard?orgName=${encodeURIComponent(orgName)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setBoardPosts(res.data.data || []);
+      const res = await getEmployeeSupportDashboard(orgName, empEmail);
+      if (res && !res.isError && res.data) {
+        const { orgDetails, boardPosts: bData, myQueries: qData } = res.data;
+        if (orgDetails?.name) setEmpName(orgDetails.name);
+        if (orgDetails?.email) setEmpEmail(orgDetails.email);
+        if (orgDetails?.org_name) setOrgName(orgDetails.org_name);
+        setBoardPosts(bData || []);
+        setMyQueries(qData || []);
+      }
     } catch {
-      // silently ignore fetch failure
+      // silently ignore
     } finally {
       if (!silent) setBoardLoading(false);
     }
-  }, [orgName, token]);
-
-  // Fetch all employee queries from backend (both pending and replied)
-  const fetchMyQueries = useCallback(async () => {
-    if (!token) return;
-    try {
-      const res = await axios.get(`/api/contact/my-queries`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.data.success && res.data.data) {
-        // Set myQueries with all queries from backend
-        setMyQueries(res.data.data || []);
-      }
-    } catch {
-      // silently ignore fetch failure
-    }
-  }, [token]);
+  }, [token, orgName, empEmail]);
 
   useEffect(() => {
-    fetchMyQueries();
-    fetchBoardPosts();
-    // Auto-refresh board every 15 seconds
-    const boardInterval = setInterval(() => fetchBoardPosts(true), 15000);
-    // Auto-refresh queries every 5 seconds to show new admin responses
-    const queriesInterval = setInterval(() => fetchMyQueries(), 5000);
-    return () => {
-      clearInterval(boardInterval);
-      clearInterval(queriesInterval);
-    };
-  }, [token, fetchBoardPosts, fetchMyQueries]);
+    loadSupportDashboard();
+    // Refresh periodically
+    const interval = setInterval(() => loadSupportDashboard(true), 15000);
+    return () => clearInterval(interval);
+  }, [loadSupportDashboard]);
 
   // Auto-scroll to bottom when new messages arrive or when switching to board tab
   useEffect(() => {
@@ -166,14 +131,17 @@ const EmployeeSupport = () => {
       category: CATEGORIES.find(c => c.value === form.category)?.label || 'General',
     };
     try {
-      await axios.post('/api/contact/employee/submit', payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      // Fetch queries from backend to reflect the newly submitted query
-      fetchMyQueries();
-      setForm({ category: 'verification', subject: '', message: '' });
-      setSubmitSuccess('Query submitted successfully! You will receive a confirmation email shortly.');
-      setTimeout(() => setSubmitSuccess(''), 6000);
+      const res = await submitEmployeeQuery(payload);
+      if (res && !res.isError) {
+        // Refresh support dashboard to reflect the newly submitted query
+        loadSupportDashboard(true);
+        setForm({ category: 'verification', subject: '', message: '' });
+        setSubmitSuccess('Query submitted successfully! You will receive a confirmation email shortly.');
+        setTimeout(() => setSubmitSuccess(''), 6000);
+      } else {
+        setSubmitError(res?.message || 'Failed to submit query. Please try again.');
+        setTimeout(() => setSubmitError(''), 5000);
+      }
     } catch {
       setSubmitError('Failed to submit query. Please try again.');
       setTimeout(() => setSubmitError(''), 5000);
@@ -188,12 +156,16 @@ const EmployeeSupport = () => {
     setBoardError('');
     setBoardPosting(true);
     try {
-      const res = await axios.post('/api/teamboard', {
+      const res = await createTeamboardPost({
         message: boardMsg.trim(),
         isOrg: false,
-      }, { headers: { Authorization: `Bearer ${token}` } });
-      setBoardPosts(prev => [res.data.data, ...prev]);
-      setBoardMsg('');
+      });
+      if (res && !res.isError && res.success) {
+        setBoardPosts(prev => [res.data, ...prev]);
+        setBoardMsg('');
+      } else {
+        setBoardError(res?.message || 'Failed to post message.');
+      }
     } catch {
       setBoardError('Failed to post message.');
     } finally {
@@ -203,10 +175,10 @@ const EmployeeSupport = () => {
 
   const handleDeleteBoardPost = async (id) => {
     try {
-      await axios.delete(`/api/teamboard/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setBoardPosts(prev => prev.filter(p => p._id !== id));
+      const res = await deleteTeamboardPost(id, user?.email || '', false);
+      if (res && !res.isError) {
+        setBoardPosts(prev => prev.filter(p => p._id !== id));
+      }
     } catch {
       // silently ignore delete failure
     }

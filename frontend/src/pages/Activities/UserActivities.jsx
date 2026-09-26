@@ -1,4 +1,5 @@
-import axios from '../../axios';
+import React, { useState, useEffect } from 'react';
+import { getUserActivities } from '../../services/misc/miscService';
 import { io } from 'socket.io-client';
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { useAuthContext } from "../../hooks/useAuthContext";
@@ -31,29 +32,17 @@ const UserActivities = () => {
     const fetchActivities = async () => {
       if (!user?.id || !token) return;
 
-      try {
-        setIsLoading(true);
-        const response = await axios.get(`/api/analytics/user/${user.id}/activities?page=${page}&limit=20`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        const data = response.data;
-
-        if (data.success) {
-          if (page === 1) {
-            setActivities(data.data.activities || []);
-          } else {
-            setActivities(prev => [...prev, ...(data.data.activities || [])]);
-          }
-          setHasMore(data.data.hasMore);
+      setIsLoading(true);
+      const res = await getUserActivities(user.id, page, 20);
+      if (!res.isError) {
+        if (page === 1) {
+          setActivities(res.data?.activities || []);
+        } else {
+          setActivities(prev => [...prev, ...(res.data?.activities || [])]);
         }
-      } catch (error) {
-        console.error('Error fetching activities:', error);
-      } finally {
-        setIsLoading(false);
+        setHasMore(res.data?.hasMore || false);
       }
+      setIsLoading(false);
     };
 
     fetchActivities();

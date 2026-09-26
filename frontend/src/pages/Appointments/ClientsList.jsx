@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import AuthContext from '../../contexts/AuthContext';
-import axios from '../../axios';
+import { getOrCreateConversation } from '../../services/chat/chatService';
 import { io } from 'socket.io-client';
 import {
   fetchDietitianClients,
@@ -35,11 +35,6 @@ const ClientsList = () => {
   const clients = useSelector(selectDietitianClients);
   const loading = useSelector(selectBookingLoading);
 
-  // Log dietitian name and ID for debugging
-  useEffect(() => {
-    if (user) {
-    }
-  }, [user]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -66,18 +61,13 @@ const ClientsList = () => {
       }
 
       // Create or get conversation
-      const response = await axios.post('/api/chat/conversation', {
+      const res = await getOrCreateConversation({
         clientId: client.id,
         dietitianId: user.id
-      }, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        }
       });
 
-      if (response.data.success) {
-        const conversation = response.data.data;
+      if (!res.isError && (res.success || res.data)) {
+        const conversation = res.data || res;
         navigate(`/dietitian/chat/${conversation._id}`, {
           state: {
             otherParticipant: {
@@ -166,7 +156,7 @@ const ClientsList = () => {
         phone: client.phone || 'N/A',
         age: client.age || 'N/A',
         location: client.location || 'N/A',
-        consultationType: client.consultationType || 'General Consultation',
+        consultationType: client.consultationType || 'Online',
         nextAppointment: client.nextAppointment || null,
         status: status,
         profileImage: client.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(client.name)}&background=28B463&color=fff&size=128`,
@@ -305,10 +295,22 @@ const ClientsList = () => {
                           <span className={`px-4 py-1.5 text-sm font-semibold rounded-full shadow-sm ${getStatusColor(client.status)}`}>
                             {client.status}
                           </span>
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border shadow-xs ${
+                            client.consultationType?.toLowerCase().includes('person')
+                              ? 'bg-purple-100 text-purple-800 border-purple-300'
+                              : 'bg-blue-100 text-blue-800 border-blue-300'
+                          }`}>
+                            <i className={`fas ${
+                              client.consultationType?.toLowerCase().includes('person')
+                                ? 'fa-building'
+                                : 'fa-video'
+                            }`} />
+                            {client.consultationType?.toLowerCase().includes('person') ? 'In-Person' : 'Online'}
+                          </span>
                         </div>
                         <p className="text-emerald-600 font-semibold text-lg flex items-center gap-2">
                           <i className="fas fa-stethoscope text-sm"></i>
-                          {client.consultationType}
+                          {client.consultationType?.toLowerCase().includes('person') ? 'In-Person Consultation' : 'Online Consultation'}
                         </p>
                         <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
                           <div className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg">
@@ -443,13 +445,27 @@ const ClientsList = () => {
                     <h3 className="text-3xl font-bold text-teal-800 mb-2">
                       {selectedClient.name}
                     </h3>
-                    <p className="text-lg text-emerald-600 font-semibold flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-3 flex-wrap mb-2">
+                      <span className={`px-4 py-1.5 text-sm font-semibold rounded-full shadow-sm ${getStatusColor(selectedClient.status)}`}>
+                        {selectedClient.status}
+                      </span>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border shadow-xs ${
+                        selectedClient.consultationType?.toLowerCase().includes('person')
+                          ? 'bg-purple-100 text-purple-800 border-purple-300'
+                          : 'bg-blue-100 text-blue-800 border-blue-300'
+                      }`}>
+                        <i className={`fas ${
+                          selectedClient.consultationType?.toLowerCase().includes('person')
+                            ? 'fa-building'
+                            : 'fa-video'
+                        }`} />
+                        {selectedClient.consultationType?.toLowerCase().includes('person') ? 'In-Person' : 'Online'}
+                      </span>
+                    </div>
+                    <p className="text-lg text-emerald-600 font-semibold flex items-center gap-2">
                       <i className="fas fa-stethoscope"></i>
-                      {selectedClient.consultationType}
+                      {selectedClient.consultationType?.toLowerCase().includes('person') ? 'In-Person Consultation' : 'Online Consultation'}
                     </p>
-                    <span className={`inline-block mt-2 px-4 py-1.5 text-sm font-semibold rounded-full shadow-sm ${getStatusColor(selectedClient.status)}`}>
-                      {selectedClient.status}
-                    </span>
                   </div>
                 </div>
 

@@ -18,7 +18,7 @@ import ChatbotPage from './pages/Chatbot';
 import RoleModal from './pages/RoleModal';
 import DocUpload from './pages/Auth/DocUpload';
 
-import PrivacyPolicy from './components/extras/PrivacyPolicy';
+import LegalPrivacy from './components/extras/LegalPrivacy';
 import TermsOfUse  from './components/extras/TermsOfUse';
 import RateLimit429 from './pages/Error/RateLimit429';
 
@@ -65,7 +65,7 @@ const App = () => {
                       <Route path="/role" element={<RoleModal />} />
                       <Route path="/upload-documents" element={<DocUpload />} />
 
-                      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                      <Route path="/privacy-policy" element={<LegalPrivacy />} />
                       <Route path="/terms-of-use" element={<TermsOfUse/>} />
 
                       {/* Role-Specific Routes (handled by Layout.jsx) */}

@@ -15,7 +15,8 @@ const { authenticateJWT } = require('../middlewares/authMiddleware');
  * /api/health-reports/create:
  *   post:
  *     tags: ['Health Reports']
- *     summary: Create health report (dietitian to client)
+ *     summary: Submit health report (dietitian to client)
+ *     description: Dietitian creates and sends a health report to a client with findings, recommendations, and attached files
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -74,7 +75,8 @@ router.post('/create', authenticateJWT, healthReportUploadFields, createHealthRe
  * /api/health-reports/client/{clientId}/dietitian/{dietitianId}:
  *   get:
  *     tags: ['Health Reports']
- *     summary: Get health reports for client from dietitian
+ *     summary: Retrieve health reports (dietitian view)
+ *     description: Dietitian retrieves all health reports sent to a specific client
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -100,7 +102,8 @@ router.get('/client/:clientId/dietitian/:dietitianId', authenticateJWT, getHealt
  * /api/health-reports/dietitian/{dietitianId}/client/{clientId}:
  *   get:
  *     tags: ['Health Reports']
- *     summary: Get all health reports sent by dietitian
+ *     summary: Retrieve health reports (client view)
+ *     description: Client retrieves all health reports received from a specific dietitian
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -126,7 +129,8 @@ router.get('/dietitian/:dietitianId/client/:clientId', authenticateJWT, getDieti
  * /api/health-reports/client/{clientId}:
  *   get:
  *     tags: ['Health Reports']
- *     summary: Get all health reports for a client
+ *     summary: Retrieve all health reports for a client
+ *     description: Fetch all health reports for a specific client across all dietitians
  *     security:
  *       - BearerAuth: []
  *     parameters:

@@ -36,19 +36,6 @@ module.exports = {
         console.log(`Socket ${socket.id} joined conversation ${conversationId}`);
       });
 
-      // Realtime booking UI viewing room
-      socket.on('viewing_dietitian', (dietitianId) => {
-        if (!dietitianId) return;
-        socket.join(`viewing_dietitian_${dietitianId}`);
-        console.log(`Socket ${socket.id} joined viewing room for dietitian ${dietitianId}`);
-      });
-
-      socket.on('leave_dietitian', (dietitianId) => {
-        if (!dietitianId) return;
-        socket.leave(`viewing_dietitian_${dietitianId}`);
-        console.log(`Socket ${socket.id} left viewing room for dietitian ${dietitianId}`);
-      });
-
       socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
         // Remove from tracked sockets
@@ -96,13 +83,6 @@ module.exports = {
     if (io) {
       // Assuming users join a room like 'user_id'
       io.to(`user_${userId}`).emit('booking_updated', bookingData);
-    }
-  },
-
-  notifySlotLockChange: (dietitianId, lockData) => {
-    // lockData: { date, time, action: 'hold' | 'release' }
-    if (io) {
-      io.to(`viewing_dietitian_${dietitianId}`).emit('slot_lock_change', lockData);
     }
   }
 };

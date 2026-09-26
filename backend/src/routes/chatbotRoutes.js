@@ -6,6 +6,41 @@ const { optionalAuthenticateJWT } = require('../middlewares/authMiddleware');
 
 /**
  * @swagger
+ * /api/chatbot/top-faqs:
+ *   get:
+ *     tags: ['Chatbot']
+ *     summary: Get top 4 most clicked FAQs
+ *     responses:
+ *       200:
+ *         description: List of top FAQs
+ */
+router.get('/top-faqs', chatbotController.getTopFAQs);
+
+/**
+ * @swagger
+ * /api/chatbot/quick-question:
+ *   post:
+ *     tags: ['Chatbot']
+ *     summary: Handle quick question chip click
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               question:
+ *                 type: string
+ *               sessionId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: FAQ answer
+ */
+router.post('/quick-question', chatbotController.quickQuestionClick);
+
+/**
+ * @swagger
  * /api/chatbot/message:
  *   post:
  *     tags: ['Chatbot']
@@ -29,8 +64,6 @@ const { optionalAuthenticateJWT } = require('../middlewares/authMiddleware');
  *       429:
  *         description: Daily chatbot query limit reached
  */
-// 1. Send Message Route: POST /api/chatbot/message (with subscription limit check)
-// optionalAuthenticateJWT decodes JWT if present so checkChatbotLimit sees the real plan
 router.post('/message', optionalAuthenticateJWT, checkChatbotLimit, chatbotController.sendMessage);
 
 /**
@@ -49,8 +82,6 @@ router.post('/message', optionalAuthenticateJWT, checkChatbotLimit, chatbotContr
  *       200:
  *         description: Chat history
  */
-// 2. Get Chat History Route: GET /api/chatbot/history/:sessionId
-// Retrieves chat history for a specific session
 router.get('/history/:sessionId', chatbotController.getChatHistory);
 
 module.exports = router;

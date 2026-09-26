@@ -1,5 +1,4 @@
-// Frontend Component Tests
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import React from 'react';
 
 // Mock Redux Store

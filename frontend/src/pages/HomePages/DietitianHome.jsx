@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AuthContext from '../../contexts/AuthContext';
-import axios from '../../axios';
+import { getDietitianBookings } from '../../services/booking/bookingService';
 import { io } from 'socket.io-client';
 
 // Helper to get formatted date for comparison
@@ -33,36 +33,25 @@ const DietitianHome = () => {
 
   // === 2. Schedule State (Real Data) ===
   const [todaySchedule, setTodaySchedule] = useState([]);
-  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
 
   const fetchRealSchedule = async () => {
     if (!user?.id || !token) return;
-    try {
-      setIsLoadingSchedule(true);
-      const response = await axios.get(`/api/bookings/dietitian/${user.id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+    const res = await getDietitianBookings(user.id);
+    if (!res.isError && (res.success || Array.isArray(res.data))) {
+      const todayKey = getTodayKey();
+      const bookings = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      // Filter for today's confirmed bookings
+      const todayBookings = bookings.filter(b => {
+        const bKey = new Date(b.date).toISOString().split('T')[0];
+        return bKey === todayKey && b.status !== 'cancelled';
+      }).map(b => ({
+        id: b._id,
+        time: b.time,
+        clientName: b.username || 'Client'
+      })).sort((a, b) => {
+        return a.time.localeCompare(b.time);
       });
-      if (response.data.success) {
-        const todayKey = getTodayKey();
-        const bookings = response.data.data || [];
-        // Filter for today's confirmed bookings
-        const todayBookings = bookings.filter(b => {
-          const bKey = new Date(b.date).toISOString().split('T')[0];
-          return bKey === todayKey && b.status !== 'cancelled';
-        }).map(b => ({
-          id: b._id,
-          time: b.time,
-          clientName: b.username || 'Client'
-        })).sort((a, b) => {
-          // Add basic time sorting if possible
-          return a.time.localeCompare(b.time);
-        });
-        setTodaySchedule(todayBookings);
-      }
-    } catch (error) {
-      console.error('Error fetching today schedule:', error);
-    } finally {
-      setIsLoadingSchedule(false);
+      setTodaySchedule(todayBookings);
     }
   };
 

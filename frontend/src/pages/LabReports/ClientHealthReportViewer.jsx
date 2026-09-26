@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FileText, Eye, Download, ChevronLeft, ClipboardList, User } from 'lucide-react';
 import AuthContext from '../../contexts/AuthContext';
-import axios from '../../axios';
+import { getHealthReport, markHealthReportViewed } from '../../services/labreport/labReportService';
 
 const ClientHealthReportViewer = () => {
   const { dietitianId } = useParams();
@@ -35,26 +35,23 @@ const ClientHealthReportViewer = () => {
         setError(null);
 
         const clientId = user.id;
+        const res = await getHealthReport(clientId, dietitianId);
 
-        const response = await axios.get(
-          `/api/health-reports/client/${clientId}/dietitian/${dietitianId}`
-        );
-
-        if (response.data.success) {
-          setReports(response.data.data || []);
+        if (!res.isError && (res.success || Array.isArray(res.data))) {
+          setReports(Array.isArray(res.data) ? res.data : (res.data?.data || []));
         } else {
-          throw new Error(response.data.message || 'Failed to fetch health reports');
+          throw new Error(res.message || 'Failed to fetch health reports');
         }
       } catch (err) {
         console.error('Error fetching health reports:', err);
-        setError(err.response?.data?.message || err.message);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
     };
 
     fetchReports();
-  }, [user, dietitianId]);
+  }, [user?.id, dietitianId]);
 
   // Auto-select first report
   useEffect(() => {
@@ -68,10 +65,7 @@ const ClientHealthReportViewer = () => {
     const markViewed = async () => {
       if (!selectedReport || selectedReport.status === 'viewed') return;
       try {
-        await axios.put(
-          `/api/health-reports/${selectedReport._id}/viewed`,
-          {}
-        );
+        await markHealthReportViewed(selectedReport._id);
         // Update local state
         setReports(prev => prev.map(r =>
           r._id === selectedReport._id ? { ...r, status: 'viewed' } : r

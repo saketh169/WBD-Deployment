@@ -39,9 +39,13 @@ const handleJWTExpiredError = () =>
 // Send error response in development
 const sendErrorDev = (err, req, res) => {
     return res.status(err.statusCode).json({
+        isError: true,
         success: false,
         error: err,
         message: err.message,
+        data: null,
+        status: err.statusCode,
+        statusCode: err.statusCode,
         stack: err.stack
     });
 };
@@ -51,18 +55,27 @@ const sendErrorProd = (err, req, res) => {
     // Operational, trusted error: send message to client
     if (err.isOperational) {
         return res.status(err.statusCode).json({
+            isError: true,
             success: false,
-            message: err.message
+            message: err.message,
+            data: null,
+            status: err.statusCode,
+            statusCode: err.statusCode,
         });
     }
 
     // Programming or other unknown error: don't leak error details
     console.error('ERROR 💥', err);
     return res.status(500).json({
+        isError: true,
         success: false,
-        message: 'Something went wrong!'
+        message: 'Something went wrong!',
+        data: null,
+        status: 500,
+        statusCode: 500,
     });
 };
+
 
 // Global error handler
 const errorHandler = (err, req, res, next) => {
@@ -79,8 +92,19 @@ const errorHandler = (err, req, res, next) => {
             LIMIT_UNEXPECTED_FILE: `Unexpected file field: "${err.field}". Please use the correct upload field.`,
         };
         const message = multerMessages[err.code] || `File upload error: ${err.message}`;
-        return res.status(400).json({ success: false, name: 'MulterError', code: err.code, field: err.field, message });
+        return res.status(400).json({
+            isError: true,
+            success: false,
+            name: 'MulterError',
+            code: err.code,
+            field: err.field,
+            message,
+            data: null,
+            status: 400,
+            statusCode: 400
+        });
     }
+
 
     if (process.env.NODE_ENV === 'development') {
         sendErrorDev(err, req, res);

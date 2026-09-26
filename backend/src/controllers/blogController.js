@@ -1,7 +1,5 @@
 const { Blog } = require('../models/blogModel');
 const { User, Dietitian, Admin, Organization, Employee } = require('../models/userModel');
-const { cacheOrFetch, invalidateCache } = require('../utils/redisClient');
-const { searchElastic } = require('../utils/elasticClient');
 
 // Helper: extract profile ID from JWT payload
 const getProfileId = (user) => user.roleId || user.employeeId;
@@ -67,11 +65,6 @@ exports.createBlog = async (req, res) => {
 
         await newBlog.save();
 
-        // Invalidate blog cache on create
-        await invalidateCache('blogs:*');
-        await invalidateCache('public:blogs:*');
-        await invalidateCache('public:stats');
-
         res.status(201).json({
             success: true,
             message: 'Blog post created successfully',
@@ -108,26 +101,11 @@ exports.getAllBlogs = async (req, res) => {
         }
 
         if (search) {
-            // Use high-performance Elasticsearch instead of MongoDB text search
-            const elasticResults = await searchElastic(search, 'blogs', { 
-                limit: 100, 
-                requestingUserId: req.user ? getProfileId(req.user) : null 
-            });
-
-            if (elasticResults && elasticResults.length > 0) {
-                const elasticIds = elasticResults.map(doc => doc.entityId);
-                filter._id = { $in: elasticIds };
-            } else if (elasticResults === null) {
-                // Fallback to MongoDB regex if Elastic is down
-                filter.$or = [
-                    { title: { $regex: search, $options: 'i' } },
-                    { content: { $regex: search, $options: 'i' } },
-                    { tags: { $regex: search, $options: 'i' } }
-                ];
-            } else {
-                // Elastic is up but no results found
-                filter._id = { $in: [] }; // Force empty result
-            }
+            filter.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { content: { $regex: search, $options: 'i' } },
+                { tags: { $regex: search, $options: 'i' } }
+            ];
         }
 
         // Sorting
@@ -137,40 +115,23 @@ exports.getAllBlogs = async (req, res) => {
         // Pagination
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        // Redis cache key based on query parameters
-        const cacheKey = `blogs:list:${category || 'all'}:${search || ''}:${sortBy}:${order}:${page}:${limit}`;
+        const blogs = await Blog.find(filter)
+            .sort(sortOptions)
+            .limit(parseInt(limit))
+            .skip(skip)
+            .select('-reports') // Don't include reports in public view
+            .lean();
 
-        const { data: result, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
-            const blogs = await Blog.find(filter)
-                .sort(sortOptions)
-                .limit(parseInt(limit))
-                .skip(skip)
-                .select('-reports') // Don't include reports in public view
-                .lean();
-
-            const total = await Blog.countDocuments(filter);
-
-            return {
-                blogs,
-                pagination: {
-                    total,
-                    page: parseInt(page),
-                    pages: Math.ceil(total / parseInt(limit))
-                }
-            };
-        });
-
-        // Add cache headers for network inspection
-        res.set({
-            'X-Cache': cacheStatus,
-            'X-Cache-Key': cacheKey,
-            'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
-            'X-Response-Time': `${duration}ms`
-        });
+        const total = await Blog.countDocuments(filter);
 
         res.status(200).json({
             success: true,
-            ...result
+            blogs,
+            pagination: {
+                total,
+                page: parseInt(page),
+                pages: Math.ceil(total / parseInt(limit))
+            }
         });
     } catch (error) {
         console.error('Get blogs error:', error);
@@ -286,11 +247,6 @@ exports.updateBlog = async (req, res) => {
 
         await blog.save();
 
-        // Invalidate blog cache on update
-        await invalidateCache('blogs:*');
-        await invalidateCache('public:blogs:*');
-        await invalidateCache('public:stats');
-
         res.status(200).json({
             success: true,
             message: 'Blog post updated successfully',
@@ -342,11 +298,6 @@ exports.deleteBlog = async (req, res) => {
 
         await Blog.findByIdAndDelete(id);
 
-        // Invalidate blog cache on delete
-        await invalidateCache('blogs:*');
-        await invalidateCache('public:blogs:*');
-        await invalidateCache('public:stats');
-
         res.status(200).json({
             success: true,
             message: 'Blog post deleted successfully'
@@ -384,9 +335,6 @@ exports.toggleLike = async (req, res) => {
             blog.likes.splice(likeIndex, 1);
             await blog.save();
 
-            await invalidateCache('blogs:*');
-            await invalidateCache('public:blogs:*');
-
             return res.status(200).json({
                 success: true,
                 message: 'Blog post unliked',
@@ -397,9 +345,6 @@ exports.toggleLike = async (req, res) => {
             // Like
             blog.likes.push({ userId });
             await blog.save();
-
-            await invalidateCache('blogs:*');
-            await invalidateCache('public:blogs:*');
 
             return res.status(200).json({
                 success: true,
@@ -450,9 +395,6 @@ exports.addComment = async (req, res) => {
 
         blog.comments.push(newComment);
         await blog.save();
-
-        await invalidateCache('blogs:*');
-        await invalidateCache('public:blogs:*');
 
         res.status(201).json({
             success: true,
@@ -507,9 +449,6 @@ exports.deleteComment = async (req, res) => {
 
         blog.comments.pull(commentId);
         await blog.save();
-
-        await invalidateCache('blogs:*');
-        await invalidateCache('public:blogs:*');
 
         res.status(200).json({
             success: true,
@@ -574,10 +513,6 @@ exports.reportBlog = async (req, res) => {
         }
 
         await blog.save();
-
-        await invalidateCache('blogs:*');
-        await invalidateCache('public:blogs:*');
-        await invalidateCache('public:stats');
 
         res.status(200).json({
             success: true,
@@ -645,10 +580,6 @@ exports.dismissReports = async (req, res) => {
         blog.status = 'active'; // Reset status to active
 
         await blog.save();
-
-        await invalidateCache('blogs:*');
-        await invalidateCache('public:blogs:*');
-        await invalidateCache('public:stats');
 
         res.status(200).json({
             success: true,

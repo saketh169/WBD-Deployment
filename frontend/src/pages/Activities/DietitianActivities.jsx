@@ -1,4 +1,5 @@
-import axios from '../../axios';
+import React, { useState, useEffect } from 'react';
+import { getDietitianActivities } from '../../services/misc/miscService';
 import { io } from 'socket.io-client';
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { useAuthContext } from "../../hooks/useAuthContext";
@@ -31,29 +32,17 @@ const DietitianActivities = () => {
     const fetchActivities = async () => {
       if (!user?.id || !token) return;
 
-      try {
-        setIsLoading(true);
-        const response = await axios.get(`/api/analytics/dietitian/${user.id}/activities?page=${page}&limit=20`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        const data = response.data;
-
-        if (data.success) {
+      setIsLoading(true);
+        const res = await getDietitianActivities(user.id, page, 20);
+        if (!res.isError) {
           if (page === 1) {
-            setActivities(data.data.activities || []);
+            setActivities(res.data?.activities || []);
           } else {
-            setActivities(prev => [...prev, ...(data.data.activities || [])]);
+            setActivities(prev => [...prev, ...(res.data?.activities || [])]);
           }
-          setHasMore(data.data.hasMore);
+          setHasMore(res.data?.hasMore || false);
         }
-      } catch (error) {
-        console.error('Error fetching activities:', error);
-      } finally {
         setIsLoading(false);
-      }
     };
 
     fetchActivities();

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from '../axios';
+import { getDocumentStatus } from '../services/misc/miscService';
 
 const StatusBadge = ({ role }) => {
   const [status, setStatus] = useState('loading');
@@ -11,13 +11,12 @@ const StatusBadge = ({ role }) => {
       const token = localStorage.getItem(`authToken_${role}`);
       if (!token) return setStatus('unauthorized');
 
-      try {
-        const res = await axios.get(`/api/status/${role}-status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = res.data;
-        setStatus(data.verificationStatus?.finalReport || 'Not Received');
-      } catch {
+      const res = await getDocumentStatus(role);
+      if (!res.isError) {
+        const payload = res.data || res;
+        const report = (payload.verificationStatus?.finalReport || payload.documentUploadStatus || 'not received').toLowerCase();
+        setStatus(report);
+      } else {
         setStatus('error');
       }
     };
@@ -46,7 +45,7 @@ const StatusBadge = ({ role }) => {
             bg: 'bg-green-100 text-green-800',
             icon: 'fas fa-check-circle',
             message: 'Your documents have been verified. You can now verify dietitians and organizations.',
-            button: null, // Just show text, no button
+            button: null,
           };
         }
         break;
@@ -75,6 +74,21 @@ const StatusBadge = ({ role }) => {
           ),
         };
       }
+      case 'not received':
+      case 'not uploaded':
+        return {
+          bg: 'bg-amber-100 text-amber-800',
+          icon: 'fas fa-file-upload',
+          message: 'Documents have not been submitted yet. Please upload your documents.',
+          button: (
+            <button
+              className="mt-3 px-4 py-2 bg-emerald-600 text-white font-semibold rounded-full hover:bg-emerald-700 transition shadow"
+              onClick={() => navigate(`/upload-documents?role=${role}`)}
+            >
+              <i className="fas fa-upload"></i> Upload Documents
+            </button>
+          ),
+        };
       case 'rejected':
         return {
           bg: 'bg-red-100 text-red-800',

@@ -5,7 +5,7 @@ import BookingSidebar from "./Consultations/BookingSidebar";
 import PaymentModal from "./Consultations/PaymentModal";
 import { Notification } from "./AllDietitiansPage";
 import DietitianCard from "./Consultations/DietitianCard";
-import axios from '../axios';
+import { getAllDietitians } from '../services/dietitian/dietitianService';
 
 // Helper to get specialization filters based on the page type
 const getSpecializationData = (specializationType) => {
@@ -130,26 +130,11 @@ const DietitianProfilesPage = ({ specializationType = "all" }) => {
   // Load dietitians data from API
   useEffect(() => {
     const loadDietitians = async () => {
-      try {
-        setLoading(true);
-        
-        // Get auth token for user
-        const token = localStorage.getItem('authToken_user');
-
-        const config = token ? {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        } : {};
-
-        const response = await axios.get('/api/dietitians', config);
-        
-        let data;
-        if (response.data.success) {
-          data = response.data.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to fetch dietitians');
-        }
+      setLoading(true);
+      const res = await getAllDietitians();
+      
+      if (!res.isError && (res.success || Array.isArray(res.data))) {
+        let data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
 
         // Filter by specialization if not 'all'
         if (specializationType !== "all") {
@@ -166,18 +151,16 @@ const DietitianProfilesPage = ({ specializationType = "all" }) => {
 
         setAllDietitians(data);
         setFilteredDietitians(data);
-      } catch (error) {
-        console.error("Error loading dietitians:", error);
-        showNotification("Error loading dietitians", "error");
+      } else {
+        showNotification(res.message || "Error loading dietitians", "error");
         setAllDietitians([]);
         setFilteredDietitians([]);
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     };
 
     loadDietitians();
-  }, [specializationType, specializationData]);
+  }, [specializationType]);
 
   // Scroll to top when component mounts
   useEffect(() => {
@@ -281,15 +264,16 @@ const DietitianProfilesPage = ({ specializationType = "all" }) => {
 
   const handleProceedToPayment = (details) => {
     setPaymentDetails({
-      amount: currentDietitian.fees,
-      dietitianId: currentDietitian._id,
-      dietitianName: currentDietitian.name,
-      dietitianEmail: currentDietitian.email,
-      dietitianPhone: currentDietitian.phone,
-      dietitianSpecialization: details.dietitianSpecialization || currentDietitian.specialties?.[0] || currentDietitian.specialization,
+      amount: details.amount || currentDietitian?.fees || currentDietitian?.consultationFee || 500,
+      dietitianId: details.dietitianId || currentDietitian?._id,
+      dietitianName: details.dietitianName || currentDietitian?.name,
+      dietitianEmail: details.dietitianEmail || currentDietitian?.email,
+      dietitianPhone: details.dietitianPhone || currentDietitian?.phone,
+      dietitianSpecialization: details.dietitianSpecialization || currentDietitian?.specialties?.[0] || currentDietitian?.specialization || '',
       date: details.date,
       time: details.time,
-      type: details.consultationType,
+      type: details.consultationType || details.type || 'Online',
+      consultationType: details.consultationType || details.type || 'Online',
       userName: details.userName,
       userEmail: details.userEmail,
       userId: details.userId,

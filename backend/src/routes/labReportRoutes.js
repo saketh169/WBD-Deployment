@@ -14,7 +14,8 @@ const { authenticateJWT } = require('../middlewares/authMiddleware');
  * /api/lab-reports/lab/submit:
  *   post:
  *     tags: ['Lab Reports']
- *     summary: Submit lab report
+ *     summary: Submit lab report (client to dietitian)
+ *     description: Client submits lab test reports with category classification (blood tests, thyroid, cardiac, etc.) for dietitian review
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -85,7 +86,8 @@ router.post('/lab/submit', authenticateJWT, uploadFields, submitLabReport);
  * /api/lab-reports/client/{clientId}/dietitian/{dietitianId}:
  *   get:
  *     tags: ['Lab Reports']
- *     summary: Get lab reports for client from dietitian
+ *     summary: Retrieve lab reports (dietitian view)
+ *     description: Dietitian retrieves all lab reports submitted by a specific client
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -111,7 +113,8 @@ router.get('/client/:clientId/dietitian/:dietitianId', authenticateJWT, getClien
  * /api/lab-reports/lab/client/{clientId}:
  *   get:
  *     tags: ['Lab Reports']
- *     summary: Get lab reports for a specific client
+ *     summary: Retrieve lab reports for a client
+ *     description: Fetch all lab reports submitted by a specific client for dietitian review
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -132,12 +135,12 @@ router.get('/lab/client/:clientId', authenticateJWT, getLabReportsByClient);
  * /api/lab-reports/lab/{reportId}/status:
  *   put:
  *     tags: ['Lab Reports']
- *     summary: Update lab report status (dietitian only)
+ *     summary: Update lab report status (dietitian review)
  *     description: |
- *       Update the status of a lab report. Valid status values are:
- *       - 'submitted': Initial status when lab report is first created
+ *       Dietitian reviews and updates lab report status. Valid status values are:
+ *       - 'submitted': Initial status when lab report is first created by client
  *       - 'pending_review': Report is waiting for dietitian review
- *       - 'reviewed': Report has been reviewed by a dietitian. When status is set to 'reviewed', the system automatically records the dietitian who reviewed it with timestamp.
+ *       - 'reviewed': Report has been reviewed. System records reviewer's ID, name, and timestamp on status change to 'reviewed'
  *     security:
  *       - BearerAuth: []
  *     parameters:

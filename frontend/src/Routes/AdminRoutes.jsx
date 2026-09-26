@@ -6,7 +6,7 @@ import NotFoundPage from '../pages/Error/NotFoundPage';
 import AdminHome from '../pages/HomePages/AdminHome';
 import AdminDashboard from '../pages/Dashboards/Admin';
 import AdminManagement from '../pages/Admin/AdminManagement';
-import OrgVerify from '../pages/Verify/OrgVeify'; 
+import OrgVerify from '../pages/Verify/OrgVerify'; 
 import Analytics from '../pages/Admin/Analytics';
 import AdminQueries from '../pages/Admin/AdminQueries';
 import AdminSettings from '../pages/Admin/AdminSettings';

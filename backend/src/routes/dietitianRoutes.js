@@ -21,40 +21,28 @@ const { cacheOrFetch, invalidateCache } = require('../utils/redisClient');
 router.get('/dietitians', async (req, res) => {
   try {
     const { search } = req.query;
-    
-    // Redis cache key depends on search query
-    const cacheKey = search ? `dietitians:search:${search}` : 'dietitians:list:verified';
+    const cacheKey = `dietitians:list:${(search || '').trim().toLowerCase() || 'all'}`;
 
-    const { data: dietitiansWithImages, cacheStatus, duration } = await cacheOrFetch(cacheKey, 3600, async () => {
-      let filter = {
+    const { data: dietitiansWithImages, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
+      const filter = {
         'verificationStatus.finalReport': 'Verified',
         isDeleted: false
       };
 
-      if (search) {
-        // Use Elasticsearch for high-performance fuzzy search
-        const { searchElastic } = require('../utils/elasticClient');
-        const elasticResults = await searchElastic(search, 'dietitians', { limit: 100 });
-        
-        if (elasticResults && elasticResults.length > 0) {
-          const elasticIds = elasticResults.map(doc => doc.entityId);
-          filter._id = { $in: elasticIds };
-        } else if (elasticResults === null) {
-          // Fallback to basic MongoDB regex if Elastic is down
-          filter.$or = [
-            { name: { $regex: search, $options: 'i' } },
-            { specializationDomain: { $regex: search, $options: 'i' } },
-            { location: { $regex: search, $options: 'i' } }
-          ];
-        } else {
-          // Elastic is up but no results found
-          return [];
-        }
+      if (search && search.trim()) {
+        const regex = new RegExp(search.trim(), 'i');
+        filter.$or = [
+          { name: regex },
+          { location: regex },
+          { specialization: regex },
+          { specialties: regex },
+          { languages: regex }
+        ];
       }
 
-      const dietitians = await Dietitian.find(filter)
-        .select('-password -files -documents -verificationStatus');
+      const dietitians = await Dietitian.find(filter).select('-password -files -documents -verificationStatus');
 
+      // Convert profileImage to suitable format
       return dietitians.map(dietitian => {
         const dietitianObj = dietitian.toObject();
         if (dietitianObj.profileImage) {
@@ -72,17 +60,15 @@ router.get('/dietitians', async (req, res) => {
       });
     });
 
-    res.set({
-      'X-Cache': cacheStatus,
-      'X-Cache-Key': cacheKey,
-      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
-      'X-Response-Time': `${duration}ms`
-    });
+    if (cacheStatus) {
+      res.setHeader('X-Cache', cacheStatus);
+      res.setHeader('X-Cache-Duration', `${duration}ms`);
+    }
 
     res.json({
       success: true,
       data: dietitiansWithImages,
-      count: dietitiansWithImages.length
+      count: Array.isArray(dietitiansWithImages) ? dietitiansWithImages.length : 0
     });
   } catch (error) {
     console.error('Error fetching dietitians:', error);
@@ -114,60 +100,56 @@ router.get('/dietitians', async (req, res) => {
  */
 router.get('/dietitians/:id', async (req, res) => {
   try {
+    const { id } = req.params;
+
     // Validate MongoDB ObjectId
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid dietitian ID format'
       });
     }
 
-    const cacheKey = `dietitians:profile:${req.params.id}`;
-    
-    const { data: dietitianObjCache, cacheStatus, duration } = await cacheOrFetch(cacheKey, 900, async () => {
+    const cacheKey = `dietitians:profile:${id}`;
+    const { data: dietitianObj, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
       const dietitian = await Dietitian.findOne({
-        _id: req.params.id,
+        _id: id,
         'verificationStatus.finalReport': 'Verified',
         isDeleted: false
       }).select('-password -files -documents -verificationStatus');
 
-      if (!dietitian) {
-        return null;
-      }
+      if (!dietitian) return null;
 
-      // Convert profileImage buffer or string to photo URL
-      const dietitianObj = dietitian.toObject();
-      if (dietitianObj.profileImage) {
-        if (typeof dietitianObj.profileImage === 'string' && dietitianObj.profileImage.startsWith('http')) {
-          dietitianObj.photo = dietitianObj.profileImage;
-        } else if (Buffer.isBuffer(dietitianObj.profileImage)) {
-          dietitianObj.photo = `data:image/jpeg;base64,${dietitianObj.profileImage.toString('base64')}`;
+      const obj = dietitian.toObject();
+      if (obj.profileImage) {
+        if (typeof obj.profileImage === 'string' && obj.profileImage.startsWith('http')) {
+          obj.photo = obj.profileImage;
+        } else if (Buffer.isBuffer(obj.profileImage)) {
+          obj.photo = `data:image/jpeg;base64,${obj.profileImage.toString('base64')}`;
         } else {
-          dietitianObj.photo = dietitianObj.profileImage;
+          obj.photo = obj.profileImage;
         }
       } else {
-        dietitianObj.photo = null;
+        obj.photo = null;
       }
-      return dietitianObj;
+      return obj;
     });
 
-    if (!dietitianObjCache) {
+    if (!dietitianObj) {
       return res.status(404).json({
         success: false,
         message: 'Dietitian not found'
       });
     }
 
-    res.set({
-      'X-Cache': cacheStatus,
-      'X-Cache-Key': cacheKey,
-      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
-      'X-Response-Time': `${duration}ms`
-    });
+    if (cacheStatus) {
+      res.setHeader('X-Cache', cacheStatus);
+      res.setHeader('X-Cache-Duration', `${duration}ms`);
+    }
 
     res.json({
       success: true,
-      data: dietitianObjCache
+      data: dietitianObj
     });
   } catch (error) {
     console.error('Error fetching dietitian:', error);
@@ -264,89 +246,100 @@ router.get('/dietitians/:id/clients', authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Get all bookings for this dietitian
-    const bookings = await Booking.find({ dietitianId: id }).sort({ createdAt: -1 });
+    const cacheKey = `dietitians:${id}:clients`;
+    const { data: clients, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
+      // Get all bookings for this dietitian with lean projection
+      const bookings = await Booking.find({ dietitianId: id })
+        .select('userId username email userPhone userAddress consultationType dietitianSpecialization date time status createdAt')
+        .sort({ createdAt: -1 })
+        .lean();
 
-    // Group by userId to get unique clients with aggregated data
-    const clientMap = new Map();
-    const userIds = [...new Set(bookings.map(b => b.userId))];
+      // Group by userId to get unique clients with aggregated data
+      const clientMap = new Map();
+      const userIds = [...new Set(bookings.map(b => b.userId))];
 
-    // Fetch actual user profiles to get real profile images
-    const { User } = require('../models/userModel');
-    const users = await User.find({ _id: { $in: userIds } }).select('name email phone address profileImage');
-    const userProfileMap = new Map();
-    users.forEach(u => {
-      userProfileMap.set(u._id.toString(), {
-        name: u.name,
-        email: u.email,
-        phone: u.phone,
-        address: u.address,
-        profileImage: u.profileImage
-      });
-    });
-
-    bookings.forEach(booking => {
-      const clientId = booking.userId.toString();
-      const dateStr = new Date(booking.date).toISOString().split('T')[0];
-      const bookingDateTime = new Date(`${dateStr}T${booking.time}`);
-      const now = new Date();
-      const hoursSinceAppointment = (now - bookingDateTime) / (1000 * 60 * 60);
-
-      // Skip only if appointment was more than 12 hours ago
-      if (hoursSinceAppointment > 12 && bookingDateTime < now) {
-        return; // Skip old past appointments (more than 12 hours ago)
-      }
-
-      if (clientMap.has(clientId)) {
-        const existing = clientMap.get(clientId);
-        existing.totalSessions += 1;
-
-        // Update next appointment if this booking is in the future and earlier
-        if (bookingDateTime > now && (!existing.nextAppointment || bookingDateTime < new Date(existing.nextAppointment))) {
-          existing.nextAppointment = `${dateStr} ${booking.time}`;
-        }
-
-        // Update last consultation if this is more recent
-        if (new Date(booking.date) > new Date(existing.lastConsultation)) {
-          existing.lastConsultation = dateStr;
-        }
-      } else {
-        const isUpcoming = bookingDateTime > now;
-        const isPast = bookingDateTime < now;
-
-        // Determine status: Active for upcoming/current, Completed for past
-        let clientStatus = 'Active';
-        if (isPast && booking.status === 'completed') {
-          clientStatus = 'Completed';
-        } else if (isPast) {
-          clientStatus = 'Completed';
-        } else if (booking.status === 'cancelled') {
-          clientStatus = 'Completed';
-        }
-
-        const userProfile = userProfileMap.get(clientId) || {};
-
-        clientMap.set(clientId, {
-          id: clientId,
-          name: userProfile.name || booking.username,
-          email: userProfile.email || booking.email,
-          phone: userProfile.phone || booking.userPhone || 'N/A',
-          age: 'N/A', // Not available in booking
-          location: userProfile.address || booking.userAddress || 'N/A',
-          consultationType: booking.consultationType || 'General Consultation',
-          nextAppointment: isUpcoming ? `${dateStr} ${booking.time}` : null,
-          status: clientStatus,
-          profileImage: userProfile.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.name || booking.username)}&background=28B463&color=fff&size=128`,
-          lastConsultation: dateStr,
-          totalSessions: 1,
-          goals: [booking.dietitianSpecialization || 'General Health'],
-          isPast: isPast
+      // Fetch actual user profiles without massive base64 profileImage binary
+      const { User } = require('../models/userModel');
+      const users = await User.find({ _id: { $in: userIds } })
+        .select('name email phone address')
+        .lean();
+      const userProfileMap = new Map();
+      users.forEach(u => {
+        userProfileMap.set(u._id.toString(), {
+          name: u.name,
+          email: u.email,
+          phone: u.phone,
+          address: u.address
         });
-      }
+      });
+
+      bookings.forEach(booking => {
+        const clientId = booking.userId.toString();
+        const dateStr = new Date(booking.date).toISOString().split('T')[0];
+        const bookingDateTime = new Date(`${dateStr}T${booking.time}`);
+        const now = new Date();
+        const hoursSinceAppointment = (now - bookingDateTime) / (1000 * 60 * 60);
+
+        // Skip only if appointment was more than 12 hours ago
+        if (hoursSinceAppointment > 12 && bookingDateTime < now) {
+          return;
+        }
+
+        if (clientMap.has(clientId)) {
+          const existing = clientMap.get(clientId);
+          existing.totalSessions += 1;
+
+          // Update next appointment if this booking is in the future and earlier
+          if (bookingDateTime > now && (!existing.nextAppointment || bookingDateTime < new Date(existing.nextAppointment))) {
+            existing.nextAppointment = `${dateStr} ${booking.time}`;
+          }
+
+          // Update last consultation if this is more recent
+          if (new Date(booking.date) > new Date(existing.lastConsultation)) {
+            existing.lastConsultation = dateStr;
+          }
+        } else {
+          const isUpcoming = bookingDateTime > now;
+          const isPast = bookingDateTime < now;
+
+          // Determine status: Active for upcoming/current, Completed for past
+          let clientStatus = 'Active';
+          if (isPast && booking.status === 'completed') {
+            clientStatus = 'Completed';
+          } else if (isPast) {
+            clientStatus = 'Completed';
+          } else if (booking.status === 'cancelled') {
+            clientStatus = 'Completed';
+          }
+
+          const userProfile = userProfileMap.get(clientId) || {};
+
+          clientMap.set(clientId, {
+            id: clientId,
+            name: userProfile.name || booking.username,
+            email: userProfile.email || booking.email,
+            phone: userProfile.phone || booking.userPhone || 'N/A',
+            age: 'N/A', // Not available in booking
+            location: userProfile.address || booking.userAddress || 'N/A',
+            consultationType: booking.consultationType || 'General Consultation',
+            nextAppointment: isUpcoming ? `${dateStr} ${booking.time}` : null,
+            status: clientStatus,
+            profileImage: userProfile.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.name || booking.username)}&background=28B463&color=fff&size=128`,
+            lastConsultation: dateStr,
+            totalSessions: 1,
+            goals: [booking.dietitianSpecialization || 'General Health'],
+            isPast: isPast
+          });
+        }
+      });
+
+      return Array.from(clientMap.values());
     });
 
-    // Return all clients that have relevant bookings
-    const clients = Array.from(clientMap.values());
+    if (cacheStatus) {
+      res.setHeader('X-Cache', cacheStatus);
+      res.setHeader('X-Cache-Duration', `${duration}ms`);
+    }
 
     res.json({
       success: true,
@@ -447,9 +440,6 @@ router.post('/dietitian-profile-setup/:id', authenticateJWT, async (req, res) =>
         message: 'Dietitian not found'
       });
     }
-
-    await invalidateCache('dietitians:*');
-    await invalidateCache('public:dietitians:*');
 
     res.json({
       success: true,
@@ -730,8 +720,6 @@ router.post('/dietitians/:id/testimonials', authenticateJWT, async (req, res) =>
     dietitian.markModified('testimonials');
 
     await dietitian.save();
-    await invalidateCache('dietitians:*');
-    await invalidateCache('public:dietitians:*');
 
     res.status(201).json({
       success: true,
@@ -742,8 +730,6 @@ router.post('/dietitians/:id/testimonials', authenticateJWT, async (req, res) =>
     });
   } catch (error) {
     console.error('Error adding testimonial:', error);
-    await invalidateCache('dietitians:*');
-    await invalidateCache('public:dietitians:*');
     res.status(500).json({
       success: false,
       message: 'Error adding review'
@@ -818,8 +804,6 @@ router.delete('/dietitians/:id/testimonials/:testimonialIndex', authenticateJWT,
     }
 
     await dietitian.save();
-
-    await invalidateCache('dietitians:*');
 
     res.json({
       success: true,

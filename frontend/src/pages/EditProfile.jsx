@@ -1,48 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import * as yup from 'yup';
 import { useProfile } from '../contexts/ProfileContext';
-
-// Yup validation schema builder based on role fields
-const getValidationSchema = (fields) => {
-  const schemaShape = {};
-  
-  if (fields.includes('name')) {
-    schemaShape.name = yup.string().min(5, 'Name must be at least 5 characters').required('Name is required');
-  }
-  
-  if (fields.includes('phone')) {
-    schemaShape.phone = yup
-      .string()
-      .matches(/^\d{10}$/, 'Phone number must be exactly 10 digits')
-      .required('Phone number is required');
-  }
-  
-  if (fields.includes('dob')) {
-    schemaShape.dob = yup.string().required('Date of birth is required');
-  }
-  
-  if (fields.includes('gender')) {
-    schemaShape.gender = yup.string().required('Gender is required');
-  }
-  
-  if (fields.includes('address')) {
-    schemaShape.address = yup.string().min(5, 'Address must be at least 5 characters').required('Address is required');
-  }
-  
-  if (fields.includes('age')) {
-    schemaShape.age = yup
-      .number()
-      .typeError('Age must be a number')
-      .min(18, 'Age must be at least 18')
-      .max(100, 'Age must be less than 100')
-      .required('Age is required');
-  }
-  
-  return yup.object().shape(schemaShape);
-};
 
 const EditProfile = () => {
   const navigate = useNavigate();
@@ -58,67 +16,144 @@ const EditProfile = () => {
     initializeRole
   } = useProfile();
 
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    dob: '',
+    age: '',
+    gender: '',
+    address: '',
+  });
+  const [errors, setErrors] = useState({});
+  const [calculatedAge, setCalculatedAge] = useState(null);
+
   // Initialize role and config
   useEffect(() => {
     initializeRole();
   }, [initializeRole]);
 
-  // React Hook Form with Yup validation
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setValue,
-    reset,
-    watch,
-    control
-  } = useForm({
-    resolver: config ? yupResolver(getValidationSchema(config.fields)) : undefined,
-    mode: 'onBlur',
-    defaultValues: originalData || {} // Use originalData as default values
-  });
-
-  // Watch DOB field to calculate age
-  const dobValue = watch('dob');
-  const [calculatedAge, setCalculatedAge] = useState(null);
-
   // Calculate age from DOB
   useEffect(() => {
-    if (dobValue) {
-      const birthDate = new Date(dobValue);
+    if (formData.dob) {
+      const birthDate = new Date(formData.dob);
       const today = new Date();
       let age = today.getFullYear() - birthDate.getFullYear();
       const monthDiff = today.getMonth() - birthDate.getMonth();
-      
+
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
         age--;
       }
-      
+
       setCalculatedAge(age);
     } else {
       setCalculatedAge(null);
     }
-  }, [dobValue]);
-  
+  }, [formData.dob]);
+
   // Fetch user details on component mount
   useEffect(() => {
     const loadProfile = async () => {
       const data = await fetchProfileData();
       if (data) {
-        // Reset form with fetched data
-        reset(data);
+        setFormData({
+          name: data.name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          dob: data.dob || '',
+          age: data.age || '',
+          gender: data.gender || '',
+          address: data.address || '',
+        });
       }
     };
-    
-    loadProfile();
-  }, [fetchProfileData, reset]);
 
-  const onSubmit = async (data) => {
-    await updateProfile(data);
+    loadProfile();
+  }, [fetchProfileData]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const validate = () => {
+    const fields = config?.fields || [];
+    const errs = {};
+
+    if (fields.includes('name')) {
+      if (!formData.name?.trim()) {
+        errs.name = 'Name is required';
+      } else if (formData.name.trim().length < 5) {
+        errs.name = 'Name must be at least 5 characters';
+      }
+    }
+
+    if (fields.includes('phone')) {
+      if (!formData.phone?.trim()) {
+        errs.phone = 'Phone number is required';
+      } else if (!/^\d{10}$/.test(formData.phone.trim())) {
+        errs.phone = 'Phone number must be exactly 10 digits';
+      }
+    }
+
+    if (fields.includes('dob')) {
+      if (!formData.dob) {
+        errs.dob = 'Date of birth is required';
+      }
+    }
+
+    if (fields.includes('gender')) {
+      if (!formData.gender) {
+        errs.gender = 'Gender is required';
+      }
+    }
+
+    if (fields.includes('address')) {
+      if (!formData.address?.trim()) {
+        errs.address = 'Address is required';
+      } else if (formData.address.trim().length < 5) {
+        errs.address = 'Address must be at least 5 characters';
+      }
+    }
+
+    if (fields.includes('age')) {
+      if (formData.age === '' || formData.age === null || formData.age === undefined) {
+        errs.age = 'Age is required';
+      } else if (isNaN(Number(formData.age))) {
+        errs.age = 'Age must be a number';
+      } else if (Number(formData.age) < 18) {
+        errs.age = 'Age must be at least 18';
+      } else if (Number(formData.age) > 100) {
+        errs.age = 'Age must be less than 100';
+      }
+    }
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+    await updateProfile(formData);
   };
 
   const handleReset = () => {
-    reset(originalData);
+    if (originalData) {
+      setFormData({
+        name: originalData.name || '',
+        email: originalData.email || '',
+        phone: originalData.phone || '',
+        dob: originalData.dob || '',
+        age: originalData.age || '',
+        gender: originalData.gender || '',
+        address: originalData.address || '',
+      });
+    }
+    setErrors({});
     resetProfileData();
   };
 
@@ -152,7 +187,7 @@ const EditProfile = () => {
           <div className="mb-6">
             <button
               onClick={() => navigate(config.dashboardPath)}
-              className="flex items-center gap-2 text-gray-600 hover:text-emerald-600 transition mb-4"
+              className="flex items-center gap-2 text-gray-600 hover:text-emerald-600 transition mb-4 cursor-pointer"
             >
               <i className="fas fa-arrow-left"></i>
               <span>Back to Dashboard</span>
@@ -177,7 +212,7 @@ const EditProfile = () => {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={onSubmit} className="space-y-6" noValidate>
             <div className="grid md:grid-cols-2 gap-6">
               {/* Full Name */}
               {config.fields.includes('name') && (
@@ -188,14 +223,16 @@ const EditProfile = () => {
                   <input
                     type="text"
                     id="name"
-                    {...register('name')}
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
                     className={`w-full px-4 py-3 rounded-lg border ${
                       errors.name ? 'border-red-500' : 'border-gray-300'
                     } focus:outline-none focus:ring-2 focus:ring-emerald-600`}
                     placeholder="Enter your full name"
                   />
                   {errors.name && (
-                    <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>
+                    <p className="text-red-500 text-sm mt-1">{errors.name}</p>
                   )}
                 </div>
               )}
@@ -208,7 +245,8 @@ const EditProfile = () => {
                 <input
                   type="email"
                   id="email"
-                  {...register('email')}
+                  name="email"
+                  value={formData.email}
                   className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-100 cursor-not-allowed"
                   readOnly
                 />
@@ -224,14 +262,16 @@ const EditProfile = () => {
                   <input
                     type="tel"
                     id="phone"
-                    {...register('phone')}
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
                     className={`w-full px-4 py-3 rounded-lg border ${
                       errors.phone ? 'border-red-500' : 'border-gray-300'
                     } focus:outline-none focus:ring-2 focus:ring-emerald-600`}
                     placeholder="10-digit phone number"
                   />
                   {errors.phone && (
-                    <p className="text-red-500 text-sm mt-1">{errors.phone.message}</p>
+                    <p className="text-red-500 text-sm mt-1">{errors.phone}</p>
                   )}
                 </div>
               )}
@@ -245,7 +285,9 @@ const EditProfile = () => {
                   <input
                     type="date"
                     id="dob"
-                    {...register('dob')}
+                    name="dob"
+                    value={formData.dob}
+                    onChange={handleChange}
                     className={`w-full px-4 py-3 rounded-lg border ${
                       errors.dob ? 'border-red-500' : 'border-gray-300'
                     } focus:outline-none focus:ring-2 focus:ring-emerald-600`}
@@ -257,7 +299,7 @@ const EditProfile = () => {
                     </p>
                   )}
                   {errors.dob && (
-                    <p className="text-red-500 text-sm mt-1">{errors.dob.message}</p>
+                    <p className="text-red-500 text-sm mt-1">{errors.dob}</p>
                   )}
                 </div>
               )}
@@ -271,14 +313,16 @@ const EditProfile = () => {
                   <input
                     type="number"
                     id="age"
-                    {...register('age')}
+                    name="age"
+                    value={formData.age}
+                    onChange={handleChange}
                     className={`w-full px-4 py-3 rounded-lg border ${
                       errors.age ? 'border-red-500' : 'border-gray-300'
                     } focus:outline-none focus:ring-2 focus:ring-emerald-600`}
                     placeholder="Enter your age"
                   />
                   {errors.age && (
-                    <p className="text-red-500 text-sm mt-1">{errors.age.message}</p>
+                    <p className="text-red-500 text-sm mt-1">{errors.age}</p>
                   )}
                 </div>
               )}
@@ -290,36 +334,22 @@ const EditProfile = () => {
                     Gender *
                   </label>
                   <div className="flex gap-6">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        value="male"
-                        {...register('gender')}
-                        className="w-4 h-4 text-emerald-600 focus:ring-emerald-600"
-                      />
-                      <span className="text-gray-700">Male</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        value="female"
-                        {...register('gender')}
-                        className="w-4 h-4 text-emerald-600 focus:ring-emerald-600"
-                      />
-                      <span className="text-gray-700">Female</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        value="other"
-                        {...register('gender')}
-                        className="w-4 h-4 text-emerald-600 focus:ring-emerald-600"
-                      />
-                      <span className="text-gray-700">Other</span>
-                    </label>
+                    {['male', 'female', 'other'].map((val) => (
+                      <label key={val} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="gender"
+                          value={val}
+                          checked={formData.gender === val}
+                          onChange={handleChange}
+                          className="w-4 h-4 text-emerald-600 focus:ring-emerald-600"
+                        />
+                        <span className="text-gray-700 capitalize">{val}</span>
+                      </label>
+                    ))}
                   </div>
                   {errors.gender && (
-                    <p className="text-red-500 text-sm mt-1">{errors.gender.message}</p>
+                    <p className="text-red-500 text-sm mt-1">{errors.gender}</p>
                   )}
                 </div>
               )}
@@ -332,15 +362,17 @@ const EditProfile = () => {
                   </label>
                   <textarea
                     id="address"
+                    name="address"
                     rows="3"
-                    {...register('address')}
+                    value={formData.address}
+                    onChange={handleChange}
                     className={`w-full px-4 py-3 rounded-lg border ${
                       errors.address ? 'border-red-500' : 'border-gray-300'
                     } focus:outline-none focus:ring-2 focus:ring-emerald-600 resize-none`}
                     placeholder="Enter your complete address"
                   ></textarea>
                   {errors.address && (
-                    <p className="text-red-500 text-sm mt-1">{errors.address.message}</p>
+                    <p className="text-red-500 text-sm mt-1">{errors.address}</p>
                   )}
                 </div>
               )}
@@ -351,7 +383,7 @@ const EditProfile = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-lg hover:bg-emerald-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-lg hover:bg-emerald-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {isLoading ? (
                   <>
@@ -368,7 +400,7 @@ const EditProfile = () => {
               <button
                 type="button"
                 onClick={handleReset}
-                className="flex-1 bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-300 transition"
+                className="flex-1 bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-300 transition cursor-pointer"
               >
                 <i className="fas fa-undo mr-2"></i>
                 Reset
@@ -376,7 +408,7 @@ const EditProfile = () => {
               <button
                 type="button"
                 onClick={() => navigate(config.dashboardPath)}
-                className="flex-1 bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-300 transition"
+                className="flex-1 bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-300 transition cursor-pointer"
               >
                 Cancel
               </button>

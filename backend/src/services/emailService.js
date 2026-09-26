@@ -1,13 +1,18 @@
+const nodemailer = require('nodemailer');
 const { User, Dietitian, Organization } = require('../models/userModel');
-const { getEmailTransporter, sendEmailWithRetry } = require('../utils/emailTransporter');
 
-// Send email function with retry logic
+// Create transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail', // or your email service
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// Send email function
 const sendEmail = async (to, subject, htmlMessage) => {
   try {
-    if (!to || !subject || !htmlMessage) {
-      throw new Error('Missing required email fields: to, subject, htmlMessage');
-    }
-
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to,
@@ -15,13 +20,11 @@ const sendEmail = async (to, subject, htmlMessage) => {
       html: htmlMessage
     };
 
-    await sendEmailWithRetry(mailOptions);
-    console.log('✅ Email sent successfully to:', to);
-    return { success: true, to };
+    await transporter.sendMail(mailOptions);
+    console.log('Email sent successfully');
   } catch (error) {
-    console.error('❌ Error sending email to', to, ':', error.message);
-    // Return error info instead of throwing to allow graceful degradation
-    return { success: false, to, error: error.message };
+    console.error('Error sending email:', error);
+    throw error;
   }
 };
 

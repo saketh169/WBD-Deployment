@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Sidebar from "../../components/Sidebar/Sidebar";
-import axios from '../../axios';
+import { getAdminQueries, replyToAdminQuery } from '../../services/admin/adminService';
 
 // Mock data for queries
 const mockQueries = [
@@ -66,26 +66,19 @@ const AdminQueries = () => {
 
   // Fetch queries from API
   const fetchQueries = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
 
-      const response = await axios.get('/api/contact/queries-list');
+    const res = await getAdminQueries();
 
-      if (response.data.success) {
-        setQueries(response.data.data);
-      } else {
-        setError('Failed to fetch queries');
-        // Fallback to mock data if API fails
-        setQueries(mockQueries);
-      }
-    } catch {
-      setError('Failed to load queries. Showing sample data.');
-      // Fallback to mock data
+    if (!res.isError && (res.success || Array.isArray(res.data))) {
+      setQueries(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+    } else {
+      setError('Failed to fetch queries');
+      // Fallback to mock data if API fails
       setQueries(mockQueries);
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   // Load queries on component mount
@@ -142,17 +135,9 @@ const AdminQueries = () => {
     setIsSending(true);
 
     try {
-      const response = await axios.post(
-        '/api/contact/reply',
-        { queryId, replyMessage: replyText },
-        {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      const res = await replyToAdminQuery(queryId, replyText);
 
-      if (response.data.success) {
+      if (!res.isError && (res.success || res.data)) {
         // Update local state
         setQueries(prevQueries =>
           prevQueries.map(query =>

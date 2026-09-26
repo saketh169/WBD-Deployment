@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from '../../axios';
+import { getPublicSettings } from '../../services/misc/miscService';
 
 const TermsOfUse = () => {
   const navigate = useNavigate();
@@ -14,16 +14,14 @@ const TermsOfUse = () => {
 
   useEffect(() => {
     const fetchTermsOfUse = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get('/api/settings');
-        setContent(response.data.termsOfService || 'Terms of service content not available.');
-      } catch (err) {
-        console.error('Error fetching terms of use:', err);
+      setLoading(true);
+      const res = await getPublicSettings();
+      if (!res.isError) {
+        setContent(res.termsOfService || res.data?.termsOfService || 'Terms of service content not available.');
+      } else {
         setError('Failed to load terms of use. Please try again later.');
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     };
 
     fetchTermsOfUse();

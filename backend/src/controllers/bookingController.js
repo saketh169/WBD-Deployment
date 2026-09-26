@@ -1,13 +1,13 @@
 const mongoose = require("mongoose");
 const Booking = require("../models/bookingModel");
 const { BlockedSlot } = require("../models/bookingModel");
-const { redis, isConnected: isRedisConnected, cacheOrFetch, invalidateCache } = require("../utils/redisClient");
+const { acquireLock, getLockHolder, releaseLock, getMatchingLocks, cacheOrFetch, invalidateCache } = require("../utils/redisClient");
 const {
   sendBookingConfirmationToUser,
   sendBookingNotificationToDietitian,
 } = require("../services/bookingService");
 const razorpayService = require("../services/razorpayService");
-const { notifyDietitianNewBooking, notifyBookingUpdate, notifyUserUpdate, notifySlotLockChange } = require("../utils/socket");
+const { notifyDietitianNewBooking, notifyBookingUpdate, notifyUserUpdate } = require("../utils/socket");
 const crypto = require("crypto");
 
 // Lightweight ICS generator (no external deps)
@@ -82,6 +82,15 @@ exports.createBookingPaymentOrder = async (req, res) => {
 
     return res.status(201).json({
       success: true,
+      data: {
+        order: {
+          id: order.id,
+          amount: order.amount,
+          currency: order.currency,
+          receipt: order.receipt
+        },
+        keyId: razorpayService.getPublicKey()
+      },
       order: {
         id: order.id,
         amount: order.amount,
@@ -253,25 +262,16 @@ exports.createBooking = async (req, res) => {
       });
     }
 
-    // **NEW: Redis Concurrency Check (Cinema-style logic)**
-    if (isRedisConnected()) {
-      const lockKey = `lock:booking:${dietitianId}:${date}:${time}`;
-      const lockHolder = await redis.get(lockKey);
-      
-      // If there IS a hold and it's NOT this user, block it.
-      if (lockHolder && lockHolder !== userId.toString()) {
-        return res.status(423).json({
-          success: false,
-          message: "This slot is currently being held by another user. Please wait for them to finish or select another time."
-        });
-      }
-
-      // If there is no hold at all, we should probably allow it (race condition back to DB check)
-      // but ideally the frontend always calls /hold first.
-      
-      // Cleanup the lock after successful booking verification
-      await redis.del(lockKey);
+    // Concurrency Check (10-minute hold lock verification)
+    const lockKey = `lock:booking:${dietitianId}:${date}:${time}`;
+    const lockHolder = await getLockHolder(lockKey);
+    if (lockHolder && lockHolder !== userId.toString()) {
+      return res.status(423).json({
+        success: false,
+        message: "This slot is currently being held by another user. Please select another slot."
+      });
     }
+    await releaseLock(lockKey, userId.toString());
 
     // Check if payment ID is unique
     const existingPayment = await Booking.findOne({ paymentId: normalizedPaymentId });
@@ -349,13 +349,11 @@ exports.createBooking = async (req, res) => {
       // Don't fail the request if email queuing fails
     }
 
-    // Invalidate booking list caches for this user and dietitian so next list call is MISS then becomes HIT
-    try {
-      await invalidateCache(`bookings:user:${userId}:*`);
-      await invalidateCache(`bookings:dietitian:${dietitianId}:*`);
-    } catch (invErr) {
-      console.error('Error invalidating booking caches:', invErr);
-    }
+    // Invalidate schedules cache for user and dietitian
+    invalidateCache(`bookings:user:${userId}:*`);
+    invalidateCache(`bookings:dietitian:${dietitianId}:*`);
+    invalidateCache(`dietitians:${dietitianId}:*`);
+    invalidateCache(`slots:${dietitianId}:*`);
 
     res.status(201).json({
       success: true,
@@ -371,23 +369,22 @@ exports.createBooking = async (req, res) => {
   }
 };
 
-// Hold a slot using Redis (Cinema-style locking)
+/**
+ * Hold a slot for 10 minutes (Cinema-style locking)
+ * POST /api/bookings/hold
+ */
 exports.holdSlot = async (req, res) => {
   try {
     const { dietitianId, date, time } = req.body;
-    const userId = req.user.roleId || req.user.userId;
+    const userId = req.user?.roleId || req.user?.userId;
 
     if (!dietitianId || !date || !time) {
       return res.status(400).json({ success: false, message: "Dietitian, date, and time are required" });
     }
 
-    if (!isRedisConnected()) {
-      return res.status(503).json({ success: false, message: "Booking lock service is temporarily unavailable" });
-    }
-
     const lockKey = `lock:booking:${dietitianId}:${date}:${time}`;
-    
-    // Check if slot is already officially booked in DB first
+
+    // Verify slot is not already booked in DB
     const [year, month, day] = date.split('-').map(Number);
     const bookingDate = new Date(Date.UTC(year, month - 1, day));
     const dayStart = new Date(bookingDate);
@@ -402,26 +399,18 @@ exports.holdSlot = async (req, res) => {
     });
 
     if (alreadyBooked) {
-      return res.status(409).json({ success: false, message: "This slot is already officially booked." });
+      return res.status(409).json({ success: false, message: "This slot is already booked." });
     }
 
-    // Try to acquire Redis lock for 10 minutes (600 seconds)
-    // NX: Only set if not exists
-    const acquired = await redis.set(lockKey, userId.toString(), "EX", 600, "NX");
+    // Acquire lock for 10 minutes (600 seconds)
+    const acquired = await acquireLock(lockKey, userId.toString(), 600);
 
     if (!acquired) {
-      // Check if it's already held by the SAME user
-      const currentHolder = await redis.get(lockKey);
+      const currentHolder = await getLockHolder(lockKey);
       if (currentHolder === userId.toString()) {
         return res.status(200).json({ success: true, message: "Slot is already held by you", expiresAt: Date.now() + 600000 });
       }
       return res.status(423).json({ success: false, message: "This slot is currently being held by another user. Try again in 10 minutes." });
-    }
-
-    try {
-      notifySlotLockChange(dietitianId, { date, time, action: 'hold', userId: userId.toString() });
-    } catch (sockErr) {
-      console.error('Socket error notifying hold:', sockErr);
     }
 
     res.status(200).json({
@@ -435,67 +424,42 @@ exports.holdSlot = async (req, res) => {
   }
 };
 
-// Explicitly release a slot hold
+/**
+ * Release a held slot
+ * POST /api/bookings/release
+ */
 exports.releaseSlot = async (req, res) => {
   try {
     const { dietitianId, date, time } = req.body;
-    const userId = req.user.roleId || req.user.userId;
+    const userId = req.user?.roleId || req.user?.userId;
     const lockKey = `lock:booking:${dietitianId}:${date}:${time}`;
-    
-    if (!isRedisConnected()) {
-      return res.status(503).json({ 
-        success: false, 
-        message: "Booking lock service is temporarily unavailable. Please try again later." 
-      });
-    }
 
-    const currentHolder = await redis.get(lockKey);
-
-    if (currentHolder === userId.toString()) {
-      await redis.del(lockKey);
-      try {
-        notifySlotLockChange(dietitianId, { date, time, action: 'release', userId: userId.toString() });
-      } catch (sockErr) {
-        console.error('Socket error notifying release:', sockErr);
-      }
-      return res.status(200).json({ success: true, message: "Slot hold released" });
-    }
-    
-    res.status(403).json({ success: false, message: "You do not have a hold on this slot" });
+    await releaseLock(lockKey, userId?.toString());
+    res.status(200).json({ success: true, message: "Slot hold released" });
   } catch (error) {
     console.error("Error releasing slot:", error);
     res.status(500).json({ success: false, message: "Error releasing slot hold" });
   }
 };
 
-// Get all active holds for a dietitian and date
+/**
+ * Get all active held slots for a dietitian and date
+ * GET /api/bookings/holds/:dietitianId?date=YYYY-MM-DD
+ */
 exports.getDietitianHolds = async (req, res) => {
   try {
     const { dietitianId } = req.params;
     const { date } = req.query;
-    
+
     if (!dietitianId || !date) {
       return res.status(400).json({ success: false, message: "Dietitian ID and date are required" });
     }
 
-    if (!isRedisConnected()) {
-      return res.status(503).json({ 
-        success: false, 
-        message: "Lock service is temporarily unavailable. Please try again later.",
-        heldSlots: [] 
-      });
-    }
-
     const pattern = `lock:booking:${dietitianId}:${date}:*`;
-    const keys = await redis.keys(pattern);
-    
-    // Extract time from keys (e.g., 'lock:booking:id:date:10:00' -> '10:00')
-    const heldSlots = keys.map(key => key.split(':').pop());
-    
-    res.status(200).json({ 
-      success: true, 
-      heldSlots 
-    });
+    const keys = await getMatchingLocks(pattern);
+    const heldSlots = keys.map(k => k.split(':').pop());
+
+    res.status(200).json({ success: true, heldSlots });
   } catch (error) {
     console.error("Error fetching dietitian holds:", error);
     res.status(500).json({ success: false, message: "Error fetching held slots" });
@@ -527,23 +491,19 @@ exports.getUserBookings = async (req, res) => {
     }
 
     const cacheKey = `bookings:user:${userId}:${status || 'all'}:${sort}`;
-
     const { data: bookings, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
       return await Booking.find(query).sort(sort).lean().exec();
     });
 
-    // Add cache inspection headers so frontend schedule/consultation lists show MISS/HIT
-    res.set({
-      'X-Cache': cacheStatus,
-      'X-Cache-Key': cacheKey,
-      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
-      'X-Response-Time': `${duration}ms`
-    });
+    if (cacheStatus) {
+      res.setHeader('X-Cache', cacheStatus);
+      res.setHeader('X-Cache-Duration', `${duration}ms`);
+    }
 
     res.status(200).json({
       success: true,
       data: bookings,
-      count: Array.isArray(bookings) ? bookings.length : (bookings ? 1 : 0),
+      count: Array.isArray(bookings) ? bookings.length : 0,
     });
   } catch (error) {
     console.error("Error fetching user bookings:", error);
@@ -579,23 +539,19 @@ exports.getDietitianBookings = async (req, res) => {
     }
 
     const cacheKey = `bookings:dietitian:${dietitianId}:${status || 'all'}:${sort}`;
-
     const { data: bookings, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
       return await Booking.find(query).sort(sort).lean().exec();
     });
 
-    // Add cache inspection headers so frontend schedule/consultation lists show MISS/HIT
-    res.set({
-      'X-Cache': cacheStatus,
-      'X-Cache-Key': cacheKey,
-      'X-Cache-Tags': cacheKey.split(':').slice(0, 2).join(','),
-      'X-Response-Time': `${duration}ms`
-    });
+    if (cacheStatus) {
+      res.setHeader('X-Cache', cacheStatus);
+      res.setHeader('X-Cache-Duration', `${duration}ms`);
+    }
 
     res.status(200).json({
       success: true,
       data: bookings,
-      count: Array.isArray(bookings) ? bookings.length : (bookings ? 1 : 0),
+      count: Array.isArray(bookings) ? bookings.length : 0,
     });
   } catch (error) {
     console.error("Error fetching dietitian bookings:", error);
@@ -797,19 +753,18 @@ exports.updateBookingStatus = async (req, res) => {
       data: booking,
     });
 
+    // Invalidate schedules cache
+    invalidateCache(`bookings:user:${booking.userId}:*`);
+    invalidateCache(`bookings:dietitian:${booking.dietitianId}:*`);
+    invalidateCache(`dietitians:${booking.dietitianId}:*`);
+    invalidateCache(`slots:${booking.dietitianId}:*`);
+
     // Trigger real-time updates
     try {
       notifyBookingUpdate(booking.dietitianId, booking);
       notifyUserUpdate(booking.userId, booking);
     } catch (err) {
       console.error("Socket notification error:", err);
-    }
-    // Invalidate booking lists cache for the affected user and dietitian
-    try {
-      await invalidateCache(`bookings:user:${booking.userId}:*`);
-      await invalidateCache(`bookings:dietitian:${booking.dietitianId}:*`);
-    } catch (invErr) {
-      console.error('Error invalidating booking caches after status update:', invErr);
     }
   } catch (error) {
     console.error("Error updating booking status:", error);
@@ -858,6 +813,12 @@ exports.cancelBooking = async (req, res) => {
     booking.updatedAt = Date.now();
     await booking.save();
 
+    // Invalidate schedules cache
+    invalidateCache(`bookings:user:${booking.userId}:*`);
+    invalidateCache(`bookings:dietitian:${booking.dietitianId}:*`);
+    invalidateCache(`dietitians:${booking.dietitianId}:*`);
+    invalidateCache(`slots:${booking.dietitianId}:*`);
+
     res.status(200).json({
       success: true,
       message: "Booking cancelled successfully",
@@ -870,13 +831,6 @@ exports.cancelBooking = async (req, res) => {
       notifyUserUpdate(booking.userId, booking);
     } catch (err) {
       console.error("Socket notification error:", err);
-    }
-    // Invalidate booking lists cache for the affected user and dietitian
-    try {
-      await invalidateCache(`bookings:user:${booking.userId}:*`);
-      await invalidateCache(`bookings:dietitian:${booking.dietitianId}:*`);
-    } catch (invErr) {
-      console.error('Error invalidating booking caches after cancellation:', invErr);
     }
   } catch (error) {
     console.error("Error cancelling booking:", error);
@@ -906,71 +860,82 @@ exports.getBookedSlots = async (req, res) => {
       });
     }
 
-    // Parse and normalize the date as UTC
-    const [year, month, day] = date.split('-').map(Number);
-    const queryDate = new Date(Date.UTC(year, month - 1, day));
+    const cacheKey = `slots:${dietitianId}:${date}:${validUserId || 'anon'}`;
+    const { data: slotData, cacheStatus, duration } = await cacheOrFetch(cacheKey, 60, async () => {
+      // Parse and normalize the date as UTC
+      const [year, month, day] = date.split('-').map(Number);
+      const queryDate = new Date(Date.UTC(year, month - 1, day));
 
-    const nextDay = new Date(queryDate);
-    nextDay.setDate(nextDay.getDate() + 1);
+      const nextDay = new Date(queryDate);
+      nextDay.setDate(nextDay.getDate() + 1);
 
-    // Find all confirmed/completed bookings for this dietitian on this date
-    const dietitianBookings = await Booking.find({
-      dietitianId,
-      date: { $gte: queryDate, $lt: nextDay },
-      status: { $in: ["confirmed", "completed"] },
-    }).select("time userId username _id");
-
-    // Find all blocked slots for this dietitian on this date
-    const blockedSlots = await BlockedSlot.find({
-      dietitianId,
-      date: queryDate.toISOString().split('T')[0]
-    }).select("time");
-
-    // Find all confirmed/completed bookings for this user on this date (with any dietitian)
-    // Only query if we have a valid userId
-    let userBookings = [];
-    if (validUserId) {
-      userBookings = await Booking.find({
-        userId: validUserId,
+      // Find all confirmed/completed bookings for this dietitian on this date
+      const dietitianBookings = await Booking.find({
+        dietitianId,
         date: { $gte: queryDate, $lt: nextDay },
         status: { $in: ["confirmed", "completed"] },
-      }).select("time dietitianName");
-    }
+      }).select("time userId username _id");
 
-    // Separate user's bookings from others' bookings for this dietitian
-    const bookedSlots = [];
-    const userBookingsWithThisDietitian = [];
-    const bookingDetails = [];
-    const blockedSlotsList = blockedSlots.map(slot => slot.time);
+      // Find all blocked slots for this dietitian on this date
+      const blockedSlots = await BlockedSlot.find({
+        dietitianId,
+        date: queryDate.toISOString().split('T')[0]
+      }).select("time");
 
-    dietitianBookings.forEach((booking) => {
-      bookingDetails.push({
-        time: booking.time,
-        userId: booking.userId,
-        userName: booking.username,
-        bookingId: booking._id
-      });
-      if (validUserId && booking.userId.toString() === validUserId) {
-        userBookingsWithThisDietitian.push(booking.time);
-      } else {
-        bookedSlots.push(booking.time);
+      // Find all confirmed/completed bookings for this user on this date (with any dietitian)
+      let userBookings = [];
+      if (validUserId) {
+        userBookings = await Booking.find({
+          userId: validUserId,
+          date: { $gte: queryDate, $lt: nextDay },
+          status: { $in: ["confirmed", "completed"] },
+        }).select("time dietitianName");
       }
+
+      // Separate user's bookings from others' bookings for this dietitian
+      const bookedSlots = [];
+      const userBookingsWithThisDietitian = [];
+      const bookingDetails = [];
+      const blockedSlotsList = blockedSlots.map(slot => slot.time);
+
+      dietitianBookings.forEach((booking) => {
+        bookingDetails.push({
+          time: booking.time,
+          userId: booking.userId,
+          userName: booking.username,
+          bookingId: booking._id
+        });
+        if (validUserId && booking.userId.toString() === validUserId) {
+          userBookingsWithThisDietitian.push(booking.time);
+        } else {
+          bookedSlots.push(booking.time);
+        }
+      });
+
+      // Get times when user has any bookings (conflicts with booking multiple dietitians at same time)
+      const userConflictingTimes = userBookings.map(booking => booking.time);
+
+      // Return all booked slots for this dietitian (including user's own)
+      const allBookedSlots = [...bookedSlots, ...userBookingsWithThisDietitian];
+
+      return {
+        bookedSlots: allBookedSlots,
+        userBookings: userBookingsWithThisDietitian,
+        userConflictingTimes,
+        bookingDetails,
+        blockedSlots: blockedSlotsList,
+        date: queryDate,
+      };
     });
 
-    // Get times when user has any bookings (conflicts with booking multiple dietitians at same time)
-    const userConflictingTimes = userBookings.map(booking => booking.time);
-
-    // Return all booked slots for this dietitian (including user's own)
-    const allBookedSlots = [...bookedSlots, ...userBookingsWithThisDietitian];
+    if (cacheStatus) {
+      res.setHeader('X-Cache', cacheStatus);
+      res.setHeader('X-Cache-Duration', `${duration}ms`);
+    }
 
     res.status(200).json({
       success: true,
-      bookedSlots: allBookedSlots, // All slots booked with this dietitian
-      userBookings: userBookingsWithThisDietitian, // Slots booked by current user with this dietitian
-      userConflictingTimes, // All times when user has bookings with any dietitian
-      bookingDetails, // Details of all bookings with IDs
-      blockedSlots: blockedSlotsList, // Blocked slots
-      date: queryDate,
+      ...slotData
     });
   } catch (error) {
     console.error("Error fetching booked slots:", error);
@@ -1107,19 +1072,18 @@ exports.rescheduleBooking = async (req, res) => {
       },
     });
 
+    // Invalidate schedules cache
+    invalidateCache(`bookings:user:${booking.userId}:*`);
+    invalidateCache(`bookings:dietitian:${booking.dietitianId}:*`);
+    invalidateCache(`dietitians:${booking.dietitianId}:*`);
+    invalidateCache(`slots:${booking.dietitianId}:*`);
+
     // Trigger real-time updates
     try {
       notifyBookingUpdate(booking.dietitianId, booking);
       notifyUserUpdate(booking.userId, booking);
     } catch (err) {
       console.error("Socket notification error:", err);
-    }
-    // Invalidate booking lists cache for the affected user and dietitian
-    try {
-      await invalidateCache(`bookings:user:${booking.userId}:*`);
-      await invalidateCache(`bookings:dietitian:${booking.dietitianId}:*`);
-    } catch (invErr) {
-      console.error('Error invalidating booking caches after reschedule:', invErr);
     }
   } catch (error) {
     console.error("Error rescheduling booking:", error);

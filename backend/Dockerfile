@@ -1,21 +1,37 @@
-FROM node:20-alpine
+# ==========================================
+# STAGE 1: Dependency Builder (Cached)
+# ==========================================
+FROM node:22-alpine AS dependencies
+
 WORKDIR /app
 
-# Copy package files first for better Docker layer caching
-COPY package*.json ./
+# Install native build tools for compiling any C++ add-ons if needed
+RUN apk add --no-cache python3 make g++
 
-# Install only production dependencies
-RUN npm cache clean --force && npm ci --legacy-peer-deps --only=production
+COPY package.json package-lock.json* ./
 
-# Copy source code
-COPY . .
+# Install production dependencies only and purge npm cache immediately
+RUN npm ci --omit=dev || npm install --omit=dev && npm cache clean --force
 
-# Expose the backend port
+# ==========================================
+# STAGE 2: Ultra-Lightweight Production Runtime
+# ==========================================
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=5000
+
+# Copy production node_modules from builder stage
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY package.json ./
+COPY src/ ./src/
+COPY scripts/ ./scripts/
+
+# Create non-root runtime context
+USER node
+
 EXPOSE 5000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:5000/api/health || exit 1
-
-# Start the server
 CMD ["node", "src/server.js"]

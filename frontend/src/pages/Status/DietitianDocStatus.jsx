@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from '../../axios';
+import { getDocumentStatus } from '../../services/misc/miscService';
 
 // NOTE: Assumes Font Awesome CSS is imported globally.
 const FIELD_MAP = {
@@ -83,37 +83,28 @@ const DietitianDocStatus = () => {
             finalReport: null
         };
 
-        try {
-            // Fetch dietitian name and full status from combined API
-            const token = localStorage.getItem('authToken_dietitian');
-            if (!token) {
-                dietitianName = 'No token found';
-            } else {
-                const statusResponse = await axios.get('/api/status/dietitian-status', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const statusData = statusResponse.data;
-                dietitianName = statusData.name;
+        const token = localStorage.getItem('authToken_dietitian');
+        if (!token) {
+            dietitianName = 'No token found';
+        } else {
+            const res = await getDocumentStatus('dietitian');
+            const data = res.data || res;
+            if (!res.isError && data) {
+                dietitianName = data.name || 'Dietitian';
                 documentData = {
-                    verificationStatus: statusData.verificationStatus,
-                    finalReport: statusData.finalReport
+                    verificationStatus: data.verificationStatus || {},
+                    finalReport: data.finalReport || null
                 };
+            } else {
+                dietitianName = 'Error loading data';
             }
-        } catch (error) {
-            console.error('Error fetching dietitian data:', error);
-            dietitianName = 'Error loading data';
         }
 
-        // Set the dietitian data
         const dietitianData = {
             name: dietitianName,
-            email: '', // Not needed for this component
-            verificationStatus: documentData.verificationStatus,
-            finalReport: documentData.finalReport
+            email: '',
+            verificationStatus: documentData.verificationStatus || {},
+            finalReport: documentData.finalReport || null
         };
 
         setDietitian(dietitianData);
@@ -138,7 +129,7 @@ const DietitianDocStatus = () => {
         const documentFields = Object.keys(FIELD_MAP).filter(field => field !== 'finalReport');
 
         return documentFields.map(field => {
-            const status = dietitian.verificationStatus[field] || 'Not Uploaded';
+            const status = dietitian?.verificationStatus?.[field] || 'Not Uploaded';
             const fieldInfo = FIELD_MAP[field];
             const statusClass = getStatusClass(status);
             const statusIcon = getStatusIcon(status);
@@ -169,7 +160,7 @@ const DietitianDocStatus = () => {
 
     // Render final report actions
     const renderFinalReportActions = () => {
-        const finalStatus = dietitian.verificationStatus.finalReport || 'Not Received';
+        const finalStatus = dietitian?.verificationStatus?.finalReport || 'Not Received';
         const finalReportData = dietitian.finalReport;
 
         const statusElement = (

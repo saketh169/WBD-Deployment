@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuthContext } from '../../hooks/useAuthContext';
-import axios from '../../axios';
+import { getUserBookings, getMeetingLink, getBookingIcs } from '../../services/booking/bookingService';
 
 // Helper function to decode HTML entities
 const decodeHtmlEntities = (text) => {
@@ -90,17 +90,11 @@ const UserSchedule = () => {
 
             try {
                 setLoading(true);
-                const config = token ? {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                } : {};
-
-                const response = await axios.get(`/api/bookings/user/${userId}`, config);
-                if (response.data.success) {
-                    setBookings(response.data.data);
+                const response = await getUserBookings(userId);
+                if (response && !response.isError && response.success) {
+                    setBookings(response.data);
                 } else {
-                    console.error('Failed to fetch bookings:', response.data.message);
+                    console.error('Failed to fetch bookings:', response?.message);
                     setBookings([]);
                 }
             } catch (error) {
@@ -156,12 +150,12 @@ const UserSchedule = () => {
             return;
         }
         try {
-            const resp = await axios.post(`/api/bookings/${bookingId}/meeting-link`, {}, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (resp.data?.success && resp.data.meetingUrl) {
-                setMeetingLinks(prev => ({ ...prev, [bookingId]: resp.data.meetingUrl }));
-                window.open(resp.data.meetingUrl, '_blank');
+            const resp = await getMeetingLink(bookingId);
+            if (resp && !resp.isError && resp.success && resp.meetingUrl) {
+                setMeetingLinks(prev => ({ ...prev, [bookingId]: resp.meetingUrl }));
+                window.open(resp.meetingUrl, '_blank');
+            } else {
+                alert(resp?.message || 'Unable to create meeting link');
             }
         } catch (error) {
             console.error('Error creating meeting link:', error);
@@ -171,11 +165,12 @@ const UserSchedule = () => {
 
     const handleDownloadICS = async (bookingId) => {
         try {
-            const resp = await axios.get(`/api/bookings/${bookingId}/ics`, {
-                headers: { Authorization: `Bearer ${token}` },
-                responseType: 'blob'
-            });
-            const blobUrl = window.URL.createObjectURL(new Blob([resp.data], { type: 'text/calendar' }));
+            const data = await getBookingIcs(bookingId);
+            if (data?.isError) {
+                alert(data.message || 'Failed to download ICS');
+                return;
+            }
+            const blobUrl = window.URL.createObjectURL(new Blob([data], { type: 'text/calendar' }));
             const link = document.createElement('a');
             link.href = blobUrl;
             link.download = `booking-${bookingId}.ics`;

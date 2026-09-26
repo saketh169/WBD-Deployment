@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from '../../axios';
+import { getDocumentStatus } from '../../services/misc/miscService';
 
 // NOTE: Assumes Font Awesome CSS is imported globally.
 const FIELD_MAP = {
@@ -83,37 +83,28 @@ const OrgDocStatus = () => {
             finalReport: null
         };
 
-        try {
-            // Fetch organization name and full status from combined API
-            const token = localStorage.getItem('authToken_organization');
-            if (!token) {
-                organizationName = 'No token found';
-            } else {
-                const statusResponse = await axios.get('/api/status/organization-status', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const statusData = statusResponse.data;
-                organizationName = statusData.name;
+        const token = localStorage.getItem('authToken_organization');
+        if (!token) {
+            organizationName = 'No token found';
+        } else {
+            const res = await getDocumentStatus('organization');
+            const data = res.data || res;
+            if (!res.isError && data) {
+                organizationName = data.name || 'Organization';
                 documentData = {
-                    verificationStatus: statusData.verificationStatus,
-                    finalReport: statusData.finalReport
+                    verificationStatus: data.verificationStatus || {},
+                    finalReport: data.finalReport || null
                 };
+            } else {
+                organizationName = 'Error loading data';
             }
-        } catch (error) {
-            console.error('Error fetching organization data:', error);
-            organizationName = 'Error loading data';
         }
 
-        // Set the organization data
         const organizationData = {
             name: organizationName,
-            email: '', // Not needed for this component
-            verificationStatus: documentData.verificationStatus,
-            finalReport: documentData.finalReport
+            email: '',
+            verificationStatus: documentData.verificationStatus || {},
+            finalReport: documentData.finalReport || null
         };
 
         setOrganization(organizationData);
@@ -138,7 +129,7 @@ const OrgDocStatus = () => {
         const documentFields = Object.keys(FIELD_MAP).filter(field => field !== 'finalReport');
 
         return documentFields.map(field => {
-            const status = organization.verificationStatus[field] || 'Not Uploaded';
+            const status = organization?.verificationStatus?.[field] || 'Not Uploaded';
             const fieldInfo = FIELD_MAP[field];
             const statusClass = getStatusClass(status);
             const statusIcon = getStatusIcon(status);
@@ -169,7 +160,7 @@ const OrgDocStatus = () => {
 
     // Render final report actions
     const renderFinalReportActions = () => {
-        const finalStatus = organization.verificationStatus.finalReport || 'Not Received';
+        const finalStatus = organization?.verificationStatus?.finalReport || 'Not Received';
         const finalReportData = organization.finalReport;
 
         const statusElement = (

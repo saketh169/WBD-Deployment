@@ -610,7 +610,7 @@ exports.verifyLoginOTPController = async (req, res) => {
 
     try {
         // 1. Verify the OTP
-        const otpVerification = otpService.verifyOTP(email, otp);
+        const otpVerification = await otpService.verifyOTP(email, otp);
         if (!otpVerification.success) {
             return res.status(400).json({ message: otpVerification.message });
         }

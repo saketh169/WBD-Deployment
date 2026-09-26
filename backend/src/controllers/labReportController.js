@@ -238,6 +238,7 @@ const getClientLabReports = async (req, res) => {
         }
 
         const labReports = await LabReport.find(query)
+            .select('-uploadedFiles.data')
             .sort({ createdAt: -1 })
             .populate('dietitianId', 'name')
             .populate('reviewedBy.dietitianId', 'name');
@@ -262,6 +263,7 @@ const getLabReportsByClient = async (req, res) => {
         const { clientId } = req.params;
 
         const labReports = await LabReport.find({ userId: clientId })
+            .select('-uploadedFiles.data')
             .sort({ createdAt: -1 })
             .populate('reviewedBy.dietitianId', 'name');
 

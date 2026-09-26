@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from '../axios';
+import { verifyToken as apiVerifyToken } from '../services/auth/authService';
 
 const RoleModal = ({ isModal = false, onClose }) => {
   const navigate = useNavigate();
@@ -33,23 +33,18 @@ const RoleModal = ({ isModal = false, onClose }) => {
 
 
   const verifyToken = async (token, role) => {
-    try {
-      await axios.get('/api/verify-token', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+    const res = await apiVerifyToken(token);
+    if (!res.isError) {
       return true;
-    } catch (error) {
-      if (error.response?.status === 401) {
-        localStorage.removeItem(`authToken_${role.slug}`);
-        alert(`Session expired for ${role.name}`);
-        navigate(`/signin?role=${role.slug}`);
-      } else {
-        localStorage.removeItem(`authToken_${role.slug}`);
-        alert('Verification failed');
-        navigate(`/signin?role=${role.slug}`);
-      }
-      return false;
     }
+    localStorage.removeItem(`authToken_${role.slug}`);
+    if (res.status === 401) {
+      alert(`Session expired for ${role.name}`);
+    } else {
+      alert('Verification failed');
+    }
+    navigate(`/signin?role=${role.slug}`);
+    return false;
   };
 
   const handleRoleClick = async (role) => {
@@ -91,11 +86,11 @@ const RoleModal = ({ isModal = false, onClose }) => {
     if (type === 'management') {
       // If a management session already exists, verify and redirect
       if (token && userData.orgType !== 'employee') {
-        try {
-          await axios.get('/api/verify-token', { headers: { Authorization: `Bearer ${token}` } });
+        const res = await apiVerifyToken(token);
+        if (!res.isError) {
           navigate('/organization/home');
           return;
-        } catch {
+        } else {
           localStorage.removeItem('authToken_organization');
           localStorage.removeItem('authUser_organization');
         }
@@ -105,11 +100,11 @@ const RoleModal = ({ isModal = false, onClose }) => {
       // Employee: check for their own separate session token
       const empToken = localStorage.getItem('authToken_employee');
       if (empToken) {
-        try {
-          await axios.get('/api/verify-token', { headers: { Authorization: `Bearer ${empToken}` } });
+        const res = await apiVerifyToken(empToken);
+        if (!res.isError) {
           navigate('/employee/home');
           return;
-        } catch {
+        } else {
           localStorage.removeItem('authToken_employee');
           localStorage.removeItem('authUser_employee');
         }

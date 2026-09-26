@@ -26,5 +26,9 @@ export default defineConfig({
     alias: {
       'react-is': 'react-is'
     }
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
   }
 })

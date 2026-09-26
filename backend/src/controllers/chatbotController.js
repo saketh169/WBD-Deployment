@@ -1,32 +1,34 @@
 const { FAQ, ChatHistory, NutritionCache, HardcodedResponse } = require('../models/chatbotModels');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios = require('axios');
+const path = require('path');
 
-// Initialize Google Gemini AI
-require('dotenv').config({ 
-  path: require('path').join(__dirname, '..', 'utils', '.env') 
-});
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize environment variables from root and utils
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', 'utils', '.env') });
 
 // USDA API Configuration
 const USDA_API_KEY = process.env.USDA_API_KEY;
 const USDA_API_URL = 'https://api.nal.usda.gov/fdc/v1';
 
-// System instruction for Gemini to focus on nutrition
-const SYSTEM_INSTRUCTION = `You are NutriConnect, a helpful and empathetic virtual nutrition assistant.
-Your role is to:
-- Answer general nutrition and diet-related questions.
-- Provide guidance on what foods to eat or avoid for specific health conditions or diseases (e.g., diabetes, high blood pressure, PCOS, heart health, weight management, etc.).
-- Suggest balanced, practical, and accessible food choices.
-- Explain nutrition concepts in clear, simple language, suitable for clients without technical knowledge.
+// System instruction for Gemini: strict domain boundary, accurate nutrition guidance
+const SYSTEM_INSTRUCTION = `You are NutriConnect, an expert virtual nutrition and dietary assistant.
 
-Important rules:
-- Always stay supportive, respectful, and encouraging.
-- If users ask medical questions outside nutrition scope (like diagnosis, medication, or emergency care), gently remind them that you cannot provide medical advice and encourage consulting a qualified healthcare professional.
-- When discussing foods for health conditions, provide evidence-based, general recommendations—not personalized medical prescriptions.
-- Keep answers concise but detailed enough to be useful.
+CORE SCOPE & GUARDRAILS:
+1. STRICT DOMAIN SPECIALIZATION:
+- You ONLY answer questions related to food, nutrition, healthy eating, diets, meal planning, macro and micronutrients, vitamins, hydration, caloric and dietary requirements, foods for specific health conditions (e.g. diabetes, hypertension, PCOS, cholesterol, IBS, heart health, obesity, kidney stones), and NutriConnect platform features.
+- If a user asks ANY question outside this scope (e.g., "what is school", general trivia, coding, history, mathematics, geography, politics, sports, entertainment, celebrity gossip, movies, unrelated science or homework), you MUST POLITELY REFUSE and redirect them.
+- REFUSAL TEMPLATE:
+"I am NutriConnect's nutrition assistant. I specialize only in food, diet, nutrition, meal planning, and dietary wellness. Please feel free to ask me anything related to nutrition, healthy eating, or our platform features!"
+- Do NOT provide answers to off-topic questions under any circumstances, even if hypothetical or roleplay.
 
-Your goal: Empower users with reliable nutrition knowledge that helps them make better daily food choices while reminding them that professional medical guidance is important for personalized care.`;
+2. ACCURATE, DIRECT & HELPFUL ANSWERS:
+- Answer the user's specific query directly, accurately, and thoroughly.
+- Provide actionable, evidence-based nutrition insights in clear, accessible language.
+- Use formatting (bullet points, clear paragraphs) when explaining food options or dietary plans.
+
+3. MEDICAL & SAFETY ADVICE:
+- Clearly communicate that your nutritional guidance is educational and does not constitute medical diagnosis or replace personalized medical prescriptions. Advise consulting a physician or certified dietitian for clinical medical management.`;
 
 /**
  * Main chatbot message handler
@@ -42,9 +44,9 @@ exports.sendMessage = async (req, res) => {
             });
         }
 
-        const userMessage = message.trim().toLowerCase();
+        const userMessage = message.trim();
 
-        // Step 1: Check hardcoded responses first
+        // Step 1: Check hardcoded greeting responses (pure greetings only)
         const hardcodedResponse = await checkHardcodedResponses(userMessage);
         if (hardcodedResponse) {
             await saveChatHistory(sessionId, userId, message, hardcodedResponse.response, 'hardcoded');
@@ -55,7 +57,7 @@ exports.sendMessage = async (req, res) => {
             });
         }
 
-        // Step 2: Check FAQs
+        // Step 2: Check FAQs (exact match or dedicated trigger phrases)
         const faqResponse = await checkFAQs(userMessage);
         if (faqResponse) {
             await saveChatHistory(sessionId, userId, message, faqResponse.answer, 'faq');
@@ -66,7 +68,7 @@ exports.sendMessage = async (req, res) => {
             });
         }
 
-        // Step 3: Check if it's a nutrition-related query
+        // Step 3: Check explicit nutrition/calorie lookup queries ("calories in X", etc.)
         const nutritionData = await getNutritionInfo(userMessage);
         if (nutritionData && nutritionData.foods.length > 0) {
             const nutritionResponse = formatNutritionResponse(nutritionData);
@@ -79,8 +81,8 @@ exports.sendMessage = async (req, res) => {
             });
         }
 
-        // Step 4: Use Gemini AI for general queries
-        const geminiResponse = await getGeminiResponse(message, sessionId, userId);
+        // Step 4: Use Gemini AI with strict nutrition guardrails & conversation history
+        const geminiResponse = await getGeminiResponse(userMessage, sessionId, userId);
         await saveChatHistory(sessionId, userId, message, geminiResponse, 'gemini');
         
         return res.json({
@@ -125,7 +127,6 @@ exports.getTopFAQs = async (req, res) => {
 
 /**
  * Handle quick question click - guarantees FAQ matching and clickCount increment
- * This endpoint ensures quick questions from UI buttons always increment their count
  */
 exports.quickQuestionClick = async (req, res) => {
     try {
@@ -145,10 +146,8 @@ exports.quickQuestionClick = async (req, res) => {
         });
 
         if (faq) {
-            // Guarantee increment of clickCount for quick question clicks
             await FAQ.updateOne({ _id: faq._id }, { $inc: { clickCount: 1 } });
             
-            // Save to chat history
             if (sessionId) {
                 await saveChatHistory(sessionId, userId, question, faq.answer, 'faq');
             }
@@ -162,7 +161,6 @@ exports.quickQuestionClick = async (req, res) => {
                 isQuickQuestion: true
             });
         } else {
-            // Fallback to regular FAQ check if exact match fails
             return res.status(404).json({ 
                 success: false, 
                 message: 'FAQ not found' 
@@ -210,12 +208,24 @@ exports.getChatHistory = async (req, res) => {
 // ============ HELPER FUNCTIONS ============
 
 /**
- * Check hardcoded responses
+ * Check hardcoded responses (only for standalone greetings / polite phrases)
  */
 async function checkHardcodedResponses(message) {
     try {
+        const cleanMsg = message.trim().toLowerCase().replace(/[!.,?]+$/, '');
+        
+        // Exact greeting / acknowledgment matches only
+        const allowedTriggers = [
+            'hello', 'hi', 'hey', 'greetings', 'bye', 'goodbye', 
+            'thank', 'thanks', 'thank you', 'stay healthy'
+        ];
+        
+        if (!allowedTriggers.includes(cleanMsg)) {
+            return null;
+        }
+
         const response = await HardcodedResponse.findOne({
-            trigger: { $regex: new RegExp(message, 'i') },
+            trigger: cleanMsg,
             isActive: true
         });
         return response;
@@ -226,76 +236,50 @@ async function checkHardcodedResponses(message) {
 }
 
 /**
- * Check FAQs using text search with improved matching logic
+ * Check FAQs with high precision matching (prevent hijacking unrelated queries)
  */
 async function checkFAQs(message) {
     try {
-        // Split message into words
-        const words = message.toLowerCase().split(/\s+/);
-        
-        // First, try to find exact match to FAQ question itself
-        const exactMatch = await FAQ.findOne({
-            question: { $regex: new RegExp(`^${message.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-            isActive: true
-        });
-        
-        if (exactMatch) {
-            console.log('✅ Exact FAQ Match Found:', exactMatch.question);
-            await FAQ.updateOne({ _id: exactMatch._id }, { $inc: { clickCount: 1 } });
-            return exactMatch;
+        const cleanMessage = message.trim().toLowerCase().replace(/[?!.,]+$/, '');
+        if (!cleanMessage) return null;
+
+        // 1. Exact match against FAQ question (case-insensitive)
+        const allFaqs = await FAQ.find({ isActive: true });
+        for (const faq of allFaqs) {
+            const cleanQuestion = faq.question.trim().toLowerCase().replace(/[?!.,]+$/, '');
+            if (cleanQuestion === cleanMessage) {
+                console.log('✅ Exact FAQ Match Found:', faq.question);
+                await FAQ.updateOne({ _id: faq._id }, { $inc: { clickCount: 1 } });
+                return faq;
+            }
         }
 
-        // Try keyword-based matching first (more reliable for quick questions)
-        const keywordMatch = await FAQ.findOne({
-            keywords: { $in: words.map(w => new RegExp(w, 'i')) },
-            isActive: true
-        });
-        
-        if (keywordMatch) {
-            console.log('🔑 FAQ Keyword Match Found:', keywordMatch.question);
-            await FAQ.updateOne({ _id: keywordMatch._id }, { $inc: { clickCount: 1 } });
-            return keywordMatch;
+        // 2. Exact match against dedicated multi-word keyword phrases
+        for (const faq of allFaqs) {
+            for (const kw of (faq.keywords || [])) {
+                const cleanKw = kw.trim().toLowerCase();
+                if (cleanKw === cleanMessage) {
+                    console.log('🔑 FAQ Exact Phrase Match Found:', faq.question);
+                    await FAQ.updateOne({ _id: faq._id }, { $inc: { clickCount: 1 } });
+                    return faq;
+                }
+            }
         }
 
-        // Try text search for FAQ matching (fallback)
-        if (message.length > 5) {
-            const faqs = await FAQ.find(
-                { $text: { $search: message }, isActive: true },
+        // 3. High-confidence text search fallback for substantial queries
+        if (cleanMessage.split(/\s+/).length >= 4) {
+            const textMatches = await FAQ.find(
+                { $text: { $search: `\"${cleanMessage}\"` }, isActive: true },
                 { score: { $meta: 'textScore' } }
             )
             .sort({ score: { $meta: 'textScore' } })
             .limit(1);
 
-            if (faqs.length > 0) {
-                console.log('📊 FAQ Text Search Score:', faqs[0].score, '| Question:', faqs[0].question);
-                
-                // Use different thresholds based on message length
-                const wordCount = words.length;
-                let threshold = 1.5;
-                
-                // Short questions (< 8 words) - lower threshold for FAQ matching
-                if (wordCount < 8) {
-                    threshold = 1.0; // Lowered for better quick question matching
-                }
-                // Standard questions (8-15 words)
-                else if (wordCount <= 15) {
-                    threshold = 1.3;
-                }
-                // Long questions (> 15 words) - higher threshold, likely needs Gemini
-                else {
-                    threshold = 2.5; // Slightly lowered from 3.0 for better matching
-                }
-                
-                console.log('⚖️  Word Count:', wordCount, '| Threshold:', threshold);
-                
-                if (faqs[0].score >= threshold) {
-                    const faq = faqs[0];
-                    console.log('✅ FAQ Text Match Succeeded');
-                    await FAQ.updateOne({ _id: faq._id }, { $inc: { clickCount: 1 } });
-                    return faq;
-                } else {
-                    console.log('❌ FAQ Text Match Failed - Score too low');
-                }
+            if (textMatches.length > 0 && textMatches[0].score >= 3.0) {
+                const faq = textMatches[0];
+                console.log('✅ FAQ High-confidence Text Match:', faq.question);
+                await FAQ.updateOne({ _id: faq._id }, { $inc: { clickCount: 1 } });
+                return faq;
             }
         }
 
@@ -311,7 +295,7 @@ async function checkFAQs(message) {
  */
 async function getNutritionInfo(message) {
     try {
-        // Extract food keywords
+        // Extract food keywords specifically requested
         const foodKeywords = extractFoodKeywords(message);
         if (foodKeywords.length === 0) return null;
 
@@ -327,7 +311,6 @@ async function getNutritionInfo(message) {
             if (!nutritionData && USDA_API_KEY) {
                 nutritionData = await fetchFromUSDA(foodName);
                 if (nutritionData) {
-                    // Save to cache
                     await NutritionCache.create(nutritionData);
                 }
             }
@@ -348,41 +331,37 @@ async function getNutritionInfo(message) {
 }
 
 /**
- * Extract food-related keywords from message
+ * Extract food-related keywords ONLY when user explicitly asks for nutrition facts or calories
  */
 function extractFoodKeywords(message) {
-    // Keywords to trigger nutrition lookup - matching your working code
-    const nutritionKeywords = ['nutrition of', 'calories in', 'how many calories in', 'what is in', 'nutrients in', 'nutritional value of'];
+    const nutritionKeywords = [
+        'how many calories in',
+        'calories in',
+        'nutritional value of',
+        'nutrients in',
+        'nutrition of',
+        'nutrition facts of',
+        'how much protein in',
+        'macros of',
+        'how much fat in'
+    ];
     
     const lowerMessage = message.toLowerCase();
     
-    // Check if message contains nutrition-related triggers
-    const hasNutritionTrigger = nutritionKeywords.some(keyword => lowerMessage.includes(keyword));
+    // Check if message contains explicit nutrition triggers
+    const matchedTrigger = nutritionKeywords.find(keyword => lowerMessage.includes(keyword));
     
-    if (hasNutritionTrigger) {
-        // Extract the food name by removing the trigger keywords
-        let foodName = lowerMessage;
-        nutritionKeywords.forEach(keyword => {
-            foodName = foodName.replace(keyword, '');
-        });
-        foodName = foodName.trim();
+    if (matchedTrigger) {
+        let foodName = lowerMessage.replace(matchedTrigger, '').trim();
+        foodName = foodName.replace(/[?!.]+$/, '').replace(/^(a|an|the)\s+/, '').trim();
         
-        if (foodName) {
+        if (foodName && foodName.length > 1) {
             return [foodName];
         }
     }
     
-    // Fallback: check for common foods
-    const commonFoods = ['apple', 'banana', 'chicken', 'rice', 'bread', 'egg', 'milk', 'fish', 'beef', 'broccoli'];
-    const foods = [];
-    
-    for (const food of commonFoods) {
-        if (lowerMessage.includes(food)) {
-            foods.push(food);
-        }
-    }
-
-    return foods.slice(0, 3); // Limit to 3 foods
+    // Do NOT fallback to generic common foods list so normal dietary questions are not hijacked
+    return [];
 }
 
 /**
@@ -402,7 +381,6 @@ async function fetchFromUSDA(foodName) {
             const food = response.data.foods[0];
             const nutrients = food.foodNutrients || [];
 
-            // Extract nutrients using the exact method from your working code
             const nutrientData = {
                 calories: nutrients.find(n => n.nutrientName === "Energy")?.value || 0,
                 protein: nutrients.find(n => n.nutrientName === "Protein")?.value || 0,
@@ -440,21 +418,79 @@ function formatNutritionResponse(nutritionData) {
 }
 
 /**
- * Get response from Gemini AI
+ * Get response from Gemini AI with strict guardrails and session history
  */
 async function getGeminiResponse(message, sessionId, userId) {
     try {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            console.error('Gemini API key is not configured');
+            return "I am NutriConnect's nutrition assistant. I can help answer questions on food, diet, nutrition, meal planning, and our platform features. How can I assist you today?";
+        }
+
+        const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ 
             model: 'gemini-2.5-flash',
             systemInstruction: SYSTEM_INSTRUCTION
         });
-        const result = await model.generateContent(message);
-        const response = await result.response;
-        const text = response.text();
-        return text;
+
+        // Load conversation history if sessionId is provided
+        let history = [];
+        if (sessionId) {
+            try {
+                const chatDoc = await ChatHistory.findOne({ sessionId });
+                if (chatDoc && chatDoc.messages && chatDoc.messages.length > 0) {
+                    const recentMessages = chatDoc.messages.slice(-8);
+                    
+                    for (const m of recentMessages) {
+                        if (m.type === 'user' && m.content) {
+                            history.push({
+                                role: 'user',
+                                parts: [{ text: m.content }]
+                            });
+                        } else if (m.type === 'bot' && m.content) {
+                            history.push({
+                                role: 'model',
+                                parts: [{ text: m.content }]
+                            });
+                        }
+                    }
+
+                    // Gemini history must start with role 'user'
+                    while (history.length > 0 && history[0].role !== 'user') {
+                        history.shift();
+                    }
+
+                    // Remove consecutive messages with same role to ensure alternation
+                    const sanitizedHistory = [];
+                    for (let i = 0; i < history.length; i++) {
+                        if (sanitizedHistory.length > 0 && sanitizedHistory[sanitizedHistory.length - 1].role === history[i].role) {
+                            sanitizedHistory[sanitizedHistory.length - 1].parts[0].text += `\n${history[i].parts[0].text}`;
+                        } else {
+                            sanitizedHistory.push(history[i]);
+                        }
+                    }
+                    history = sanitizedHistory;
+                }
+            } catch (err) {
+                console.warn('Could not load chat history for Gemini:', err.message);
+                history = [];
+            }
+        }
+
+        if (history.length > 0) {
+            const chat = model.startChat({ history });
+            const result = await chat.sendMessage(message);
+            const response = await result.response;
+            return response.text();
+        } else {
+            const result = await model.generateContent(message);
+            const response = await result.response;
+            return response.text();
+        }
     } catch (error) {
         console.error('Gemini AI error:', error);
-        return 'I can help you with nutrition questions! Feel free to ask about healthy eating, food nutrition, or our platform features.';
+        return "I am NutriConnect's nutrition assistant. I can help answer questions on food, diet, nutrition, meal planning, and our platform features. How can I assist you today?";
     }
 }
 

@@ -3,15 +3,10 @@ import BookingSidebar from "./Consultations/BookingSidebar";
 import PaymentModal from "./Consultations/PaymentModal";
 import DietitianCard from "./Consultations/DietitianCard";
 import FilterSidebar from "./Consultations/FilterSidebar";
-import axios from '../axios';
+import { getAllDietitians } from '../services/dietitian/dietitianService';
 
 // Notification Component with Green Theme
 const Notification = ({ show, message, type, onClose }) => {
-  useEffect(() => {
-    if (show) {
-    }
-  }, [show, message, type]);
-
   if (!show) return null;
 
   const bgColor = type === "success" ? "bg-green-50" : "bg-red-50";
@@ -102,64 +97,62 @@ const AllDietitiansPage = () => {
 
   const [specializations, setSpecializations] = useState([]);
 
+  const isFirstMount = React.useRef(true);
+
   // Load dietitians data from API
   const loadDietitians = useCallback(async (search = "") => {
-    try {
-      setLoading(true);
-      
-      const token = localStorage.getItem('authToken_user');
-      const config = {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        params: search ? { search } : {}
-      };
+    setLoading(true);
+    const res = await getAllDietitians(search ? { search } : {});
+    
+    if (!res.isError && (res.success || Array.isArray(res.data))) {
+      const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      const filteredData = list.filter((d) => d.specialties && d.specialties.length > 0);
+      setAllDietitians(filteredData);
+      setFilteredDietitians(filteredData);
 
-      const response = await axios.get('/api/dietitians', config);
-      
-      if (response.data.success) {
-        // Filter out dietitians with empty specialization arrays (legacy data check)
-        const filteredData = response.data.data.filter((d) => d.specialties && d.specialties.length > 0);
-        setAllDietitians(filteredData);
-        setFilteredDietitians(filteredData);
-
-        if (!search && specializations.length === 0) {
-          const primarySpecializations = [
-            "Weight Loss", "Diabetes Management", "Women's Health", 
-            "Gut Health", "Skin & Hair", "Cardiac Health", "Others"
-          ];
-          setSpecializations(primarySpecializations.map(spec => ({ value: spec, label: spec })));
-        }
-      }
-    } catch (error) {
-      console.error("Error loading dietitians:", error);
-      showNotification("Error loading dietitians", "error");
-    } finally {
-      setLoading(false);
+      setSpecializations(prev => {
+        if (prev.length > 0) return prev;
+        const primarySpecializations = [
+          "Weight Loss", "Diabetes Management", "Women's Health", 
+          "Gut Health", "Skin & Hair", "Cardiac Health", "Others"
+        ];
+        return primarySpecializations.map(spec => ({ value: spec, label: spec }));
+      });
+    } else {
+      showNotification(res.message || "Error loading dietitians", "error");
     }
-  }, [specializations.length]);
+    setLoading(false);
+  }, []);
 
-  // Initial load
+  // Single consolidated load & search effect
   useEffect(() => {
-    loadDietitians();
-  }, [loadDietitians]);
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      loadDietitians();
+      return;
+    }
 
-  // Debounced search effect
-  useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchQuery.trim()) {
-        loadDietitians(searchQuery);
-      } else {
-        loadDietitians();
-      }
+      loadDietitians(searchQuery.trim());
     }, 500); // 500ms debounce
     return () => clearTimeout(timer);
   }, [searchQuery, loadDietitians]);
 
-  // Apply other filters locally (Experience, Fees, Mode, etc.)
+  // Apply other filters locally (Search, Experience, Fees, Mode, etc.)
   useEffect(() => {
     let result = [...allDietitians];
 
-    // Note: Search is now handled by the API/Elasticsearch, so we don't filter by name/location here locally anymore.
-    // This allows Elasticsearch to handle fuzzy matches and synonyms on the server!
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (d) =>
+          d.name?.toLowerCase().includes(q) ||
+          d.location?.toLowerCase().includes(q) ||
+          d.specialties?.some((s) => s.toLowerCase().includes(q)) ||
+          (typeof d.specialization === 'string' && d.specialization.toLowerCase().includes(q)) ||
+          d.languages?.some((l) => l.toLowerCase().includes(q))
+      );
+    }
 
     // Specialization filter
     if (filters.specialization.length > 0) {

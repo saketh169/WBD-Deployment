@@ -1,26 +1,14 @@
 const Settings = require('../models/settingsModel');
 const { sendPolicyChangeEmail } = require('../services/emailService');
-const { cacheOrFetch, invalidateCache } = require('../utils/redisClient');
 
 // Get settings
 const getSettings = async (req, res) => {
   try {
-    const { data: settings, cacheStatus, duration } = await cacheOrFetch('settings:global', 600, async () => {
-      let s = await Settings.findOne();
-      if (!s) {
-        s = new Settings();
-        await s.save();
-      }
-      return s;
-    });
-    
-    res.set({
-      'X-Cache': cacheStatus,
-      'X-Cache-Key': 'settings:global',
-      'X-Cache-Tags': 'settings,global',
-      'X-Response-Time': `${duration}ms`
-    });
-    
+    let settings = await Settings.findOne();
+    if (!settings) {
+      settings = new Settings();
+      await settings.save();
+    }
     res.status(200).json(settings);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching settings' });
@@ -79,9 +67,6 @@ const updateSettings = async (req, res) => {
     });
 
     await settings.save();
-
-    // Invalidate settings cache on update
-    await invalidateCache('settings:*');
 
     console.log(`Settings updated: ${Object.keys(updates).join(', ')}`);
 

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { sendAccountRemovalEmail } = require('../services/emailService');
 const bcrypt = require('bcryptjs');
+const { cacheOrFetch, invalidateCache } = require('../utils/redisClient');
 
 // Escape regex special characters to prevent ReDoS
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -10,7 +11,8 @@ const {
     User,
     Admin,
     Dietitian,
-    Organization
+    Organization,
+    Employee
 } = require('../models/userModel');
 
 // Removed Account Schema for tracking deleted users
@@ -21,7 +23,7 @@ const RemovedAccountSchema = new mongoose.Schema({
     phone: { type: String },
     role: {
         type: String,
-        enum: ['user', 'dietitian', 'organization'],
+        enum: ['user', 'dietitian', 'organization', 'employee'],
         required: true
     },
     accountType: { type: String, required: true }, // Same as role but capitalized
@@ -32,6 +34,10 @@ const RemovedAccountSchema = new mongoose.Schema({
     originalData: { type: mongoose.Schema.Types.Mixed } // Store original profile data
 }, { timestamps: true });
 
+RemovedAccountSchema.index({ removedOn: -1 });
+RemovedAccountSchema.index({ role: 1, removedOn: -1 });
+RemovedAccountSchema.index({ name: 1, email: 1 });
+
 const RemovedAccount = mongoose.model('RemovedAccount', RemovedAccountSchema);
 
 // Helper function to get the correct model based on role
@@ -39,7 +45,8 @@ const getModelByRole = (role) => {
     const models = {
         'user': User,
         'dietitian': Dietitian,
-        'organization': Organization
+        'organization': Organization,
+        'employee': Employee
     };
     return models[role.toLowerCase()];
 };
@@ -68,77 +75,120 @@ exports.getUsersByRole = async (req, res) => {
             });
         }
 
-        let query = {};
+        // Only query active, non-soft-deleted accounts
+        let query = { isDeleted: { $ne: true } };
 
         // Add search functionality
         if (searchQuery) {
             const safeQuery = escapeRegex(searchQuery);
-            query = {
-                $or: [
-                    { name: { $regex: safeQuery, $options: 'i' } },
-                    { email: { $regex: safeQuery, $options: 'i' } }
-                ]
-            };
+            query.$or = [
+                { name: { $regex: safeQuery, $options: 'i' } },
+                { email: { $regex: safeQuery, $options: 'i' } }
+            ];
         }
 
         const pageNumber = parseInt(page, 10) || 1;
         const pageSize = parseInt(limit, 10) || 10;
         const skip = (pageNumber - 1) * pageSize;
 
-        const [users, total] = await Promise.all([
-            Model.find(query)
-                .select('-__v -createdAt -updatedAt') // Exclude version and timestamps
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(pageSize),
-            Model.countDocuments(query)
-        ]);
+        const cacheKey = `crud:users:${actualRole.toLowerCase()}:${searchQuery || 'all'}:${pageNumber}:${pageSize}`;
+        const { data: result, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
+            if (actualRole.toLowerCase() === 'organization') {
+                const [users, total] = await Promise.all([
+                    Organization.aggregate([
+                        { $match: query },
+                        {
+                            $lookup: {
+                                from: 'employees',
+                                localField: '_id',
+                                foreignField: 'organizationId',
+                                pipeline: [
+                                    { $match: { isDeleted: { $ne: true } } },
+                                    {
+                                        $lookup: {
+                                            from: 'activitylogs',
+                                            localField: '_id',
+                                            foreignField: 'employeeId',
+                                            as: 'activities'
+                                        }
+                                    },
+                                    {
+                                        $addFields: {
+                                            verificationsCount: {
+                                                $size: {
+                                                    $filter: {
+                                                        input: '$activities',
+                                                        as: 'act',
+                                                        cond: { $in: ['$$act.activityType', ['verification_approved', 'verification_rejected']] }
+                                                    }
+                                                }
+                                            },
+                                            blogModerationsCount: {
+                                                $size: {
+                                                    $filter: {
+                                                        input: '$activities',
+                                                        as: 'act',
+                                                        cond: { $in: ['$$act.activityType', ['blog_approved', 'blog_rejected', 'blog_flagged']] }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    { $project: { passwordHash: 0, activities: 0, __v: 0 } }
+                                ],
+                                as: 'employees'
+                            }
+                        },
+                        {
+                            $addFields: {
+                                employeeCount: { $size: '$employees' }
+                            }
+                        },
+                        {
+                            $project: {
+                                password: 0,
+                                passwordHash: 0,
+                                profileImage: 0,
+                                files: 0,
+                                documents: 0,
+                                __v: 0
+                            }
+                        },
+                        { $sort: { createdAt: -1 } },
+                        { $skip: skip },
+                        { $limit: pageSize }
+                    ]).exec(),
+                    Organization.countDocuments(query)
+                ]);
+                return { users, total };
+            }
 
-        // Add consultation counts for each user/dietitian
-        const Booking = require('../models/bookingModel');
-        const usersWithCounts = await Promise.all(
-            users.map(async (user) => {
-                const userData = user.toObject ? user.toObject() : user;
-                
-                if (actualRole === 'user') {
-                    // For users: count consultations
-                    const consultationCount = await Booking.countDocuments({ userId: user._id });
-                    return {
-                        ...userData,
-                        consultationCount
-                    };
-                } else if (actualRole === 'dietitian') {
-                    // For dietitians: count unique clients (distinct userId)
-                    const clientIds = await Booking.distinct('userId', { dietitianId: user._id });
-                    const clientCount = clientIds.length;
-                    return {
-                        ...userData,
-                        clientCount
-                    };
-                } else if (actualRole === 'organization') {
-                    // For organization, count employees
-                    const { Employee } = require('../models/userModel');
-                    const employeeCount = await Employee.countDocuments({
-                        organizationId: user._id,
-                        isDeleted: false
-                    });
-                    return {
-                        ...userData,
-                        employeeCount
-                    };
-                }
-                return userData;
-            })
-        );
+            const [users, total] = await Promise.all([
+                Model.find(query)
+                    .select('-password -passwordHash -profileImage -files -documents -bookedslots -testimonials -publications -awards -certifications -__v')
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(pageSize)
+                    .lean()
+                    .exec(),
+                Model.countDocuments(query)
+            ]);
+            return { users, total };
+        });
+
+        if (cacheStatus) {
+            res.setHeader('X-Cache', cacheStatus);
+            res.setHeader('X-Cache-Duration', `${duration}ms`);
+        }
 
         res.status(200).json({
             success: true,
-            data: usersWithCounts,
-            count: usersWithCounts.length,
-            total,
+            data: result.users,
+            count: result.users.length,
+            total: result.total,
             page: pageNumber,
             limit: pageSize,
-            pages: Math.ceil(total / pageSize)
+            pages: Math.ceil(result.total / pageSize)
         });
 
     } catch (error) {
@@ -277,6 +327,10 @@ exports.removeUser = async (req, res) => {
             console.error('Failed to send removal notification email:', emailError.message);
         }
 
+        // Invalidate cached account lists
+        invalidateCache('crud:users:*');
+        invalidateCache('crud:removed:*');
+
         res.status(200).json({
             success: true,
             message: `${actualRole.charAt(0).toUpperCase() + actualRole.slice(1)} removed successfully`
@@ -314,23 +368,34 @@ exports.getRemovedAccounts = async (req, res) => {
         const pageSize = parseInt(limit, 10) || 10;
         const skip = (pageNumber - 1) * pageSize;
 
-        const [removedAccounts, total] = await Promise.all([
-            RemovedAccount.find(query)
-                .select('-__v') // Exclude version, but keep originalData for details view
-                .sort({ removedOn: -1 })
-                .skip(skip)
-                .limit(pageSize),
-            RemovedAccount.countDocuments(query)
-        ]);
+        const cacheKey = `crud:removed:${searchQuery || 'all'}:${pageNumber}:${pageSize}`;
+        const { data: result, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
+            const [removedAccounts, total] = await Promise.all([
+                RemovedAccount.find(query)
+                    .select('-originalPasswordHash -originalData.profileImage -originalData.files -originalData.documents -originalData.bookedslots -__v')
+                    .sort({ removedOn: -1 })
+                    .skip(skip)
+                    .limit(pageSize)
+                    .lean()
+                    .exec(),
+                RemovedAccount.countDocuments(query)
+            ]);
+            return { removedAccounts, total };
+        });
+
+        if (cacheStatus) {
+            res.setHeader('X-Cache', cacheStatus);
+            res.setHeader('X-Cache-Duration', `${duration}ms`);
+        }
 
         res.status(200).json({
             success: true,
-            data: removedAccounts,
-            count: removedAccounts.length,
-            total,
+            data: result.removedAccounts,
+            count: result.removedAccounts.length,
+            total: result.total,
             page: pageNumber,
             limit: pageSize,
-            pages: Math.ceil(total / pageSize)
+            pages: Math.ceil(result.total / pageSize)
         });
 
     } catch (error) {
@@ -395,6 +460,10 @@ exports.restoreAccount = async (req, res) => {
         // Remove from removed accounts
         await RemovedAccount.findByIdAndDelete(id);
 
+        // Invalidate cached account lists
+        invalidateCache('crud:users:*');
+        invalidateCache('crud:removed:*');
+
         res.status(200).json({
             success: true,
             message: `${removedAccount.accountType} restored successfully with original password.`,
@@ -430,6 +499,9 @@ exports.permanentDeleteAccount = async (req, res) => {
                 message: 'Removed account not found'
             });
         }
+
+        // Invalidate cached removed accounts list
+        invalidateCache('crud:removed:*');
 
         res.status(200).json({
             success: true,

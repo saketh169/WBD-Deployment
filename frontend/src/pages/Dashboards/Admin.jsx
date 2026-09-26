@@ -1,28 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import Chart from "chart.js/auto";
-import axios from '../../axios';
+import { uploadAvatar, deleteAvatar } from '../../services/profile/profileService';
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { useAuthContext } from "../../hooks/useAuthContext";
-import {
-  fetchUserStats,
-  fetchUserGrowth,
-  fetchMembershipRevenue,
-  fetchConsultationRevenue,
-  fetchSubscriptions,
-  fetchRevenueAnalytics,
-} from "../../redux/slices/analyticsSlice";
+import { fetchAllAdminAnalytics } from "../../redux/slices/analyticsSlice";
+import Chart from "chart.js/auto";
+import { getOrganizationsForVerification } from '../../services/verification/verifyService';
 
-// --- Mock Data & API Call Simulation ---
-const mockAdmin = {
-  name: "",
-  email: "",
-  phone: "",
-  profileImage: "/images/dummy_user.png",
-};
-
-// --- Organization Verification Table (real data) ---
 const getOrgStatusClass = (status) => {
   switch (status) {
     case 'Verified': return 'bg-green-100 text-green-800';
@@ -104,17 +89,18 @@ const GrowthChart = ({ data }) => {
   return <canvas ref={chartRef} className="h-96 w-full" />;
 };
 
-// --- Organization Table Component ---
 const OrganizationTable = ({ onViewAll }) => {
   const navigate = useNavigate();
   const [organizations, setOrganizations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    axios.get('/api/verify/organizations', { withCredentials: true })
+    getOrganizationsForVerification()
       .then(res => {
-        const orgData = res.data.data ? res.data.data : res.data;
-        setOrganizations(Array.isArray(orgData) ? orgData.slice(0, 5) : []);
+        if (!res.isError) {
+          const orgData = res.data ? res.data : res;
+          setOrganizations(Array.isArray(orgData) ? orgData.slice(0, 5) : []);
+        }
       })
       .catch(err => console.error('Failed to fetch organizations:', err))
       .finally(() => setIsLoading(false));
@@ -165,6 +151,101 @@ const OrganizationTable = ({ onViewAll }) => {
   );
 };
 
+const StatCard = ({ title, value, icon, color, desc }) => (
+  <div className="bg-white rounded-xl shadow p-5 border-l-4 border-gray-300 hover:shadow-md transition">
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-medium text-gray-500">{title}</p>
+        <h3 className={`text-3xl font-bold ${color}`}>{value}</h3>
+      </div>
+      <i className={`${icon} ${color} text-3xl opacity-70`}></i>
+    </div>
+    <p className="text-xs text-gray-400 mt-2">{desc}</p>
+  </div>
+);
+
+const RevenueBox = ({ title, value, isTotal = false }) => (
+  <div className={`flex items-center justify-between p-3 rounded-lg mb-3 ${isTotal ? 'bg-green-600 text-white font-bold' : 'bg-green-50'}`}>
+    <h3 className={`m-0 ${isTotal ? 'text-lg' : 'text-sm text-gray-700'}`}>{title}</h3>
+    <span className={`text-xl font-extrabold ${isTotal ? 'text-white' : 'text-green-700'}`}>
+      ₹{Number(value || 0).toFixed(2)}
+    </span>
+  </div>
+);
+
+const AdminProfileModal = ({
+  isOpen,
+  onClose,
+  profileImage,
+  user,
+  fileInputRef,
+  onRemovePhoto
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl max-w-2xl w-full relative overflow-hidden shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg z-10 transition"
+          aria-label="Close modal"
+        >
+          <i className="fas fa-times text-lg"></i>
+        </button>
+
+        <div className="flex items-center justify-center bg-gray-100 p-4 md:p-8 h-64 md:h-80 lg:h-96">
+          <img
+            src={profileImage}
+            alt="Admin Profile Full Size"
+            className="w-full h-full rounded-lg object-contain"
+          />
+        </div>
+
+        <div className="bg-white p-6 border-t border-gray-200">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">{user?.name || 'Admin'}</h2>
+          <p className="text-gray-600 mb-4">{user?.email || ''}</p>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => {
+                onClose();
+                fileInputRef.current?.click();
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-full font-medium hover:bg-green-700 transition"
+            >
+              <i className="fas fa-camera"></i> Change Photo
+            </button>
+            <button
+              onClick={onRemovePhoto}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-full font-medium hover:bg-red-700 transition"
+            >
+              <i className="fas fa-trash"></i> Remove Photo
+            </button>
+            <button
+              onClick={onClose}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-400 text-gray-700 rounded-full font-medium hover:bg-gray-100 transition"
+            >
+              <i className="fas fa-times"></i> Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const mockAdmin = {
+  name: "",
+  email: "",
+  phone: "",
+  profileImage: "/images/dummy_user.png",
+};
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -185,18 +266,7 @@ const AdminDashboard = () => {
   const [profileImage, setProfileImage] = useState(mockAdmin.profileImage);
   const [isUploading, setIsUploading] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
-  const fileInputRef = React.useRef(null);
-
-  // State for window width to force re-rendering on resize
-  // eslint-disable-next-line no-unused-vars
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-
-  // State for responsive breakpoint to force profile card re-rendering
-  const [currentBreakpoint, setCurrentBreakpoint] = useState(() => {
-    if (window.innerWidth >= 1024) return 'lg';
-    if (window.innerWidth >= 768) return 'md';
-    return 'sm';
-  });
+  const fileInputRef = useRef(null);
 
   const [calculatedData, setCalculatedData] = useState({
     monthWiseWithZeros: {},
@@ -207,44 +277,14 @@ const AdminDashboard = () => {
   const yearlyConRevenue = revenueAnalytics?.summary?.totalConsultationRevenue ?? (consultationRevenue.yearlyPeriods?.reduce((sum, period) => sum + period.revenue, 0) || 0);
   const totalRevenue = revenueAnalytics?.summary?.totalRevenue ?? (yearlySubRevenue + yearlyConRevenue);
 
-  // Fetch data on component mount
   useEffect(() => {
-    dispatch(fetchUserStats());
-    dispatch(fetchUserGrowth());
-    dispatch(fetchMembershipRevenue());
-    dispatch(fetchConsultationRevenue());
-    dispatch(fetchSubscriptions());
-    dispatch(fetchRevenueAnalytics());
+    dispatch(fetchAllAdminAnalytics());
   }, [dispatch]);
 
   useEffect(() => {
-    if (user?.profileImage) {
-      setProfileImage(user.profileImage);
-    } else {
-      setProfileImage(mockAdmin.profileImage);
-    }
+    setProfileImage(user?.profileImage || mockAdmin.profileImage);
   }, [user?.profileImage]);
 
-  // Handle window resize to force re-rendering for responsive behavior
-  useEffect(() => {
-    const handleResize = () => {
-      const newWidth = window.innerWidth;
-      setWindowWidth(newWidth);
-
-      // Update breakpoint for profile card re-rendering
-      let newBreakpoint;
-      if (newWidth >= 1024) newBreakpoint = 'lg';
-      else if (newWidth >= 768) newBreakpoint = 'md';
-      else newBreakpoint = 'sm';
-
-      setCurrentBreakpoint(newBreakpoint);
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Calculate membership revenue data like in Analytics.jsx
   useEffect(() => {
     if (subscriptions.length > 0) {
       const now = new Date();
@@ -261,7 +301,6 @@ const AdminDashboard = () => {
         return acc;
       }, {});
 
-      // Generate all months for last 6 months
       const allMonths = [];
       let currentMonth = new Date();
       for (let i = 0; i < 6; i++) {
@@ -277,11 +316,9 @@ const AdminDashboard = () => {
         return acc;
       }, {});
 
-      const monthTotal = Object.values(monthWiseWithZeros).reduce((sum, val) => sum + val, 0);
-
       setCalculatedData({
         monthWiseWithZeros,
-        monthTotal,
+        monthTotal: Object.values(monthWiseWithZeros).reduce((sum, val) => sum + val, 0),
       });
     }
   }, [subscriptions]);
@@ -295,38 +332,22 @@ const AdminDashboard = () => {
       const formData = new FormData();
       formData.append('profileImage', file);
 
-      let authToken = token;
-      if (!authToken) {
-        authToken = localStorage.getItem('authToken_admin');
-      }
-
+      const authToken = token || localStorage.getItem('authToken_admin');
       if (!authToken) {
         alert('Session expired. Please login again.');
         navigate('/signin?role=admin');
         return;
       }
 
-      const response = await axios.post('/api/uploadadmin', formData, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
-
-      const data = response.data;
-
-      if (data.success) {
+      const res = await uploadAvatar('admin', formData);
+      if (!res.isError && (res.success || res.data)) {
         const reader = new FileReader();
-        reader.onload = () => {
-          setProfileImage(reader.result);
-        };
+        reader.onload = () => setProfileImage(reader.result);
         reader.readAsDataURL(file);
-
         alert('Profile photo updated successfully!');
-        if (user?.id) {
-          window.location.reload();
-        }
+        if (user?.id) window.location.reload();
       } else {
-        alert(`Upload failed: ${data.message || 'Unknown error'}`);
+        alert(`Upload failed: ${res.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -337,36 +358,25 @@ const AdminDashboard = () => {
   };
 
   const handleRemoveProfilePhoto = async () => {
-    if (!window.confirm('Are you sure you want to remove your profile photo?')) {
-      return;
-    }
+    if (!window.confirm('Are you sure you want to remove your profile photo?')) return;
 
     setIsUploading(true);
     try {
-      let authToken = token;
-      if (!authToken) {
-        authToken = localStorage.getItem('authToken_admin');
-      }
-
+      const authToken = token || localStorage.getItem('authToken_admin');
       if (!authToken) {
         alert('Session expired. Please login again.');
         navigate('/signin?role=admin');
         return;
       }
 
-      const response = await axios.delete('/api/deleteadmin', {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
-
-      if (response.data.success) {
+      const res = await deleteAvatar('admin');
+      if (!res.isError && (res.success || res.data)) {
         setProfileImage(mockAdmin.profileImage);
         setShowImageModal(false);
         alert('Profile photo removed successfully!');
         window.location.reload();
       } else {
-        alert(`Removal failed: ${response.data.message || 'Unknown error'}`);
+        alert(`Removal failed: ${res.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Remove error:', error);
@@ -392,11 +402,7 @@ const AdminDashboard = () => {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div
-            key={`profile-card-${currentBreakpoint}`}
-            className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-green-600 flex flex-col items-center"
-            style={{ minHeight: currentBreakpoint === 'sm' ? '320px' : currentBreakpoint === 'md' ? '340px' : '360px' }}
-          >
+          <div className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-green-600 flex flex-col items-center min-h-[340px]">
             <h3 className="text-xl font-bold text-teal-900 mb-5 text-center w-full">Admin Profile</h3>
 
             <div className="relative mb-4">
@@ -462,9 +468,7 @@ const AdminDashboard = () => {
             </div>
 
             <div className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-green-700">
-              <h3 className="text-xl font-bold text-teal-900 mb-5 border-b pb-3">
-                Revenue Overview (YTD)
-              </h3>
+              <h3 className="text-xl font-bold text-teal-900 mb-5 border-b pb-3">Revenue Overview (YTD)</h3>
               <RevenueBox title="Subscriptions Revenue" value={yearlySubRevenue} />
               <RevenueBox title="Consultations Revenue (Admin Share)" value={yearlyConRevenue} />
               <RevenueBox title="Total Revenue" value={totalRevenue} isTotal={true} />
@@ -473,9 +477,7 @@ const AdminDashboard = () => {
         </div>
 
         <div className="mt-8 bg-white rounded-2xl shadow-lg p-6 border-t-4 border-blue-600">
-          <h3 className="text-xl font-bold text-teal-900 mb-5">
-            Platform Growth Statistics
-          </h3>
+          <h3 className="text-xl font-bold text-teal-900 mb-5">Platform Growth Statistics</h3>
           {isLoading ? (
             <div className="h-64 md:h-80 lg:h-96 flex items-center justify-center">
               <div className="text-center">
@@ -503,96 +505,22 @@ const AdminDashboard = () => {
           )}
         </div>
 
-
         <div className="mt-8 bg-white rounded-2xl shadow-lg p-6 border-t-4 border-amber-500">
-          <h3 className="text-xl font-bold text-teal-900 mb-5">
-            Recent Organization Verifications
-          </h3>
+          <h3 className="text-xl font-bold text-teal-900 mb-5">Recent Organization Verifications</h3>
           <OrganizationTable onViewAll={() => { navigate('/admin/verify-organizations'); window.scrollTo(0, 0); }} />
         </div>
 
-        {showImageModal && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm"
-            onClick={() => setShowImageModal(false)}
-          >
-            <div
-              className="bg-white rounded-2xl max-w-2xl w-full relative overflow-hidden shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                onClick={() => setShowImageModal(false)}
-                className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg z-10 transition"
-                aria-label="Close modal"
-              >
-                <i className="fas fa-times text-lg"></i>
-              </button>
-
-              <div className="flex items-center justify-center bg-gray-100 p-4 md:p-8 h-64 md:h-80 lg:h-96">
-                <img
-                  src={profileImage}
-                  alt="Admin Profile Full Size"
-                  className="w-full h-full rounded-lg object-contain"
-                  onError={() => setProfileImage(mockAdmin.profileImage)}
-                />
-              </div>
-
-              <div className="bg-white p-6 border-t border-gray-200">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">{user?.name || mockAdmin.name}</h2>
-                <p className="text-gray-600 mb-4">{user?.email || mockAdmin.email}</p>
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    onClick={() => {
-                      setShowImageModal(false);
-                      fileInputRef.current?.click();
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-full font-medium hover:bg-green-700 transition"
-                  >
-                    <i className="fas fa-camera"></i> Change Photo
-                  </button>
-                  <button
-                    onClick={handleRemoveProfilePhoto}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-full font-medium hover:bg-red-700 transition"
-                  >
-                    <i className="fas fa-trash"></i> Remove Photo
-                  </button>
-                  <button
-                    onClick={() => setShowImageModal(false)}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-400 text-gray-700 rounded-full font-medium hover:bg-gray-100 transition"
-                  >
-                    <i className="fas fa-times"></i> Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <AdminProfileModal
+          isOpen={showImageModal}
+          onClose={() => setShowImageModal(false)}
+          profileImage={profileImage}
+          user={user || mockAdmin}
+          fileInputRef={fileInputRef}
+          onRemovePhoto={handleRemoveProfilePhoto}
+        />
       </div>
     </div>
   );
 };
-
-// --- Helper Components ---
-const StatCard = ({ title, value, icon, color, desc }) => (
-  <div className="bg-white rounded-xl shadow p-5 border-l-4 border-gray-300 hover:shadow-md transition">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium text-gray-500">{title}</p>
-        <h3 className={`text-3xl font-bold ${color}`}>{value}</h3>
-      </div>
-      <i className={`${icon} ${color} text-3xl opacity-70`}></i>
-    </div>
-    <p className="text-xs text-gray-400 mt-2">{desc}</p>
-  </div>
-);
-
-const RevenueBox = ({ title, value, isTotal = false }) => (
-  <div className={`flex items-center justify-between p-3 rounded-lg mb-3 ${isTotal ? 'bg-green-600 text-white font-bold' : 'bg-green-50'}`}>
-    <h3 className={`m-0 ${isTotal ? 'text-lg' : 'text-sm text-gray-700'}`}>{title}</h3>
-    <span className={`text-xl font-extrabold ${isTotal ? 'text-white' : 'text-green-700'}`}>
-      ₹{value.toFixed(2)}
-    </span>
-  </div>
-);
 
 export default AdminDashboard;

@@ -18,7 +18,8 @@ router.use(authenticateJWT);
  * /api/bookings/check-limits:
  *   post:
  *     tags: ['Bookings']
- *     summary: Check booking limits based on subscription plan
+ *     summary: Check booking limits (before booking)
+ *     description: Verifies if user has available bookings within their subscription plan and checks advance booking day restrictions
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -132,7 +133,8 @@ router.post("/check-limits", async (req, res) => {
  * /api/bookings/create:
  *   post:
  *     tags: ['Bookings']
- *     summary: Create new consultation booking
+ *     summary: Create consultation booking (client to dietitian)
+ *     description: Client creates a consultation booking with a dietitian with validated subscription limits and no scheduling conflicts
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -191,21 +193,63 @@ router.post("/check-limits", async (req, res) => {
  *       403:
  *         description: Subscription limit reached
  */
-// POST /api/bookings/create (with subscription limit check)
-router.post("/payment/order", checkBookingLimit, bookingController.createBookingPaymentOrder);
-router.post("/create", checkBookingLimit, bookingController.createBooking);
+/**
+ * @swagger
+ * /api/bookings/payment/order:
+ *   post:
+ *     tags: ['Bookings']
+ *     summary: Create Razorpay payment order for consultation
+ *     description: Creates an order with Razorpay for consultation booking payment
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *               - dietitianId
+ *             properties:
+ *               amount:
+ *                 type: number
+ *               currency:
+ *                 type: string
+ *               dietitianId:
+ *                 type: string
+ *               date:
+ *                 type: string
+ *               time:
+ *                 type: string
+ *               consultationType:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Order created successfully
+ *       400:
+ *         description: Invalid amount
+ *       500:
+ *         description: Failed to create order
+ */
+// POST /api/bookings/payment/order
+router.post("/payment/order", bookingController.createBookingPaymentOrder);
 
-// Redis Booking Concurency Locks
+// Slot Holding & Double-Booking Prevention Routes (10-min Redis hold)
 router.post("/hold", bookingController.holdSlot);
 router.post("/release", bookingController.releaseSlot);
-router.get("/dietitian/:dietitianId/holds", bookingController.getDietitianHolds);
+router.get("/holds/:dietitianId", bookingController.getDietitianHolds);
+
+// POST /api/bookings/create (with subscription limit check)
+router.post("/create", checkBookingLimit, bookingController.createBooking);
 
 /**
  * @swagger
  * /api/bookings/user/{userId}:
  *   get:
  *     tags: ['Bookings']
- *     summary: Get all bookings for a user
+ *     summary: Retrieve user's bookings
+ *     description: Client retrieves all their consultation bookings with dietitians
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -226,7 +270,8 @@ router.get("/user/:userId", bookingController.getUserBookings);
  * /api/bookings/user/{userId}/booked-slots:
  *   get:
  *     tags: ['Bookings']
- *     summary: Get user's booked time slots
+ *     summary: Get user's booked time slots on a date
+ *     description: Retrieve specific time slots a user has already booked on a given date to prevent double-booking
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -254,7 +299,8 @@ router.get("/user/:userId/booked-slots", bookingController.getUserBookedSlots);
  * /api/bookings/dietitian/{dietitianId}:
  *   get:
  *     tags: ['Bookings']
- *     summary: Get all bookings for a dietitian
+ *     summary: Retrieve dietitian's consultation bookings
+ *     description: Dietitian views all consultation bookings scheduled with them across all clients
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -275,7 +321,8 @@ router.get("/dietitian/:dietitianId", bookingController.getDietitianBookings);
  * /api/bookings/dietitian/{dietitianId}/booked-slots:
  *   get:
  *     tags: ['Bookings']
- *     summary: Get dietitian's available and booked slots
+ *     summary: Get dietitian's booked time slots on a date
+ *     description: Check dietitian's available and booked time slots for a specific date to show clients available appointment times
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -307,18 +354,13 @@ router.get(
   bookingController.getBookedSlots
 );
 
-// Create or fetch meeting link for an online consultation
-router.post("/:bookingId/meeting-link", bookingController.createMeetingLink);
-
-// Download calendar invite (.ics)
-router.get("/:bookingId/ics", bookingController.getCalendarInvite);
-
 /**
  * @swagger
  * /api/bookings/{bookingId}:
  *   get:
  *     tags: ['Bookings']
- *     summary: Get specific booking details
+ *     summary: Retrieve booking details by ID
+ *     description: Get full details of a specific consultation booking
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -341,7 +383,8 @@ router.get("/:bookingId", bookingController.getBookingById);
  * /api/bookings/{bookingId}/status:
  *   patch:
  *     tags: ['Bookings']
- *     summary: Update booking status
+ *     summary: Update booking status (dietitian action)
+ *     description: Dietitian updates booking status (confirmed, completed, cancelled, no-show) throughout the consultation lifecycle
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -372,7 +415,8 @@ router.patch("/:bookingId/status", bookingController.updateBookingStatus);
  * /api/bookings/{bookingId}:
  *   delete:
  *     tags: ['Bookings']
- *     summary: Cancel a booking
+ *     summary: Cancel a booking (client)
+ *     description: Client cancels their consultation booking reservation
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -395,7 +439,8 @@ router.delete("/:bookingId", bookingController.cancelBooking);
  * /api/bookings/{bookingId}/reschedule:
  *   patch:
  *     tags: ['Bookings']
- *     summary: Reschedule a booking to new date/time
+ *     summary: Reschedule booking (client)
+ *     description: Client reschedules their consultation booking to a different date/time with conflict validation
  *     security:
  *       - BearerAuth: []
  *     parameters:

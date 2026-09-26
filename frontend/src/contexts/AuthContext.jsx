@@ -1,6 +1,8 @@
-import React, { createContext, useState, useEffect, useRef } from 'react';
-import axios from '../axios';
+import React, { createContext, useState, useEffect } from 'react';
+import { loginUser } from '../services/auth/authService';
+import { getProfileByRole, clearProfileCache } from '../services/profile/profileService';
 import { isTokenExpired } from '../utils/jwtUtils';
+
 
 // Create Auth Context
 const AuthContext = createContext();
@@ -91,51 +93,31 @@ export const AuthProvider = ({ children, currentRole }) => {
     };
 
     initializeAuth();
-  }, [currentRole]); // Re-run when currentRole changes
-
-  // Sync profile image to role-specific localStorage when user data changes
-  useEffect(() => {
-    // Don't store profile images in localStorage as they exceed quota limits
-    // Profile images should be fetched from server when needed
-    return;
-  }, [user?.profileImage, role]);
+  }, [currentRole]);
 
   // Fetch user details from API
   const fetchUserDetails = async (token, role) => {
     try {
-      // Role-specific API endpoints
-      const apiEndpoints = {
-        user: '/api/getuserdetails',
-        dietitian: '/api/getdietitiandetails',
-        organization: '/api/getorganizationdetails',
-        employee: '/api/getorganizationdetails',
-        admin: '/api/getadmindetails'
-      };
+      const res = await getProfileByRole(role);
+      // After middleware fix: business fields live in res.data only
+      const resData = res.data || {};
 
-      const endpoint = apiEndpoints[role] || '/api/getuserdetails';
-
-      const response = await axios.get(endpoint, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.data.success) {
+      if (!res.isError && (res.success || resData.id || resData.email)) {
         const userData = {
-          id: response.data.id,
-          name: response.data.name,
-          email: response.data.email,
-          phone: response.data.phone,
-          age: response.data.age,
-          address: response.data.address,
-          profileImage: response.data.profileImage,
-          gender: response.data.gender,
+          id: resData.id,
+          name: resData.name,
+          email: resData.email,
+          phone: resData.phone,
+          age: resData.age,
+          address: resData.address,
+          profileImage: resData.profileImage,
+          gender: resData.gender,
           // Organization-specific fields
-          org_name: response.data.org_name,
+          org_name: resData.org_name,
           // Dietitian-specific fields
-          specialization: response.data.specialization,
-          experience: response.data.experience,
-          licenseNumber: response.data.licenseNumber,
+          specialization: resData.specialization,
+          experience: resData.experience,
+          licenseNumber: resData.licenseNumber,
         };
         setUser(userData);
 
@@ -166,11 +148,10 @@ export const AuthProvider = ({ children, currentRole }) => {
         ...additionalData,
       };
 
-      const apiRoute = `/api/signin/${role}`;
-      const response = await axios.post(apiRoute, formData);
-      const data = response.data;
+      const res = await loginUser(role, formData);
+      const data = res.data || res;
 
-      if (data.token) {
+      if (!res.isError && data.token) {
         const loginRole = data.role || role;
 
         // Clear all previous JWT sessions for this role completely
@@ -219,6 +200,7 @@ export const AuthProvider = ({ children, currentRole }) => {
       localStorage.removeItem(`authToken_${logoutRole}`);
       localStorage.removeItem(`authUser_${logoutRole}`);
       localStorage.removeItem(`profileImage_${logoutRole}`);
+      clearProfileCache(logoutRole);
     }
 
     if (role === logoutRole || !role) {
@@ -226,6 +208,7 @@ export const AuthProvider = ({ children, currentRole }) => {
       setRole(null);
       setUser(null);
       setIsAuthenticated(false);
+      clearProfileCache();
     }
   };
 
@@ -234,8 +217,10 @@ export const AuthProvider = ({ children, currentRole }) => {
     setUser(newUserData);
     if (role) {
       localStorage.setItem(`authUser_${role}`, JSON.stringify(newUserData));
+      clearProfileCache(role);
     }
   };
+
 
   const value = {
     user,
@@ -254,6 +239,14 @@ export const AuthProvider = ({ children, currentRole }) => {
       {children}
     </AuthContext.Provider>
   );
+};
+
+export const useAuthContext = () => {
+  const context = React.useContext(AuthContext);
+  return context || {
+    user: null, token: null, role: null, isAuthenticated: false, loading: false,
+    login: async () => {}, logout: () => {}, updateUser: () => {}, fetchUserDetails: async () => {}
+  };
 };
 
 export default AuthContext;

@@ -71,7 +71,7 @@ exports.resetPasswordController = async (req, res) => {
 
     try {
         // Verify OTP first
-        const otpVerification = otpService.verifyOTP(email, otp);
+        const otpVerification = await otpService.verifyOTP(email, otp);
 
         if (!otpVerification.success) {
             return res.status(400).json({ message: otpVerification.message });

@@ -121,6 +121,7 @@ const getHealthReports = async (req, res) => {
         if (dietitianId) query.dietitianId = dietitianId;
 
         const reports = await HealthReport.find(query)
+            .select('-uploadedFiles.data')
             .sort({ createdAt: -1 });
 
         res.json({
@@ -146,6 +147,7 @@ const getDietitianHealthReports = async (req, res) => {
         if (clientId) query.clientId = clientId;
 
         const reports = await HealthReport.find(query)
+            .select('-uploadedFiles.data')
             .sort({ createdAt: -1 });
 
         res.json({
@@ -172,6 +174,7 @@ const getClientHealthReports = async (req, res) => {
         if (dietitianId) query.dietitianId = dietitianId;
 
         const reports = await HealthReport.find(query)
+            .select('-uploadedFiles.data')
             .sort({ createdAt: -1 });
 
         res.json({

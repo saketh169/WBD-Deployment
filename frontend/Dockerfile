@@ -1,31 +1,34 @@
-# Build stage
-FROM node:20-alpine AS build
+# ==========================================
+# STAGE 1: Frontend Build Stage
+# ==========================================
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+COPY package.json package-lock.json* ./
 
-# Install all dependencies (including devDependencies for build)
-RUN npm cache clean --force && npm ci --legacy-peer-deps
+# Install all dependencies (including devDependencies required for Vite build)
+RUN npm ci || npm install
 
-# Copy source code and env file
-COPY .env* ./
-COPY . .
+COPY . ./
 
-# Build the production bundle
+# Build production bundle (produces static files in /app/dist)
 RUN npm run build
 
-# Production stage — serve with nginx
-FROM nginx:alpine
+# ==========================================
+# STAGE 2: Ultra-Lightweight Nginx Web Server (~25MB)
+# ==========================================
+FROM nginx:alpine AS runner
 
-# Copy built files
-COPY --from=build /app/dist /usr/share/nginx/html
+# Remove default nginx static assets
+RUN rm -rf /usr/share/nginx/html/*
 
-# Copy custom nginx config
+# Copy built production assets from builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy optimized nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose port 80
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]

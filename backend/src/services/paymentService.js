@@ -1,7 +1,6 @@
 const Payment = require('../models/paymentModel');
 const crypto = require('crypto');
 const { sendPaymentCancellationEmail } = require('./emailService');
-const razorpayService = require('./razorpayService');
 
 class PaymentService {
   /**
@@ -23,48 +22,18 @@ class PaymentService {
    */
   async createPayment(paymentData) {
     try {
-      if (!razorpayService.isConfigured()) {
-        return {
-          success: false,
-          error: 'Payment gateway is not configured. Please contact support.'
-        };
-      }
-
-      const amountInPaise = Math.round(Number(paymentData.amount) * 100);
-      if (!Number.isFinite(amountInPaise) || amountInPaise <= 0) {
-        return { success: false, error: 'Invalid payment amount' };
-      }
-
-      const razorpayOrder = await razorpayService.createOrder({
-        amount: amountInPaise,
-        currency: 'INR',
-        receipt: this.generateOrderId(),
-        notes: {
-          userId: String(paymentData.userId),
-          planType: paymentData.planType,
-          billingCycle: paymentData.billingCycle
-        }
-      });
+      const transactionId = this.generateTransactionId();
+      const orderId = this.generateOrderId();
 
       const payment = new Payment({
         ...paymentData,
-        transactionId: this.generateTransactionId(),
-        orderId: razorpayOrder.id,
-        paymentStatus: 'pending',
-        paymentGatewayResponse: {
-          provider: 'razorpay',
-          orderCreatedAt: new Date(),
-          order: razorpayOrder
-        }
+        transactionId,
+        orderId,
+        paymentStatus: 'pending'
       });
 
       await payment.save();
-      return {
-        success: true,
-        payment,
-        razorpayOrder,
-        amountInPaise
-      };
+      return { success: true, payment };
     } catch (error) {
       console.error('Error creating payment:', error);
       return { success: false, error: error.message };
@@ -74,69 +43,44 @@ class PaymentService {
   /**
    * Process payment (simulate payment gateway)
    */
-  async processPayment(paymentId, paymentDetails = {}) {
+  async processPayment(paymentId, paymentDetails) {
     try {
       const payment = await Payment.findById(paymentId);
       if (!payment) {
         return { success: false, error: 'Payment not found' };
       }
 
-      const {
-        razorpayOrderId,
-        razorpayPaymentId,
-        razorpaySignature,
-        paymentMethod
-      } = paymentDetails;
-
-      if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
-        return { success: false, error: 'Missing Razorpay verification fields' };
-      }
-
-      if (payment.orderId !== razorpayOrderId) {
-        return { success: false, error: 'Razorpay order mismatch for this payment' };
-      }
-
-      const isSignatureValid = razorpayService.verifySignature({
-        orderId: razorpayOrderId,
-        paymentId: razorpayPaymentId,
-        signature: razorpaySignature
-      });
-
-      if (!isSignatureValid) {
-        payment.paymentStatus = 'failed';
-        payment.failureReason = 'Invalid Razorpay signature';
-        await payment.save();
-
-        return { success: false, error: 'Payment signature verification failed' };
-      }
-
       // Update payment status to processing
       payment.paymentStatus = 'processing';
-      payment.transactionId = razorpayPaymentId;
-
-      if (paymentMethod) {
-        payment.paymentMethod = paymentMethod;
-      }
-
-      payment.paymentGatewayResponse = {
-        ...(payment.paymentGatewayResponse || {}),
-        provider: 'razorpay',
-        razorpayOrderId,
-        razorpayPaymentId,
-        signatureVerified: true,
-        verifiedAt: new Date()
-      };
-
       await payment.save();
 
-      // Payment successful - activate subscription
-      await payment.activateSubscription();
+      // Simulate payment processing delay (in real scenario, this would be payment gateway API call)
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      return {
-        success: true,
-        payment,
-        message: 'Payment processed successfully'
-      };
+      // Simulate 95% success rate (for testing purposes)
+      const isSuccess = Math.random() > 0.05;
+
+      if (isSuccess) {
+        // Payment successful - activate subscription
+        await payment.activateSubscription();
+        
+        return {
+          success: true,
+          payment,
+          message: 'Payment processed successfully'
+        };
+      } else {
+        // Payment failed
+        payment.paymentStatus = 'failed';
+        payment.failureReason = 'Payment declined by bank';
+        await payment.save();
+        
+        return {
+          success: false,
+          error: 'Payment failed',
+          payment
+        };
+      }
     } catch (error) {
       console.error('Error processing payment:', error);
       return { success: false, error: error.message };

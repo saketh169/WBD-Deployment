@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Chart from "chart.js/auto";
-import axios from '../../axios';
+import { uploadAvatar, deleteAvatar } from '../../services/profile/profileService';
+import { getUserDashboardData } from '../../services/misc/miscService';
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { io } from 'socket.io-client';
@@ -116,17 +117,12 @@ const UserDashboard = () => {
 
     try {
       if (showLoading) setIsLoadingDashboard(true);
-      const response = await axios.get(`/api/analytics/user/${user.id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      const data = response.data;
+      const res = await getUserDashboardData(user.id);
 
-      if (data.success) {
-        setNotifications(data.data.notifications || []);
-        setActivities(data.data.activities || []);
+      if (!res.isError && (res.success || res.data)) {
+        const d = res.data || res;
+        setNotifications(d.notifications || []);
+        setActivities(d.activities || []);
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -137,7 +133,7 @@ const UserDashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [user?.id, token, fetchDashboardData]);
+  }, [fetchDashboardData]);
 
   // Real-time WebSocket listener
   useEffect(() => {
@@ -148,24 +144,20 @@ const UserDashboard = () => {
     });
 
     socket.on('connect', () => {
-      console.log('User connected to socket room');
-      socket.emit('register_dietitian', user.id); // Reusing register_dietitian room logic on backend or user specific
-      // Backend socket.js has io.to(`user_${userId}`) logic now
-      socket.join?.(`user_${user.id}`); // If socket supports joining client side or just emit register
+      socket.emit('register_dietitian', user.id);
+      socket.join?.(`user_${user.id}`);
     });
 
-    socket.on('booking_updated', (data) => {
-      console.log('Real-time booking update for user:', data);
+    socket.on('booking_updated', () => {
       fetchDashboardData(false);
     });
 
-    socket.on('new_booking', (data) => {
-      console.log('New booking event for user session');
+    socket.on('new_booking', () => {
       fetchDashboardData(false);
     });
 
     return () => socket.disconnect();
-  }, [user?.id, token, fetchDashboardData]);
+  }, [user?.id, token]);
 
   // Set profile image from user data when available
   useEffect(() => {
@@ -198,15 +190,9 @@ const UserDashboard = () => {
         return;
       }
 
-      const response = await axios.post('/api/uploaduser', formData, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
+      const res = await uploadAvatar('user', formData);
 
-      const data = response.data;
-
-      if (data.success) {
+      if (!res.isError && (res.success || res.data)) {
         const reader = new FileReader();
         reader.onload = () => {
           setProfileImage(reader.result);
@@ -218,7 +204,7 @@ const UserDashboard = () => {
           window.location.reload();
         }
       } else {
-        alert(`Upload failed: ${data.message || 'Unknown error'}`);
+        alert(`Upload failed: ${res.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -246,19 +232,15 @@ const UserDashboard = () => {
         return;
       }
 
-      const response = await axios.delete('/api/deleteuser', {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
+      const res = await deleteAvatar('user');
 
-      if (response.data.success) {
+      if (!res.isError && (res.success || res.data)) {
         setProfileImage(mockUser.profileImage);
         setShowImageModal(false);
         alert('Profile photo removed successfully!');
         window.location.reload();
       } else {
-        alert(`Removal failed: ${response.data.message || 'Unknown error'}`);
+        alert(`Removal failed: ${res.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Remove error:', error);

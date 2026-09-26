@@ -556,15 +556,6 @@ async function updateUserProfile(req, res) {
 
         await user.save();
 
-        // Clear dietitian cache if a dietitian updates their profile
-        if (userRole.toLowerCase() === 'dietitian') {
-            const { invalidateCache } = require('../utils/redisClient');
-            try {
-                await invalidateCache('dietitians:*');
-                await invalidateCache('public:dietitians:*');
-            } catch(e) { console.error('Cache invalidation failed', e); }
-        }
-
         // Prepare updated response
         const response = {
             success: true,

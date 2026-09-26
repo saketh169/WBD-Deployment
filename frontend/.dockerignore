@@ -1,6 +1,15 @@
 node_modules
 dist
-.env
+build
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 .git
 .gitignore
+.env
+.env.*
+!.env.example
+coverage
 *.md
+.DS_Store
+Thumbs.db

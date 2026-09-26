@@ -1,65 +1,20 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
-import axios from '../../axios';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  getDietitiansForVerification, approveDietitianWithLog, disapproveDietitianWithLog,
+  finalApproveDietitianWithLog, finalDisapproveDietitianWithLog, uploadDietitianReport, getDietitianFile
+} from '../../services/verification/verifyService';
+
 const FIELD_MAP = {
-  resume: {
-    name: 'Resume',
-    ext: 'pdf',
-    icon: 'fas fa-file-alt',
-    isImage: false
-  },
-  degreeCertificate: {
-    name: 'Degree Certificate',
-    ext: 'pdf',
-    icon: 'fas fa-graduation-cap',
-    isImage: false
-  },
-  licenseDocument: {
-    name: 'License Document',
-    ext: 'pdf',
-    icon: 'fas fa-id-card',
-    isImage: false
-  },
-  idProof: {
-    name: 'ID Proof',
-    ext: 'pdf',
-    icon: 'fas fa-user',
-    isImage: true
-  },
-  experienceCertificates: {
-    name: 'Experience Certificates',
-    ext: 'pdf',
-    icon: 'fas fa-briefcase',
-    isImage: false,
-    optional: true
-  },
-  specializationCertifications: {
-    name: 'Specialization Certifications',
-    ext: 'pdf',
-    icon: 'fas fa-certificate',
-    isImage: false,
-    optional: true
-  },
-  internshipCertificate: {
-    name: 'Internship Certificate',
-    ext: 'pdf',
-    icon: 'fas fa-certificate',
-    isImage: false,
-    optional: true
-  },
-  researchPapers: {
-    name: 'Research Papers',
-    ext: 'pdf',
-    icon: 'fas fa-book',
-    isImage: false,
-    optional: true
-  },
-  finalReport: {
-    name: 'Final Report',
-    ext: 'pdf',
-    icon: 'fas fa-file-alt',
-    isImage: false
-  }
-}
+  resume: { name: 'Resume', ext: 'pdf', icon: 'fas fa-file-alt', isImage: false },
+  degreeCertificate: { name: 'Degree Certificate', ext: 'pdf', icon: 'fas fa-graduation-cap', isImage: false },
+  licenseDocument: { name: 'License Document', ext: 'pdf', icon: 'fas fa-id-card', isImage: false },
+  idProof: { name: 'ID Proof', ext: 'pdf', icon: 'fas fa-user', isImage: true },
+  experienceCertificates: { name: 'Experience Certificates', ext: 'pdf', icon: 'fas fa-briefcase', isImage: false, optional: true },
+  specializationCertifications: { name: 'Specialization Certifications', ext: 'pdf', icon: 'fas fa-certificate', isImage: false, optional: true },
+  internshipCertificate: { name: 'Internship Certificate', ext: 'pdf', icon: 'fas fa-certificate', isImage: false, optional: true },
+  researchPapers: { name: 'Research Papers', ext: 'pdf', icon: 'fas fa-book', isImage: false, optional: true },
+  finalReport: { name: 'Final Report', ext: 'pdf', icon: 'fas fa-file-alt', isImage: false }
+};
 
 const STATUS_ICONS = {
   'Not Received': 'hourglass-half',
@@ -68,261 +23,271 @@ const STATUS_ICONS = {
   Rejected: 'times-circle',
   Pending: 'hourglass-half',
   'Not Uploaded': 'minus-circle'
-}
-// --- Utility Components (Simplified Notifications & Modals) ---
-// Removed as they are now inlined in the JSX
+};
+
+const VerificationNotification = ({ notification, setNotification }) => {
+  if (!notification) return null;
+  return (
+    <div className={`fixed top-6 right-6 z-50 p-4 rounded-2xl shadow-xl border-l-4 w-full max-w-md ${notification.type === 'success' ? 'bg-emerald-50 border-emerald-400 text-emerald-800' : notification.type === 'error' ? 'bg-red-50 border-red-400 text-red-800' : 'bg-blue-50 border-blue-400 text-blue-800'}`}>
+      <div className="flex items-start justify-between">
+        <div className="flex items-start">
+          <i className={`text-lg mr-3 mt-1 fas ${notification.type === 'success' ? 'fa-check-circle text-emerald-600' : notification.type === 'error' ? 'fa-exclamation-triangle text-red-600' : 'fa-info-circle text-blue-600'}`} />
+          <p className="font-semibold text-sm">{notification.message}</p>
+        </div>
+        <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-600"><i className="fas fa-times text-sm" /></button>
+      </div>
+    </div>
+  );
+};
+
+const VerificationConfirmModal = ({ modal, setModal }) => {
+  if (!modal.active) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full border border-slate-200 text-center">
+        <div className="w-16 h-16 bg-amber-100 rounded-2xl mx-auto mb-4 flex items-center justify-center"><i className="fas fa-question text-2xl text-amber-600" /></div>
+        <h4 className="text-2xl font-bold text-slate-800 mb-2">Confirm Action</h4>
+        <p className="text-slate-600 mb-8" dangerouslySetInnerHTML={{ __html: modal.message }} />
+        <div className="flex gap-3">
+          <button className="flex-1 bg-slate-100 text-slate-700 py-3 rounded-2xl font-semibold" onClick={() => setModal({ active: false, message: '', onConfirm: () => {} })}>Cancel</button>
+          <button className="flex-1 bg-linear-to-r from-emerald-500 to-teal-600 text-white py-3 rounded-2xl font-semibold" onClick={modal.onConfirm}>Confirm</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const VerificationFileViewer = ({ fileViewer, closeFileViewer }) => {
+  if (!fileViewer.active) return null;
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-full lg:max-w-6xl w-full flex flex-col overflow-hidden h-[600px]">
+        <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+          <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><i className="fas fa-file-alt text-emerald-600" />Document Viewer</h3>
+          <button onClick={closeFileViewer} className="p-2 text-slate-400 hover:text-red-500"><i className="fas fa-times text-xl" /></button>
+        </div>
+        <div className="grow p-4 overflow-y-auto bg-slate-50">
+          {fileViewer.file?.mime?.startsWith('image/') ? (
+            <img src={fileViewer.file.dataUrl} alt="Document" className="w-full h-full object-contain mx-auto rounded-xl" />
+          ) : (
+            <iframe src={fileViewer.file?.dataUrl} title="Document Viewer" className="w-full h-full border-none" allow="fullscreen" />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DietitianDocumentDetails = ({
+  dietitian: d, viewFile, downloadFile, verifyDocument, rejectDocument,
+  handleFileUpload, finalVerify, finalReject
+}) => (
+  <div className="bg-linear-to-r from-slate-50 to-emerald-50/30 p-8 border-t border-slate-200">
+    <div className="max-w-6xl mx-auto">
+      <div className="flex items-center mb-8">
+        <div className="p-3 bg-emerald-100 rounded-2xl mr-4"><i className="fas fa-folder-open text-emerald-600 text-xl" /></div>
+        <div>
+          <h3 className="text-xl font-bold text-slate-800">Document Verification</h3>
+          <p className="text-slate-600">Review and verify documents for {d.name}</p>
+        </div>
+      </div>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
+        {Object.keys(FIELD_MAP).map(field => {
+          const status = d.verificationStatus[field] || (field === 'finalReport' ? 'Not Received' : 'Not Uploaded');
+          const fileExists = ['Received', 'Pending', 'Verified', 'Rejected'].includes(status);
+          const fieldInfo = FIELD_MAP[field];
+
+          return (
+            <div key={field} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-lg transition-all">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center">
+                  <div className={`p-3 rounded-xl mr-4 ${status === 'Verified' ? 'bg-emerald-100 text-emerald-600' : status === 'Rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+                    <i className={`${fieldInfo.icon} text-lg`} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-lg">{fieldInfo.name}</h4>
+                    {fieldInfo.optional && <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">Optional</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className={`px-3 py-1 rounded-xl text-xs font-bold ${status === 'Verified' ? 'bg-emerald-100 text-emerald-800' : status === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                  {status}
+                </span>
+                {fileExists && (
+                  <div className="flex gap-2">
+                    <button className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl" onClick={e => { e.preventDefault(); viewFile(d._id, field); }} title="View"><i className="fas fa-eye" /></button>
+                    <button className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl" onClick={e => { e.preventDefault(); downloadFile(d._id, field, fieldInfo.name, fieldInfo.ext); }} title="Download"><i className="fas fa-download" /></button>
+                  </div>
+                )}
+              </div>
+              {status === 'Pending' && field !== 'finalReport' && (
+                <div className="flex gap-3 mt-4">
+                  <button className="flex-1 bg-emerald-600 text-white py-1.5 px-3 rounded-xl font-semibold text-sm hover:bg-emerald-700" onClick={() => verifyDocument(d._id, field)}><i className="fas fa-check mr-1" />Verify</button>
+                  <button className="flex-1 bg-red-600 text-white py-1.5 px-3 rounded-xl font-semibold text-sm hover:bg-red-700" onClick={() => rejectDocument(d._id, field)}><i className="fas fa-times mr-1" />Reject</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-200 mb-6">
+        <h4 className="text-xl font-bold text-slate-800 mb-1">Upload Final Verification Report</h4>
+        <p className="text-slate-600 text-sm mb-4">PDF files only. Required before final approval or rejection.</p>
+        <input type="file" accept=".pdf" onChange={e => handleFileUpload(d._id, e.target.files[0])} className="w-full p-4 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-slate-100" />
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <button className="flex-1 bg-emerald-600 text-white py-3 px-6 rounded-2xl font-bold hover:bg-emerald-700 disabled:opacity-50" onClick={() => finalVerify(d._id)} disabled={!['Received', 'Verified', 'Rejected'].includes(d.verificationStatus.finalReport)}>
+          <i className="fas fa-check-circle mr-2" />Final Approve
+        </button>
+        <button className="flex-1 bg-red-600 text-white py-3 px-6 rounded-2xl font-bold hover:bg-red-700 disabled:opacity-50" onClick={() => finalReject(d._id)} disabled={!['Received', 'Verified', 'Rejected'].includes(d.verificationStatus.finalReport)}>
+          <i className="fas fa-times-circle mr-2" />Final Reject
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 const DietitianVerify = () => {
-  const [dietitians, setDietitians] = useState([])
-  const [expandedRow, setExpandedRow] = useState(null)
-  const [notification, setNotification] = useState(null)
-  const [modal, setModal] = useState({
-    active: false,
-    message: '',
-    onConfirm: () => { }
-  })
-  const [fileViewer, setFileViewer] = useState({ active: false, file: null })
-  const [currentPage, setCurrentPage] = useState(1)
-  const ITEMS_PER_PAGE = 10
-  const tableRef = useRef(null)
+  const [dietitians, setDietitians] = useState([]);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const [modal, setModal] = useState({ active: false, message: '', onConfirm: () => {} });
+  const [fileViewer, setFileViewer] = useState({ active: false, file: null });
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  const tableRef = useRef(null);
 
   const handlePageChange = (page) => {
-    setCurrentPage(page)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-  const handleNotify = (
-    message,
-    type = 'info',
-    duration = 5000,
-    isFinalReject = false
-  ) => {
-    setNotification({ message, type, isFinalReject })
-    setTimeout(() => setNotification(null), duration)
-  }
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-  const closeFileViewer = () => setFileViewer({ active: false, file: null })
-  const toggleDocumentDetails = rowId =>
-    setExpandedRow(expandedRow === rowId ? null : rowId)
+  const handleNotify = (message, type = 'info', duration = 5000, isFinalReject = false) => {
+    setNotification({ message, type, isFinalReject });
+    setTimeout(() => setNotification(null), duration);
+  };
+
+  const closeFileViewer = () => setFileViewer({ active: false, file: null });
+  const toggleDocumentDetails = (rowId) => setExpandedRow(expandedRow === rowId ? null : rowId);
+
   const fetchDietitians = useCallback(async () => {
     try {
-      const response = await axios.get('/api/verify/dietitians', {
-        withCredentials: true
-      });
-
-      const data = response.data;
-      setDietitians(data.map((d, index) => ({ ...d, rowId: index + 1 })));
-    } catch (error) {
-      console.error('Error fetching dietitians:', error);
+      const response = await getDietitiansForVerification();
+      const data = response?.data || response;
+      if (Array.isArray(data)) {
+        setDietitians(data.map((d, index) => ({ ...d, rowId: index + 1 })));
+      }
+    } catch {
       handleNotify('Failed to load dietitians. Please try again.', 'error');
     }
-  }, [])
+  }, []);
 
-  useEffect(() => {
-    fetchDietitians()
-  }, [fetchDietitians])
+  useEffect(() => { fetchDietitians(); }, [fetchDietitians]);
 
   const verifyDocument = async (dietitianId, field) => {
     try {
-      await axios.post(`/api/verify/${dietitianId}/approve`, { field }, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        withCredentials: true,
-      });
-
-      // Log activity
-      const dietitian = dietitians.find(d => d._id === dietitianId);
-
-      if (dietitian) {
-        axios.post('/api/organization/log-activity', {
-          activityType: 'verification_approved',
-          targetId: dietitianId,
-          targetType: 'dietitian',
-          targetName: `${dietitian.name} - ${FIELD_MAP[field].name}`,
-          status: 'verified',
-          notes: `Approved ${FIELD_MAP[field].name}`
-        }, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('authToken_employee')}` },
-          withCredentials: true
-        }).catch(err => console.warn('Activity log failed:', err));
-      }
-
-      handleNotify(`Document ${FIELD_MAP[field].name} verified.`, 'success');
-      fetchDietitians(); // Refresh data
-    } catch (error) {
-      console.error('Error approving document:', error);
+      const d = dietitians.find(x => x._id === dietitianId);
+      const logDetails = d ? { activityType: 'verification_approved', targetId: dietitianId, targetType: 'dietitian', targetName: `${d.name} - ${FIELD_MAP[field]?.name || field}`, status: 'verified', notes: `Approved ${FIELD_MAP[field]?.name || field}` } : null;
+      const res = await approveDietitianWithLog(dietitianId, field, logDetails);
+      if (res?.isError) { handleNotify(res.message || 'Failed to approve document', 'error'); return; }
+      handleNotify(`Document ${FIELD_MAP[field]?.name || field} verified.`, 'success');
+      fetchDietitians();
+    } catch {
       handleNotify('Failed to approve document', 'error');
     }
-  }
+  };
 
   const rejectDocument = async (dietitianId, field) => {
     try {
-      await axios.post(`/api/verify/${dietitianId}/disapprove`, { field }, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        withCredentials: true,
-      });
-
-      // Log activity
-      const dietitian = dietitians.find(d => d._id === dietitianId);
-
-      if (dietitian) {
-        axios.post('/api/organization/log-activity', {
-          activityType: 'verification_rejected',
-          targetId: dietitianId,
-          targetType: 'dietitian',
-          targetName: `${dietitian.name} - ${FIELD_MAP[field].name}`,
-          status: 'rejected',
-          notes: `Rejected ${FIELD_MAP[field].name}`
-        }, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('authToken_employee')}` },
-          withCredentials: true
-        }).catch(err => console.warn('Activity log failed:', err));
-      }
-
-      handleNotify(`Document ${FIELD_MAP[field].name} rejected.`, 'error');
-      fetchDietitians(); // Refresh data
-    } catch (error) {
-      console.error('Error rejecting document:', error);
+      const d = dietitians.find(x => x._id === dietitianId);
+      const logDetails = d ? { activityType: 'verification_rejected', targetId: dietitianId, targetType: 'dietitian', targetName: `${d.name} - ${FIELD_MAP[field]?.name || field}`, status: 'rejected', notes: `Rejected ${FIELD_MAP[field]?.name || field}` } : null;
+      const res = await disapproveDietitianWithLog(dietitianId, field, logDetails);
+      if (res?.isError) { handleNotify(res.message || 'Failed to reject document', 'error'); return; }
+      handleNotify(`Document ${FIELD_MAP[field]?.name || field} rejected.`, 'error');
+      fetchDietitians();
+    } catch {
       handleNotify('Failed to reject document', 'error');
     }
-  }
+  };
 
   const finalVerify = async (dietitianId) => {
     try {
-      await axios.post(`/api/verify/${dietitianId}/final-approve`, {}, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        withCredentials: true,
-      });
-
-      // Log activity
-      const dietitian = dietitians.find(d => d._id === dietitianId);
-
-      if (dietitian) {
-        axios.post('/api/organization/log-activity', {
-          activityType: 'verification_approved',
-          targetId: dietitianId,
-          targetType: 'dietitian',
-          targetName: `${dietitian.name} - Final Approval`,
-          status: 'verified',
-          notes: 'Final Report Verified'
-        }, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('authToken_employee')}` },
-          withCredentials: true
-        }).catch(err => console.warn('Activity log failed:', err));
-      }
-
+      const d = dietitians.find(x => x._id === dietitianId);
+      const logDetails = d ? { activityType: 'verification_approved', targetId: dietitianId, targetType: 'dietitian', targetName: `${d.name} - Final Approval`, status: 'verified', notes: 'Final Report Verified' } : null;
+      const res = await finalApproveDietitianWithLog(dietitianId, logDetails);
+      if (res?.isError) { handleNotify(res.message || 'Failed to finalize approval', 'error'); return; }
       handleNotify('Dietitian has been finally approved!', 'success');
-      fetchDietitians(); // Refresh data
-      setExpandedRow(null); // Close the expanded row
-      setTimeout(() => {
-        const element = document.getElementById(`dietitian-row-${dietitianId}`);
-        if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 100);
-    } catch (error) {
-      console.error('Error finalizing approval:', error);
+      fetchDietitians();
+      setExpandedRow(null);
+    } catch {
       handleNotify('Failed to finalize approval', 'error');
     }
-  }
+  };
 
   const finalReject = async (dietitianId) => {
     try {
-      await axios.post(`/api/verify/${dietitianId}/final-disapprove`, {}, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        withCredentials: true,
-      });
-
-      // Log activity
-      const dietitian = dietitians.find(d => d._id === dietitianId);
-
-      if (dietitian) {
-        axios.post('/api/organization/log-activity', {
-          activityType: 'verification_rejected',
-          targetId: dietitianId,
-          targetType: 'dietitian',
-          targetName: `${dietitian.name} - Final Rejection`,
-          status: 'rejected',
-          notes: 'Final Report Rejected'
-        }, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('authToken_employee')}` },
-          withCredentials: true
-        }).catch(err => console.warn('Activity log failed:', err));
-      }
-
+      const d = dietitians.find(x => x._id === dietitianId);
+      const logDetails = d ? { activityType: 'verification_rejected', targetId: dietitianId, targetType: 'dietitian', targetName: `${d.name} - Final Rejection`, status: 'rejected', notes: 'Final Report Rejected' } : null;
+      const res = await finalDisapproveDietitianWithLog(dietitianId, logDetails);
+      if (res?.isError) { handleNotify(res.message || 'Failed to finalize rejection', 'error'); return; }
       handleNotify('Dietitian has been finally rejected.', 'error', 5000, true);
-      fetchDietitians(); // Refresh data
-      setExpandedRow(null); // Close the expanded row
-      setTimeout(() => {
-        const element = document.getElementById(`dietitian-row-${dietitianId}`);
-        if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 100);
-    } catch (error) {
-      console.error('Error finalizing rejection:', error);
+      fetchDietitians();
+      setExpandedRow(null);
+    } catch {
       handleNotify('Failed to finalize rejection', 'error');
     }
-  }
+  };
 
   const handleFileUpload = async (dietitianId, file) => {
     if (!file) return handleNotify('Please select a file to upload.', 'warning');
-
     const formData = new FormData();
     formData.append('finalReport', file);
-
     try {
-      await axios.post(`/api/verify/${dietitianId}/upload-report`, formData, {
-        withCredentials: true,
-      });
-      handleNotify('Verification report uploaded successfully.', 'success');
-      fetchDietitians(); // Refresh data
-    } catch (error) {
-      console.error('Error uploading report:', error);
+      const res = await uploadDietitianReport(dietitianId, formData);
+      if (res?.isError) {
+        handleNotify(res.message || 'Failed to upload verification report', 'error');
+      } else {
+        handleNotify('Verification report uploaded successfully.', 'success');
+        fetchDietitians();
+      }
+    } catch {
       handleNotify('Failed to upload verification report', 'error');
     }
-  }
+  };
 
   const viewFile = async (dietitianId, field) => {
     try {
-      const response = await axios.get(`/api/verify/files/${dietitianId}/${field}`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        withCredentials: true,
-      });
-      const data = response.data;
-      const dataUrl = data.file.url;
-      setFileViewer({ active: true, file: { dataUrl, mime: data.file.mime } });
-    } catch (error) {
-      console.error('Error fetching file:', error);
+      const data = await getDietitianFile(dietitianId, field);
+      if (data && !data.isError && data.file) {
+        setFileViewer({ active: true, file: { dataUrl: data.file.url, mime: data.file.mime } });
+      } else {
+        handleNotify('File is not uploaded or data is missing.', 'warning');
+      }
+    } catch {
       handleNotify('File is not uploaded or data is missing.', 'warning');
     }
-  }
+  };
 
   const downloadFile = async (dietitianId, field, fileName, fileExt) => {
     try {
-      const response = await axios.get(`/api/verify/files/${dietitianId}/${field}`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        withCredentials: true,
-      });
-      const data = response.data;
-      const dataUrl = data.file.url;
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `${fileName}.${fileExt}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      handleNotify(`Starting download for ${fileName}.`, 'info');
-    } catch (error) {
-      console.error('Error fetching file:', error);
-      handleNotify('File is not uploaded or data is missing.', 'warning');
+      const data = await getDietitianFile(dietitianId, field);
+      if (data && !data.isError && data.file) {
+        const link = document.createElement('a');
+        link.href = data.file.url;
+        link.download = `${fileName}.${fileExt}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        handleNotify('File is not available for download.', 'warning');
+      }
+    } catch {
+      handleNotify('File is not available for download.', 'warning');
     }
-  }
+  };
 
   const sortedDietitians = [...dietitians].sort((a, b) => {
     const priority = d => {
@@ -334,522 +299,95 @@ const DietitianVerify = () => {
     };
     return priority(a) - priority(b);
   });
+
   const totalPages = Math.ceil(sortedDietitians.length / ITEMS_PER_PAGE);
-  const paginatedDietitians = sortedDietitians.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const paginatedDietitians = sortedDietitians.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   return (
     <div className='min-h-screen bg-linear-to-br from-slate-50 via-emerald-50 to-teal-50 pb-12 px-4 sm:px-6 lg:px-8'>
       <div className='w-full max-w-7xl mx-auto'>
-        {/* Header Title */}
-        <div className='flex items-center justify-center mb-6 pt-2 px-4' style={{ minHeight: '60px', maxHeight: '100px' }}>
-          <div className='text-center'>
-            <div className='inline-flex items-center justify-center gap-3'>
-              <div className='inline-flex items-center justify-center w-10 h-10 bg-linear-to-r from-emerald-500 to-teal-600 rounded-2xl shadow-lg'>
-                <i className='fas fa-user-md text-lg text-white'></i>
-              </div>
-              <h1 className='text-2xl sm:text-3xl lg:text-4xl font-bold bg-linear-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent leading-tight'>
-                Dietitian Verification
-              </h1>
-            </div>
-            <p className='text-sm text-slate-600 mt-2 leading-tight max-w-lg mx-auto'>
-              Streamlined document verification system for dietitians
-            </p>
-          </div>
+        <div className='text-center py-6'>
+          <h1 className='text-3xl font-bold bg-linear-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent'>
+            Dietitian Verification
+          </h1>
+          <p className='text-sm text-slate-600 mt-1'>Streamlined document verification system for dietitians</p>
         </div>
 
-        {/* Modern Notification */}
-        {notification && (
-          <div
-            className={`fixed top-6 right-6 z-50 p-4 rounded-2xl shadow-xl border-l-4 backdrop-blur-sm animate-in slide-in-from-right-4 duration-500 w-full max-w-md ${notification.type === 'success'
-                ? 'bg-emerald-50/95 border-emerald-400 text-emerald-800 shadow-emerald-100'
-                : notification.type === 'error'
-                  ? 'bg-red-50/95 border-red-400 text-red-800 shadow-red-100'
-                  : 'bg-blue-50/95 border-blue-400 text-blue-800 shadow-blue-100'
-              }`}
-          >
-            <div className='flex items-start justify-between'>
-              <div className='flex items-start'>
-                <div className={`p-2 rounded-xl mr-3 ${notification.type === 'success'
-                    ? 'bg-emerald-100'
-                    : notification.type === 'error'
-                      ? 'bg-red-100'
-                      : 'bg-blue-100'
-                  }`}>
-                  <i
-                    className={`text-lg ${notification.type === 'success'
-                        ? 'fa-check-circle text-emerald-600'
-                        : notification.type === 'error'
-                          ? 'fa-exclamation-triangle text-red-600'
-                          : 'fa-info-circle text-blue-600'
-                      }`}
-                  ></i>
-                </div>
-                <div>
-                  <p className='font-semibold text-sm'>{notification.message}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setNotification(null)}
-                className='text-slate-400 hover:text-slate-600 transition-colors ml-4 p-1 hover:bg-slate-100 rounded-lg'
-              >
-                <i className='fas fa-times text-sm'></i>
-              </button>
-            </div>
-          </div>
-        )}
+        <VerificationNotification notification={notification} setNotification={setNotification} />
+        <VerificationConfirmModal modal={modal} setModal={setModal} />
+        <VerificationFileViewer fileViewer={fileViewer} closeFileViewer={closeFileViewer} />
 
-        {/* Modern Confirmation Modal */}
-        {modal.active && (
-          <div className='fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300'>
-            <div className='bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full border border-slate-200'>
-              <div className='text-center mb-6'>
-                <div className='inline-flex items-center justify-center w-16 h-16 bg-amber-100 rounded-2xl mb-4'>
-                  <i className='fas fa-question text-2xl text-amber-600'></i>
-                </div>
-                <h4 className='text-2xl font-bold text-slate-800 mb-2'>
-                  Confirm Action
-                </h4>
-              </div>
-              <p
-                className='text-slate-600 mb-8 text-center leading-relaxed'
-                dangerouslySetInnerHTML={{ __html: modal.message }}
-              ></p>
-              <div className='flex gap-3'>
-                <button
-                  className='flex-1 bg-slate-100 text-slate-700 py-3 px-6 rounded-2xl font-semibold hover:bg-slate-200 transition-all duration-200 shadow-sm hover:shadow-md'
-                  onClick={() => {
-                    setModal({ active: false, message: '', onConfirm: () => { } })
-                  }}
-                >
-                  <i className='fas fa-times mr-2'></i> Cancel
-                </button>
-                <button
-                  className='flex-1 bg-linear-to-r from-emerald-500 to-teal-600 text-white py-3 px-6 rounded-2xl font-semibold hover:from-emerald-600 hover:to-teal-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
-                  onClick={modal.onConfirm}
-                >
-                  <i className='fas fa-check mr-2'></i> Confirm
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modern File Viewer */}
-        {fileViewer.active && (
-          <div className='fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300' style={{ paddingTop: '2vh' }}>
-            <div className='bg-white rounded-3xl shadow-2xl max-w-full lg:max-w-6xl w-full mx-4 flex flex-col overflow-hidden border border-slate-200' style={{ height: '600px' }}>
-              <div className='p-6 border-b border-slate-200 bg-linear-to-r from-slate-50 to-emerald-50 rounded-t-3xl flex justify-between items-center'>
-                <div className='flex items-center'>
-                  <div className='p-2 bg-emerald-100 rounded-xl mr-3'>
-                    <i className='fas fa-file-alt text-emerald-600'></i>
-                  </div>
-                  <h3 className='text-xl font-bold text-slate-800'>
-                    Document Viewer
-                  </h3>
-                </div>
-                <button
-                  onClick={closeFileViewer}
-                  className='p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200'
-                >
-                  <i className='fas fa-times text-xl'></i>
-                </button>
-              </div>
-              <div className='grow p-6 overflow-y-auto bg-slate-50' style={{ height: 'calc(600px - 80px)' }}>
-                {fileViewer.file?.mime?.startsWith('image/') ? (
-                  <div className='bg-white p-4 rounded-2xl shadow-sm h-full'>
-                    <img
-                      src={fileViewer.file.dataUrl}
-                      alt='Document View'
-                      className='w-full h-full object-contain mx-auto rounded-xl'
-                    />
-                  </div>
-                ) : (
-                  <div className='bg-white rounded-2xl shadow-sm overflow-hidden h-full'>
-                    <iframe
-                      src={fileViewer.file?.dataUrl}
-                      title='Document Viewer'
-                      className='w-full h-full border-none'
-                      allow='fullscreen'
-                    ></iframe>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modern Table */}
-        <div ref={tableRef} className='bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 overflow-hidden'>
+        <div ref={tableRef} className='bg-white rounded-3xl shadow-xl overflow-hidden'>
           <table className='min-w-full divide-y divide-slate-200'>
-            {/* Modern Header */}
-            <thead className='bg-linear-to-r from-emerald-600 to-teal-600'>
+            <thead className='bg-emerald-600 text-white'>
               <tr>
-                <th className='py-4 px-8 text-left text-sm font-bold uppercase tracking-wider text-white'>
-                  <div className='flex items-center'>
-                    <i className='fas fa-user-md mr-3 opacity-90'></i>
-                    Dietitian Name
-                  </div>
-                </th>
-                <th className='py-4 px-8 text-left text-sm font-bold uppercase tracking-wider text-white'>
-                  <div className='flex items-center'>
-                    <i className='fas fa-chart-line mr-3 opacity-90'></i>
-                    Verification Status
-                  </div>
-                </th>
+                <th className='py-4 px-8 text-left text-sm font-bold uppercase'>Dietitian Name</th>
+                <th className='py-4 px-8 text-left text-sm font-bold uppercase'>Verification Status</th>
               </tr>
             </thead>
             <tbody className='divide-y divide-slate-100 bg-white'>
-              {dietitians.length === 0 ? (
-                <tr>
-                  <td colSpan='2' className='py-16 text-center'>
-                    <div className='flex flex-col items-center justify-center'>
-                      <div className='inline-flex items-center justify-center w-20 h-20 bg-slate-100 rounded-full mb-4'>
-                        <i className='fas fa-user-md text-3xl text-slate-400'></i>
-                      </div>
-                      <h3 className='text-xl font-semibold text-slate-700 mb-2'>No Dietitians Found</h3>
-                      <p className='text-slate-500'>There are currently no dietitians to verify.</p>
-                    </div>
-                  </td>
-                </tr>
+              {!dietitians.length ? (
+                <tr><td colSpan='2' className='py-16 text-center text-slate-500'>No dietitians found to verify.</td></tr>
               ) : (
                 paginatedDietitians.map(d => {
-                  const overallStatus =
-                    d.verificationStatus.finalReport || 'Not Received'
-                  const documentUploadStatus = d.documentUploadStatus || 'pending'
-                  const displayStatus =
-                    documentUploadStatus === 'verified' ? 'Verified' :
-                      overallStatus === 'Not Received' ? 'Pending' : overallStatus
-                  const statusColor =
-                    documentUploadStatus === 'verified'
-                      ? 'text-emerald-600'
-                      : overallStatus === 'Rejected'
-                        ? 'text-red-600'
-                        : 'text-amber-600'
+                  const overallStatus = d.verificationStatus?.finalReport || 'Not Received';
+                  const docStatus = d.documentUploadStatus || 'pending';
+                  const displayStatus = docStatus === 'verified' ? 'Verified' : overallStatus === 'Not Received' ? 'Pending' : overallStatus;
+                  const statusColor = docStatus === 'verified' ? 'text-emerald-600' : overallStatus === 'Rejected' ? 'text-red-600' : 'text-amber-600';
 
                   return (
                     <React.Fragment key={d._id}>
-                      <tr
-                        id={`dietitian-row-${d._id}`}
-                        className='hover:bg-emerald-100/70 cursor-pointer transition-all duration-300 group border-b border-emerald-100'
-                        onClick={() => toggleDocumentDetails(d.rowId)}
-                      >
+                      <tr id={`dietitian-row-${d._id}`} className='hover:bg-emerald-50 cursor-pointer transition-colors border-b' onClick={() => toggleDocumentDetails(d.rowId)}>
                         <td className='py-3 px-8'>
-                          <div className='flex items-center'>
-                            <div className='p-3 bg-emerald-100 rounded-xl mr-4 group-hover:bg-emerald-200 transition-colors duration-200'>
-                              <i className='fas fa-user-md text-emerald-600 text-lg'></i>
-                            </div>
+                          <div className='flex items-center gap-3'>
+                            <div className='w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600'><i className='fas fa-user-md' /></div>
                             <div>
-                              <div className='font-bold text-slate-800 text-lg'>{d.name}</div>
-                              <div className='text-sm text-slate-500'>Dietitian</div>
+                              <div className='font-bold text-slate-800'>{d.name}</div>
+                              <div className='text-xs text-slate-500'>Dietitian</div>
                             </div>
                           </div>
                         </td>
                         <td className='py-3 px-8'>
-                          <div className='flex items-center'>
-                            <div className={`p-2 rounded-xl mr-3 ${documentUploadStatus === 'verified'
-                                ? 'bg-emerald-100'
-                                : overallStatus === 'Rejected'
-                                  ? 'bg-red-100'
-                                  : 'bg-amber-100'
-                              }`}>
-                              <i
-                                className={`fas fa-${STATUS_ICONS[overallStatus]} ${documentUploadStatus === 'verified'
-                                    ? 'text-emerald-600'
-                                    : overallStatus === 'Rejected'
-                                      ? 'text-red-600'
-                                      : 'text-amber-600'
-                                  }`}
-                              ></i>
-                            </div>
-                            <span className={`font-bold text-lg ${statusColor}`}>
-                              {displayStatus}
-                            </span>
-                            <i className='fas fa-chevron-down text-slate-400 ml-auto group-hover:text-emerald-500 transition-colors duration-200'></i>
+                          <div className='flex items-center justify-between'>
+                            <span className={`font-bold ${statusColor}`}><i className={`fas fa-${STATUS_ICONS[overallStatus] || 'info-circle'} mr-2`} />{displayStatus}</span>
+                            <i className='fas fa-chevron-down text-slate-400' />
                           </div>
                         </td>
                       </tr>
                       {expandedRow === d.rowId && (
                         <tr>
                           <td colSpan='2' className='p-0'>
-                            <div className='bg-linear-to-r from-slate-50 to-emerald-50/30 p-8 border-t border-slate-200'>
-                              <div className='max-w-6xl mx-auto'>
-                                <div className='flex items-center mb-8'>
-                                  <div className='p-3 bg-emerald-100 rounded-2xl mr-4'>
-                                    <i className='fas fa-folder-open text-emerald-600 text-xl'></i>
-                                  </div>
-                                  <div>
-                                    <h3 className='text-xl font-bold text-slate-800'>
-                                      Document Verification
-                                    </h3>
-                                    <p className='text-slate-600'>Review and verify documents for {d.name}</p>
-                                  </div>
-                                </div>
-
-                                <div className='grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8'>
-                                  {Object.keys(FIELD_MAP).map(field => {
-                                    const status =
-                                      d.verificationStatus[field] ||
-                                      (field === 'finalReport'
-                                        ? 'Not Received'
-                                        : 'Not Uploaded')
-                                    const fileExists = [
-                                      'Received',
-                                      'Pending',
-                                      'Verified',
-                                      'Rejected'
-                                    ].includes(status)
-                                    const fieldInfo = FIELD_MAP[field]
-                                    const isOptional = fieldInfo.optional
-
-                                    return (
-                                      <div
-                                        key={field}
-                                        className='bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-lg transition-all duration-200'
-                                      >
-                                        <div className='flex items-start justify-between mb-4'>
-                                          <div className='flex items-center'>
-                                            <div className={`p-3 rounded-xl mr-4 ${status === 'Verified'
-                                                ? 'bg-emerald-100'
-                                                : status === 'Rejected'
-                                                  ? 'bg-red-100'
-                                                  : status === 'Received' || status === 'Pending'
-                                                    ? 'bg-amber-100'
-                                                    : 'bg-slate-100'
-                                              }`}>
-                                              <i
-                                                className={`${fieldInfo.icon} text-lg ${status === 'Verified'
-                                                    ? 'text-emerald-600'
-                                                    : status === 'Rejected'
-                                                      ? 'text-red-600'
-                                                      : status === 'Received' || status === 'Pending'
-                                                        ? 'text-amber-600'
-                                                        : 'text-slate-500'
-                                                  }`}
-                                              ></i>
-                                            </div>
-                                            <div>
-                                              <h4 className='font-bold text-slate-800 text-lg'>
-                                                {fieldInfo.name}
-                                              </h4>
-                                              {isOptional && (
-                                                <span className='text-sm text-slate-500 bg-slate-100 px-2 py-1 rounded-lg'>
-                                                  Optional
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
-
-                                        <div className='flex items-center justify-between'>
-                                          <span
-                                            className={`px-4 py-2 rounded-xl text-sm font-bold ${status === 'Verified'
-                                                ? 'bg-emerald-100 text-emerald-800'
-                                                : status === 'Rejected'
-                                                  ? 'bg-red-100 text-red-800'
-                                                  : status === 'Received' || status === 'Pending'
-                                                    ? 'bg-amber-100 text-amber-800'
-                                                    : 'bg-slate-100 text-slate-800'
-                                              }`}
-                                          >
-                                            {status}
-                                          </span>
-
-                                          {fileExists && (
-                                            <div className='flex gap-2'>
-                                              <button
-                                                className='p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all duration-200'
-                                                onClick={e => {
-                                                  e.preventDefault()
-                                                  viewFile(d._id, field)
-                                                }}
-                                                title='View Document'
-                                              >
-                                                <i className='fas fa-eye'></i>
-                                              </button>
-                                              <button
-                                                className='p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all duration-200'
-                                                onClick={e => {
-                                                  e.preventDefault()
-                                                  downloadFile(
-                                                    d._id,
-                                                    field,
-                                                    fieldInfo.name,
-                                                    fieldInfo.ext
-                                                  )
-                                                }}
-                                                title='Download Document'
-                                              >
-                                                <i className='fas fa-download'></i>
-                                              </button>
-                                            </div>
-                                          )}
-                                        </div>
-
-                                        {status === 'Pending' && field !== 'finalReport' && (
-                                          <div className='flex gap-3 mt-4'>
-                                            <button
-                                              className='flex-1 bg-linear-to-r from-emerald-500 to-teal-600 text-white py-2 px-4 rounded-xl hover:from-emerald-600 hover:to-teal-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold'
-                                              onClick={() =>
-                                                verifyDocument(d._id, field)
-                                              }
-                                            >
-                                              <i className='fas fa-check mr-2'></i> Verify
-                                            </button>
-                                            <button
-                                              className='flex-1 bg-linear-to-r from-red-500 to-rose-600 text-white py-2 px-4 rounded-xl hover:from-red-600 hover:to-rose-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold'
-                                              onClick={() =>
-                                                rejectDocument(d._id, field)
-                                              }
-                                            >
-                                              <i className='fas fa-times mr-2'></i> Reject
-                                            </button>
-                                          </div>
-                                        )}
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-
-                                {/* Modern Upload Report */}
-                                <div className='bg-white p-6 rounded-2xl shadow-lg border border-slate-200'>
-                                  <div className='flex items-center mb-4'>
-                                    <div className='p-3 bg-emerald-100 rounded-xl mr-4'>
-                                      <i className='fas fa-upload text-emerald-600 text-lg'></i>
-                                    </div>
-                                    <div>
-                                      <h4 className='text-xl font-bold text-slate-800'>
-                                        Upload Final Verification Report
-                                      </h4>
-                                      <p className='text-slate-600 text-sm'>PDF files only</p>
-                                    </div>
-                                  </div>
-                                  <p className='text-slate-600 mb-6 leading-relaxed'>
-                                    Upload a detailed report before final approval or rejection of this dietitian.
-                                  </p>
-                                  <div className='relative'>
-                                    <input
-                                      type='file'
-                                      accept='.pdf'
-                                      onChange={e =>
-                                        handleFileUpload(d._id, e.target.files[0])
-                                      }
-                                      className='w-full p-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 bg-slate-50 hover:bg-slate-100 hover:border-emerald-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100'
-                                    />
-                                    <div className='absolute inset-0 flex items-center justify-center pointer-events-none'>
-                                      <div className='text-center'>
-                                        <i className='fas fa-cloud-upload-alt text-3xl text-slate-400 mb-2'></i>
-                                        <p className='text-slate-500 text-sm'>Drop PDF here or click to browse</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className='flex flex-col sm:flex-row gap-4 mb-6'>
-                                  <button
-                                    className={`flex-1 bg-linear-to-r from-emerald-500 to-teal-600 text-white py-4 px-6 rounded-2xl font-bold hover:from-emerald-600 hover:to-teal-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 hover:bg-emerald-600`}
-                                    onClick={() => finalVerify(d._id)}
-                                    disabled={
-                                      ![
-                                        'Received',
-                                        'Verified',
-                                        'Rejected'
-                                      ].includes(d.verificationStatus.finalReport)
-                                    }
-                                  >
-                                    <i className='fas fa-check-circle mr-2'></i>{' '}
-                                    Final Approve
-                                  </button>
-                                  <button
-                                    className='flex-1 bg-linear-to-r from-red-500 to-rose-600 text-white py-4 px-6 rounded-2xl font-bold hover:from-red-600 hover:to-rose-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
-                                    onClick={() => finalReject(d._id)}
-                                    disabled={
-                                      ![
-                                        'Received',
-                                        'Verified',
-                                        'Rejected'
-                                      ].includes(d.verificationStatus.finalReport)
-                                    }
-                                  >
-                                    <i className='fas fa-times-circle mr-2'></i>{' '}
-                                    Final Reject
-                                  </button>
-                                </div>
-
-                                {/* Full border separator */}
-                                <div className='border-t-2 border-emerald-200 pt-6 hover:border-emerald-300 transition-colors duration-300'></div>
-                              </div>
-                            </div>
+                            <DietitianDocumentDetails
+                              dietitian={d} viewFile={viewFile} downloadFile={downloadFile}
+                              verifyDocument={verifyDocument} rejectDocument={rejectDocument}
+                              handleFileUpload={handleFileUpload} finalVerify={finalVerify} finalReject={finalReject}
+                            />
                           </td>
                         </tr>
                       )}
                     </React.Fragment>
-                  )
-                }))}
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className='flex items-center justify-between mt-6 px-2'>
-          <p className='text-sm text-slate-500'>
-            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, sortedDietitians.length)} of {sortedDietitians.length} dietitians
-          </p>
-          <div className='flex items-center gap-2'>
-            <button
-              onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
-              disabled={currentPage === 1}
-              className='px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-medium hover:bg-emerald-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
-            >
-              <i className='fas fa-chevron-left mr-1'></i> Prev
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <button
-                key={page}
-                onClick={() => handlePageChange(page)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${page === currentPage
-                    ? 'bg-emerald-600 text-white shadow'
-                    : 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
-                  }`}
-              >
-                {page}
-              </button>
-            ))}
-            <button
-              onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              className='px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-medium hover:bg-emerald-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
-            >
-              Next <i className='fas fa-chevron-right ml-1'></i>
-            </button>
+        {totalPages > 1 && (
+          <div className='flex items-center justify-between mt-6 px-2'>
+            <p className='text-sm text-slate-500'>Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, sortedDietitians.length)} of {sortedDietitians.length}</p>
+            <div className='flex items-center gap-2'>
+              <button onClick={() => handlePageChange(Math.max(currentPage - 1, 1))} disabled={currentPage === 1} className='px-3 py-1.5 rounded-lg border text-emerald-700 text-sm disabled:opacity-40'>Prev</button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                <button key={p} onClick={() => handlePageChange(p)} className={`px-3 py-1.5 rounded-lg text-sm ${p === currentPage ? 'bg-emerald-600 text-white' : 'border text-emerald-700'}`}>{p}</button>
+              ))}
+              <button onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))} disabled={currentPage === totalPages} className='px-3 py-1.5 rounded-lg border text-emerald-700 text-sm disabled:opacity-40'>Next</button>
+            </div>
           </div>
-        </div>
-
-        {/* Modern Footer */}
-        <div className='mt-16 text-center'>
-          <div className='inline-flex items-center justify-center w-12 h-12 bg-linear-to-r from-emerald-500 to-teal-600 rounded-2xl mb-4'>
-            <i className='fas fa-question-circle text-white text-lg'></i>
-          </div>
-          <p className='text-slate-600 mb-2'>Need help with verification?</p>
-          <p className='text-sm text-slate-500'>
-            Contact our support team at{' '}
-            <a
-              href='https://mail.google.com/mail/?view=cm&fs=1&to=support%40dietitianverify.com'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-emerald-600 hover:text-emerald-700 font-semibold transition-colors duration-200 inline-flex items-center'
-            >
-              <i className='fas fa-envelope mr-2'></i>
-              support@dietitianverify.com
-            </a>
-          </p>
-        </div>
+        )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default DietitianVerify
-
+export default DietitianVerify;

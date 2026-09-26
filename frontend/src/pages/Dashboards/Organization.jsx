@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from '../../axios';
+import { getDietitiansForVerification } from '../../services/verification/verifyService';
+import { uploadAvatar, deleteAvatar } from '../../services/profile/profileService';
 import Sidebar from "../../components/Sidebar/Sidebar";
 import Status from "../../middleware/StatusBadge";
 import { useAuthContext } from "../../hooks/useAuthContext";
@@ -18,8 +19,13 @@ const RecentDietitiansTable = ({ onViewAll }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    axios.get('/api/verify/dietitians', { withCredentials: true })
-      .then(res => setDietitians(res.data.slice(0, 5)))
+    getDietitiansForVerification()
+      .then(res => {
+        if (!res.isError) {
+          const list = Array.isArray(res.data) ? res.data : (Array.isArray(res) ? res : []);
+          setDietitians(list.slice(0, 5));
+        }
+      })
       .catch(err => console.error('Failed to fetch dietitians:', err))
       .finally(() => setIsLoading(false));
   }, []);
@@ -111,15 +117,9 @@ const OrganizationDashboard = () => {
         return;
       }
 
-      const response = await axios.post('/api/uploadorganization', formData, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
+      const res = await uploadAvatar('organization', formData);
 
-      const data = response.data;
-
-      if (data.success) {
+      if (!res.isError && (res.success || res.data)) {
         const reader = new FileReader();
         reader.onload = () => {
           setProfileImage(reader.result);
@@ -131,7 +131,7 @@ const OrganizationDashboard = () => {
           window.location.reload();
         }
       } else {
-        alert(`Upload failed: ${data.message || 'Unknown error'}`);
+        alert(`Upload failed: ${res.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -159,19 +159,15 @@ const OrganizationDashboard = () => {
         return;
       }
 
-      const response = await axios.delete('/api/deleteorganization', {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
+      const res = await deleteAvatar('organization');
 
-      if (response.data.success) {
+      if (!res.isError && (res.success || res.data)) {
         setProfileImage(mockOrganization.profileImage);
         setShowImageModal(false);
         alert('Profile photo removed successfully!');
         window.location.reload();
       } else {
-        alert(`Removal failed: ${response.data.message || 'Unknown error'}`);
+        alert(`Removal failed: ${res.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Remove error:', error);

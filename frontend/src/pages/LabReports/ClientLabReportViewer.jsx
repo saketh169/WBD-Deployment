@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Utensils, Heart, Activity, Pill, FileText, Eye, Download, Zap } from 'lucide-react';
 import AuthContext from '../../contexts/AuthContext';
 import { useContext } from 'react';
-import axios from '../../axios';
+import { getClientLabReports } from '../../services/labreport/labReportService';
 
 const ClientLabReportViewer = () => {
   const { dietitianId } = useParams();
@@ -35,26 +35,23 @@ const ClientLabReportViewer = () => {
         setError(null);
 
         const clientId = user.id;
-        
-        const response = await axios.get(
-          `/api/lab-reports/client/${clientId}/dietitian/${dietitianId}`
-        );
+        const res = await getClientLabReports(clientId, dietitianId);
 
-        if (response.data.success) {
-          setReports(response.data.data || []);
+        if (!res.isError && (res.success || Array.isArray(res.data))) {
+          setReports(Array.isArray(res.data) ? res.data : (res.data?.data || []));
         } else {
-          throw new Error(response.data.message || 'Failed to fetch lab reports');
+          throw new Error(res.message || 'Failed to fetch lab reports');
         }
       } catch (error) {
         console.error('Error fetching lab reports:', error);
-        setError(error.response?.data?.message || error.message || 'Failed to fetch lab reports');
+        setError(error.message || 'Failed to fetch lab reports');
       } finally {
         setLoading(false);
       }
     };
 
     fetchLabReports();
-  }, [user, dietitianId]);
+  }, [user?.id, dietitianId]);
   
   // Remove the static data - now using API data
   const [selectedReport, setSelectedReport] = useState(null);

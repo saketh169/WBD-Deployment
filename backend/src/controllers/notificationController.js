@@ -3,6 +3,7 @@ const Progress = require('../models/progressModel');
 const MealPlan = require('../models/mealPlanModel');
 const { User, Dietitian } = require('../models/userModel');
 const mongoose = require('mongoose');
+const { cacheOrFetch } = require('../utils/redisClient');
 
 /**
  * Get user dashboard data (notifications and recent activities)
@@ -452,83 +453,86 @@ exports.getUserAllActivities = async (req, res) => {
       return res.status(400).json({ success: false, message: 'User ID not found in token' });
     }
     
-    const activities = [];
+    const cacheKey = `activities:user:${userId}:${page}:${limit}`;
+    const { data: activityData, cacheStatus, duration } = await cacheOrFetch(cacheKey, 120, async () => {
+      const activities = [];
 
-    // Fetch all bookings
-    const bookings = await Booking.find({ userId })
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
+      const bookings = await Booking.find({ userId })
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit);
 
-    // Fetch all progress entries
-    const progress = await Progress.find({ userId })
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
+      const progress = await Progress.find({ userId })
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit);
 
-    // Fetch all meal plans
-    const mealPlans = await MealPlan.find({ userId })
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
+      const mealPlans = await MealPlan.find({ userId })
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit);
 
-    // Build activities from bookings
-    bookings.forEach(booking => {
-      activities.push({
-        id: booking._id,
-        type: 'booking',
-        icon: 'fas fa-calendar-check',
-        iconColor: 'text-blue-600',
-        description: `Booked appointment with <strong>${booking.dietitianName}</strong>`,
-        details: `${booking.consultationType} consultation - ${new Date(booking.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${booking.time}`,
-        timestamp: booking.createdAt,
-        status: booking.status
+      bookings.forEach(booking => {
+        activities.push({
+          id: booking._id,
+          type: 'booking',
+          icon: 'fas fa-calendar-check',
+          iconColor: 'text-blue-600',
+          description: `Booked appointment with <strong>${booking.dietitianName}</strong>`,
+          details: `${booking.consultationType} consultation - ${new Date(booking.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${booking.time}`,
+          timestamp: booking.createdAt,
+          status: booking.status
+        });
       });
-    });
 
-    // Build activities from progress
-    progress.forEach(entry => {
-      let details = [];
-      if (entry.weight) details.push(`Weight: ${entry.weight} kg`);
-      if (entry.waterIntake) details.push(`Water: ${entry.waterIntake} L`);
-      if (entry.calories) details.push(`Calories: ${entry.calories}`);
-      if (entry.steps) details.push(`Steps: ${entry.steps}`);
+      progress.forEach(entry => {
+        let details = [];
+        if (entry.weight) details.push(`Weight: ${entry.weight} kg`);
+        if (entry.waterIntake) details.push(`Water: ${entry.waterIntake} L`);
+        if (entry.calories) details.push(`Calories: ${entry.calories}`);
+        if (entry.steps) details.push(`Steps: ${entry.steps}`);
 
-      activities.push({
-        id: entry._id,
-        type: 'progress',
-        icon: 'fas fa-chart-line',
-        iconColor: 'text-emerald-600',
-        description: `Logged progress for <strong>${entry.goal}</strong>`,
-        details: details.join(' • '),
-        timestamp: entry.createdAt
+        activities.push({
+          id: entry._id,
+          type: 'progress',
+          icon: 'fas fa-chart-line',
+          iconColor: 'text-emerald-600',
+          description: `Logged progress for <strong>${entry.goal}</strong>`,
+          details: details.join(' • '),
+          timestamp: entry.createdAt
+        });
       });
-    });
 
-    // Build activities from meal plans
-    mealPlans.forEach(plan => {
-      activities.push({
-        id: plan._id,
-        type: 'meal_plan',
-        icon: 'fas fa-utensils',
-        iconColor: 'text-green-600',
-        description: `Received meal plan: <strong>${plan.planName}</strong>`,
-        details: `${plan.dietType} - ${plan.calories} calories`,
-        timestamp: plan.createdAt
+      mealPlans.forEach(plan => {
+        activities.push({
+          id: plan._id,
+          type: 'meal_plan',
+          icon: 'fas fa-utensils',
+          iconColor: 'text-green-600',
+          description: `Received meal plan: <strong>${plan.planName}</strong>`,
+          details: `${plan.dietType} - ${plan.calories} calories`,
+          timestamp: plan.createdAt
+        });
       });
-    });
 
-    // Sort all activities by timestamp
-    activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    res.status(200).json({
-      success: true,
-      data: {
+      return {
         activities: activities.slice(0, limit * page),
         page: parseInt(page),
         limit: parseInt(limit),
         hasMore: activities.length >= limit
-      }
+      };
+    });
+
+    if (cacheStatus) {
+      res.setHeader('X-Cache', cacheStatus);
+      res.setHeader('X-Cache-Duration', `${duration}ms`);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: activityData
     });
 
   } catch (error) {
@@ -554,62 +558,67 @@ exports.getDietitianAllActivities = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Dietitian ID not found in token' });
     }
     
-    const activities = [];
+    const cacheKey = `activities:dietitian:${dietitianId}:${page}:${limit}`;
+    const { data: activityData, cacheStatus, duration } = await cacheOrFetch(cacheKey, 120, async () => {
+      const activities = [];
 
-    // Fetch all bookings
-    const bookings = await Booking.find({ dietitianId })
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
+      const bookings = await Booking.find({ dietitianId })
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit);
 
-    // Fetch all meal plans created by this dietitian
-    const mealPlans = await MealPlan.find({ dietitianId })
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
+      const mealPlans = await MealPlan.find({ dietitianId })
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit);
 
-    // Build activities from bookings
-    bookings.forEach(booking => {
-      let action = 'New appointment booked';
-      if (booking.status === 'completed') action = 'Completed consultation';
-      else if (booking.status === 'cancelled') action = 'Appointment cancelled';
+      bookings.forEach(booking => {
+        let action = 'New appointment booked';
+        if (booking.status === 'completed') action = 'Completed consultation';
+        else if (booking.status === 'cancelled') action = 'Appointment cancelled';
 
-      activities.push({
-        id: booking._id,
-        type: 'booking',
-        icon: 'fas fa-calendar-check',
-        iconColor: booking.status === 'cancelled' ? 'text-red-600' : 'text-blue-600',
-        description: `${action} with <strong>${booking.username}</strong>`,
-        details: `${booking.consultationType} - ${new Date(booking.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${booking.time}`,
-        timestamp: booking.createdAt,
-        status: booking.status
+        activities.push({
+          id: booking._id,
+          type: 'booking',
+          icon: 'fas fa-calendar-check',
+          iconColor: booking.status === 'cancelled' ? 'text-red-600' : 'text-blue-600',
+          description: `${action} with <strong>${booking.username}</strong>`,
+          details: `${booking.consultationType} - ${new Date(booking.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${booking.time}`,
+          timestamp: booking.createdAt,
+          status: booking.status
+        });
       });
-    });
 
-    // Build activities from meal plans
-    mealPlans.forEach(plan => {
-      activities.push({
-        id: plan._id,
-        type: 'meal_plan',
-        icon: 'fas fa-utensils',
-        iconColor: 'text-green-600',
-        description: `Created meal plan: <strong>${plan.planName}</strong>`,
-        details: `${plan.dietType} - ${plan.calories} calories`,
-        timestamp: plan.createdAt
+      mealPlans.forEach(plan => {
+        activities.push({
+          id: plan._id,
+          type: 'meal_plan',
+          icon: 'fas fa-utensils',
+          iconColor: 'text-green-600',
+          description: `Created meal plan: <strong>${plan.planName}</strong>`,
+          details: `${plan.dietType} - ${plan.calories} calories`,
+          timestamp: plan.createdAt
+        });
       });
-    });
 
-    // Sort all activities by timestamp
-    activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    res.status(200).json({
-      success: true,
-      data: {
+      return {
         activities: activities.slice(0, limit * page),
         page: parseInt(page),
         limit: parseInt(limit),
         hasMore: activities.length >= limit
-      }
+      };
+    });
+
+    if (cacheStatus) {
+      res.setHeader('X-Cache', cacheStatus);
+      res.setHeader('X-Cache-Duration', `${duration}ms`);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: activityData
     });
 
   } catch (error) {

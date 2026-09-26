@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from '../../axios';
+import { getDietitianDashboardData } from '../../services/misc/miscService';
+import { uploadAvatar, deleteAvatar } from '../../services/profile/profileService';
 import { io } from 'socket.io-client';
 import Sidebar from "../../components/Sidebar/Sidebar";
 import Status from "../../middleware/StatusBadge";
@@ -47,17 +48,12 @@ const DietitianDashboard = () => {
 
     try {
       if (showLoading) setIsLoadingDashboard(true);
-      const response = await axios.get(`/api/analytics/dietitian/${user.id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      const data = response.data;
+      const res = await getDietitianDashboardData(user.id);
 
-      if (data.success) {
-        setNotifications(data.data.notifications || []);
-        setActivities(data.data.activities || []);
+      if (!res.isError && (res.success || res.data)) {
+        const d = res.data || res;
+        setNotifications(d.notifications || []);
+        setActivities(d.activities || []);
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -69,9 +65,7 @@ const DietitianDashboard = () => {
   // Initial fetch
   useEffect(() => {
     fetchDashboardData();
-  }, [user?.id, token, fetchDashboardData]);
-
-  // Real-time updates handled by WebSocket listener
+  }, [fetchDashboardData]);
 
   // Real-time WebSocket listener for new bookings
   useEffect(() => {
@@ -83,25 +77,21 @@ const DietitianDashboard = () => {
     });
 
     socket.on('connect', () => {
-      console.log('Connected to real-time server');
       socket.emit('register_dietitian', user.id);
     });
 
-    socket.on('new_booking', (bookingData) => {
-      console.log('New booking received!', bookingData);
-      alert("A new appointment has just been booked!");
+    socket.on('new_booking', () => {
       fetchDashboardData(false);
     });
 
-    socket.on('booking_updated', (bookingData) => {
-      console.log('Booking update received!', bookingData);
+    socket.on('booking_updated', () => {
       fetchDashboardData(false);
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [user?.id, token, fetchDashboardData]);
+  }, [user?.id, token]);
 
   // Set profile image from user data when available
   useEffect(() => {
@@ -134,15 +124,9 @@ const DietitianDashboard = () => {
         return;
       }
 
-      const response = await axios.post('/api/uploaddietitian', formData, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
+      const res = await uploadAvatar('dietitian', formData);
 
-      const data = response.data;
-
-      if (data.success) {
+      if (!res.isError && (res.success || res.data)) {
         const reader = new FileReader();
         reader.onload = () => {
           setProfileImage(reader.result);
@@ -154,7 +138,7 @@ const DietitianDashboard = () => {
           window.location.reload();
         }
       } else {
-        alert(`Upload failed: ${data.message || 'Unknown error'}`);
+        alert(`Upload failed: ${res.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error("Upload error:", error);
@@ -182,19 +166,15 @@ const DietitianDashboard = () => {
         return;
       }
 
-      const response = await axios.delete('/api/deletedietitian', {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
+      const res = await deleteAvatar('dietitian');
 
-      if (response.data.success) {
+      if (!res.isError && (res.success || res.data)) {
         setProfileImage(mockDietitian.profileImage);
         setShowImageModal(false);
         alert('Profile photo removed successfully!');
         window.location.reload();
       } else {
-        alert(`Removal failed: ${response.data.message || 'Unknown error'}`);
+        alert(`Removal failed: ${res.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Remove error:', error);

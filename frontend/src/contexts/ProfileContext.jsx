@@ -1,10 +1,49 @@
-import React, { useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import axios from '../axios';
-import { roleConfig, ProfileContext as Context, useProfile } from './roleConfig';
+import { getProfileByRole, updateProfile as apiUpdateProfile, changePassword as apiChangePassword } from '../services/profile/profileService';
 import { useAuthContext } from '../hooks/useAuthContext';
 
-// Profile Provider Component
+export const roleConfig = {
+  user: {
+    tokenKey: 'authToken_user',
+    signinPath: '/signin?role=user',
+    dashboardPath: '/user/profile',
+    roleLabel: 'User',
+    fields: ['name', 'phone', 'dob', 'gender', 'address']
+  },
+  dietitian: {
+    tokenKey: 'authToken_dietitian',
+    signinPath: '/signin?role=dietitian',
+    dashboardPath: '/dietitian/profile',
+    roleLabel: 'Dietitian',
+    fields: ['name', 'phone', 'age']
+  },
+  organization: {
+    tokenKey: 'authToken_organization',
+    signinPath: '/signin?role=organization',
+    dashboardPath: '/organization/profile',
+    roleLabel: 'Organization',
+    fields: ['name', 'phone', 'address']
+  },
+  admin: {
+    tokenKey: 'authToken_admin',
+    signinPath: '/signin?role=admin',
+    dashboardPath: '/admin/profile',
+    roleLabel: 'Admin',
+    fields: ['name', 'phone']
+  },
+};
+
+export const ProfileContext = createContext();
+
+export const useProfile = () => {
+  const context = useContext(ProfileContext);
+  if (!context) {
+    throw new Error('useProfile must be used within a ProfileProvider');
+  }
+  return context;
+};
+
 export const ProfileProvider = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -18,30 +57,27 @@ export const ProfileProvider = ({ children }) => {
   const [currentRole, setCurrentRole] = useState(null);
   const [config, setConfig] = useState(null);
 
-  // Detect role: prefer AuthContext role, fall back to URL path
   const detectRole = useCallback(() => {
     if (authRole) return authRole;
-    const path = location.pathname;
-    if (path.includes('/user/')) return 'user';
-    if (path.includes('/dietitian/')) return 'dietitian';
-    if (path.includes('/organization/')) return 'organization';
-    if (path.includes('/admin/')) return 'admin';
-    return 'user'; // Default fallback
+    const path = location.pathname.toLowerCase();
+    if (path.startsWith('/dietitian')) return 'dietitian';
+    if (path.startsWith('/organization') || path.startsWith('/org')) return 'organization';
+    if (path.startsWith('/employee')) return 'employee';
+    if (path.startsWith('/admin')) return 'admin';
+    return 'user';
   }, [authRole, location.pathname]);
 
-  // Initialize role and config
   const initializeRole = useCallback(() => {
     const role = detectRole();
     setCurrentRole(role);
-    setConfig(roleConfig[role]);
-    return { role, config: roleConfig[role] };
+    const cfg = roleConfig[role] || roleConfig.user;
+    setConfig(cfg);
+    return { role, config: cfg };
   }, [detectRole]);
 
-  // Fetch user profile details
   const fetchProfileData = useCallback(async () => {
     setIsFetching(true);
     setMessage('');
-
     const { config: roleConfiguration } = initializeRole();
 
     try {
@@ -52,26 +88,19 @@ export const ProfileProvider = ({ children }) => {
         return null;
       }
 
-      const response = await axios.get(roleConfiguration.apiEndpoint, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const res = await getProfileByRole(currentRole || roleConfiguration.role);
+      const resData = res?.data || res;
 
-      if (response.data.success) {
+      if (!res?.isError && (res?.success || resData?.email || resData?.name)) {
         const userData = {};
-
-        // Populate data based on role-specific fields
-        roleConfiguration.fields.forEach(field => {
-          if (field === 'dob' && response.data[field]) {
-            userData[field] = response.data[field].split('T')[0];
+        roleConfiguration.fields.forEach((field) => {
+          if (field === 'dob' && resData[field]) {
+            userData[field] = resData[field].split('T')[0];
           } else {
-            userData[field] = response.data[field] || '';
+            userData[field] = resData[field] || '';
           }
         });
-
-        // Email is always included (read-only)
-        userData.email = response.data.email || '';
+        userData.email = resData.email || '';
 
         setProfileData(userData);
         setOriginalData(userData);
@@ -84,19 +113,15 @@ export const ProfileProvider = ({ children }) => {
     } finally {
       setIsFetching(false);
     }
-  }, [initializeRole, navigate]);
+  }, [initializeRole, navigate, currentRole]);
 
-  // Update profile
   const updateProfile = useCallback(async (data) => {
     setMessage('');
     setIsLoading(true);
-
     const { config: roleConfiguration } = initializeRole();
 
     try {
-      // Check if any changes were made
-      const hasChanges = roleConfiguration.fields.some(key => data[key] !== originalData[key]);
-
+      const hasChanges = roleConfiguration.fields.some((key) => data[key] !== originalData[key]);
       if (!hasChanges) {
         setMessage('No changes detected. Please modify at least one field.');
         setIsLoading(false);
@@ -111,46 +136,32 @@ export const ProfileProvider = ({ children }) => {
         return { success: false, message: 'Session expired' };
       }
 
-      // Only send fields that were changed
       const updatePayload = {};
-      roleConfiguration.fields.forEach(key => {
+      roleConfiguration.fields.forEach((key) => {
         if (data[key] !== originalData[key]) {
           updatePayload[key] = data[key];
         }
       });
 
-      const response = await axios.put('/api/update-profile', updatePayload, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.data.success) {
+      const res = await apiUpdateProfile(updatePayload);
+      if (!res?.isError && (res?.success || res?.data)) {
         setMessage('Profile updated successfully! Redirecting to dashboard...');
         setProfileData(data);
         setOriginalData(data);
 
-        // Update localStorage authUser data so AuthContext picks up the changes
         const currentAuthUser = localStorage.getItem(`authUser_${currentRole}`);
-
         if (currentAuthUser) {
           const authUserData = JSON.parse(currentAuthUser);
-          // Merge updated fields into authUser data
           const updatedAuthUser = { ...authUserData, ...data };
-
-          // Special handling for organization - sync 'name' to 'org_name' field
           if (currentRole === 'organization' && data.name) {
             updatedAuthUser.org_name = data.name;
           }
-
           localStorage.setItem(`authUser_${currentRole}`, JSON.stringify(updatedAuthUser));
         }
 
-        // Force page reload to refresh AuthContext
         setTimeout(() => {
           window.location.href = roleConfiguration.dashboardPath;
         }, 2000);
-
         return { success: true, message: 'Profile updated successfully' };
       }
     } catch (error) {
@@ -163,11 +174,9 @@ export const ProfileProvider = ({ children }) => {
     }
   }, [originalData, initializeRole, navigate, currentRole]);
 
-  // Change password
   const changePassword = useCallback(async (oldPassword, newPassword) => {
     setMessage('');
     setIsLoading(true);
-
     const { config: roleConfiguration } = initializeRole();
 
     try {
@@ -179,16 +188,8 @@ export const ProfileProvider = ({ children }) => {
         return { success: false, message: 'Session expired' };
       }
 
-      const response = await axios.post('/api/change-password', {
-        oldPassword,
-        newPassword
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.data.success) {
+      const res = await apiChangePassword({ oldPassword, newPassword });
+      if (!res?.isError && (res?.success || res?.data)) {
         setMessage('Password changed successfully! Redirecting to dashboard...');
         setTimeout(() => {
           navigate(roleConfiguration.dashboardPath);
@@ -205,16 +206,12 @@ export const ProfileProvider = ({ children }) => {
     }
   }, [initializeRole, navigate]);
 
-  // Reset profile data to original
   const resetProfileData = useCallback(() => {
     setProfileData(originalData);
     setMessage('');
   }, [originalData]);
 
-  // Clear message
-  const clearMessage = useCallback(() => {
-    setMessage('');
-  }, []);
+  const clearMessage = useCallback(() => setMessage(''), []);
 
   const value = {
     profileData,
@@ -234,13 +231,10 @@ export const ProfileProvider = ({ children }) => {
   };
 
   return (
-    <Context.Provider value={value}>
+    <ProfileContext.Provider value={value}>
       {children}
-    </Context.Provider>
+    </ProfileContext.Provider>
   );
 };
 
-export { Context as ProfileContext };
-// eslint-disable-next-line react-refresh/only-export-components
-export { useProfile };
-export default Context;
+export default ProfileContext;

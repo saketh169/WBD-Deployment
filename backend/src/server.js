@@ -13,7 +13,6 @@ const progressRoutes = require('./routes/progressRoutes');
 const verifyRoutes = require('./routes/verifyRoutes');
 const statusRoutes = require('./routes/statusRoutes');
 const blogRoutes = require('./routes/blogRoutes');
-const { initElastic } = require('./utils/elasticClient');
 const contactusRoutes = require('./routes/contactusRoutes');
 const crudRoutes = require('./routes/crudRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
@@ -29,28 +28,23 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const teamBoardRoutes = require('./routes/teamBoardRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
-const searchRoutes = require('./routes/searchRoutes');
-const publicApiRoutes = require('./routes/publicApiRoutes');
 
 // Middleware imports
 const { helmetMiddleware, rateLimiter, sanitizeInput } = require('./middlewares/securityMiddleware');
 const { requestLogger } = require('./middlewares/loggerMiddleware');
 const { errorHandler, notFoundHandler } = require('./middlewares/errorMiddleware');
+const { formatResponseMiddleware } = require('./middlewares/responseMiddleware');
 const compression = require('compression');
 
 const app = express();
 // Enable response compression 
 app.use(compression());
-
-// Trust the first proxy (Docker/Nginx) for correct IP rate-limiting
-app.set('trust proxy', 1);
-
 const PORT = process.env.PORT || 5000;
 
 // Allowed frontend origins (configure via env for production)
 const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',')
-  : true; // Allow all origins in development (can be configured via CORS_ORIGINS env var)
+  : ['http://localhost:5173', 'http://localhost:3000'];
 
 // --- Middlewares ---
 // Connect to the database
@@ -63,12 +57,11 @@ app.use(rateLimiter);
 // Request logger
 app.use(requestLogger);
 
-// Enable CORS
+// Enable CORS with specific origins
 app.use(cors({
   origin: ALLOWED_ORIGINS,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['X-Cache', 'X-Cache-Key', 'X-Cache-Tags', 'X-Response-Time'],
   credentials: true,
 }));
 
@@ -78,6 +71,10 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Sanitize input for XSS protection
 app.use(sanitizeInput);
+
+// Enforce standard API response format: { isError, success, message, data, status, statusCode }
+app.use(formatResponseMiddleware);
+
 
 // --- SWAGGER DOCUMENTATION ---
 const swaggerOptions = {
@@ -134,9 +131,7 @@ const swaggerOptions = {
       { name: 'Status', description: 'Status checks' },
       { name: 'Verify', description: 'Verification operations' },
       { name: 'Crud', description: 'General CRUD operations' },
-      { name: 'Dietitian', description: 'Dietitian management' },
-      { name: 'Search', description: 'Global search across the platform' },
-      { name: 'B2B Public API', description: 'Public APIs for partner integrations (B2B)' }
+      { name: 'Dietitian', description: 'Dietitian management' }
     ]
   },
   apis: [
@@ -161,9 +156,7 @@ const swaggerOptions = {
     './src/routes/statusRoutes.js',
     './src/routes/verifyRoutes.js',
     './src/routes/crudRoutes.js',
-    './src/routes/dietitianRoutes.js',
-    './src/routes/searchRoutes.js',
-    './src/routes/publicApiRoutes.js'
+    './src/routes/dietitianRoutes.js'
   ]
 };
 
@@ -240,12 +233,6 @@ app.use('/api/organization', activityLogRoutes);
 // Team Board routes mounted at '/api/teamboard'
 app.use('/api/teamboard', teamBoardRoutes);
 
-// Search routes mounted at '/api/search'
-app.use('/api/search', searchRoutes);
-
-// Public B2B API routes mounted at '/api/v1/public'
-app.use('/api/v1/public', publicApiRoutes);
-
 // Health check endpoint for frontend error handling
 app.get('/api/health', (req, res) => {
   res.status(200).json({
@@ -255,13 +242,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Root health check endpoint
+// Simple test route (kept from your original code)
 app.get('/', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    message: 'Nutri-Connect Backend Server is running',
-    timestamp: new Date().toISOString()
-  });
+  res.json({ message: 'Nutri Connect Server is Currently Live!' });
 });
 
 // 404 handler (must be after all routes)
@@ -276,19 +259,14 @@ app.use(errorHandler);
 // Initialize Cron Jobs
 require('./utils/cronJobs').startCronJobs();
 
-// Start Server only when run directly (not when imported as module)
-if (require.main === module) {
-  const server = app.listen(PORT, async () => {
-    // Initialize Elasticsearch globally
-    await initElastic();
-    
-    console.log(`Server running at http://localhost:${PORT}`);
-    console.log(`Swagger docs at http://localhost:${PORT}/api-docs`);
-  });
 
-  // Initialize Socket.io
-  require('./utils/socket').init(server, ALLOWED_ORIGINS);
-}
 
-// Export app for serverless deployment
-module.exports = app;
+// Start Server
+const server = app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Swagger docs at http://localhost:${PORT}/api-docs`);
+});
+
+
+// Initialize Socket.io
+require('./utils/socket').init(server, ALLOWED_ORIGINS);

@@ -17,7 +17,8 @@ router.use(authenticateJWT);
  * /api/meal-plans:
  *   post:
  *     tags: ['Meal Plans']
- *     summary: Create a new meal plan
+ *     summary: Create meal plan (dietitian to client)
+ *     description: Dietitian creates a meal plan template with diet type, calories, meals, and assigns it to a client
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -60,7 +61,8 @@ router.post('/', checkMealPlanLimit, mealPlanController.createMealPlan);
  * /api/meal-plans/user/{userId}:
  *   get:
  *     tags: ['Meal Plans']
- *     summary: Get all meal plans for a user
+ *     summary: Retrieve user's meal plans
+ *     description: Client retrieves all meal plans assigned to them by their dietitian with optional date filtering
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -81,7 +83,8 @@ router.get('/user/:userId', mealPlanController.getUserMealPlans);
  * /api/meal-plans/dietitian/{dietitianId}/client/{userId}:
  *   get:
  *     tags: ['Meal Plans']
- *     summary: Get dietitian's meal plans for a specific client
+ *     summary: Retrieve dietitian's meal plans for a client
+ *     description: Dietitian retrieves all meal plans they created for a specific client
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -107,7 +110,8 @@ router.get('/dietitian/:dietitianId/client/:userId', mealPlanController.getDieti
  * /api/meal-plans/{planId}:
  *   get:
  *     tags: ['Meal Plans']
- *     summary: Get specific meal plan by ID
+ *     summary: Retrieve meal plan details by ID
+ *     description: Get full meal plan including meals, diet details, calories, and calendar assignments
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -128,7 +132,8 @@ router.get('/:planId', mealPlanController.getMealPlanById);
  * /api/meal-plans/{planId}:
  *   put:
  *     tags: ['Meal Plans']
- *     summary: Update a meal plan
+ *     summary: Update meal plan (dietitian)
+ *     description: Dietitian updates meal plan details including name, diet type, calories, meals, and notes
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -154,7 +159,8 @@ router.put('/:planId', mealPlanController.updateMealPlan);
  * /api/meal-plans/{planId}/assign:
  *   post:
  *     tags: ['Meal Plans']
- *     summary: Assign meal plan to dates
+ *     summary: Assign meal plan to client calendar dates
+ *     description: Dietitian assigns a meal plan template to specific dates on the client's calendar for daily tracking
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -184,7 +190,8 @@ router.post('/:planId/assign', mealPlanController.assignMealPlanToDates);
  * /api/meal-plans/{planId}/dates:
  *   delete:
  *     tags: ['Meal Plans']
- *     summary: Remove meal plan from dates
+ *     summary: Unassign meal plan from calendar dates
+ *     description: Dietitian removes a meal plan from specific calendar dates
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -205,7 +212,8 @@ router.delete('/:planId/dates', mealPlanController.removeMealPlanFromDates);
  * /api/meal-plans/{planId}:
  *   delete:
  *     tags: ['Meal Plans']
- *     summary: Delete a meal plan (soft delete)
+ *     summary: Delete meal plan (soft delete)
+ *     description: Marks meal plan as inactive without removing from database for audit trail
  *     security:
  *       - BearerAuth: []
  *     parameters:

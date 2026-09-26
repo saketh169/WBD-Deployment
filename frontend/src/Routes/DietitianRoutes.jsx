@@ -7,7 +7,7 @@ import NotFoundPage from '../pages/Error/NotFoundPage';
 import DietitianHome from '../pages/HomePages/DietitianHome';
 import DietitianDashboard from '../pages/Dashboards/Dietitian';
 import DietitianSchedule from '../pages/Schedules/DietitianSchedule';
-import DietitianSetup from '../pages/DietitianSetup';
+import DietitianSetup from '../pages/Setup/DietitianSetup';
 import DietitianDocStatus from '../pages/Status/DietitianDocStatus';
 import ChangePassword from '../pages/ChangePassword';
 import EditProfile from '../pages/EditProfile';

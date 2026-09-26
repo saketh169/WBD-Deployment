@@ -9,8 +9,10 @@ services:
       - PORT=${PORT:-5000}
       - MONGODB_URL=${MONGODB_URL}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - ELASTICSEARCH_URL=${ELASTICSEARCH_URL:-http://elasticsearch:9200}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:3000,http://localhost:80}
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
@@ -40,9 +42,6 @@ services:
       - "80:80"
     environment:
       - VITE_API_URL=${VITE_API_URL:-http://backend:5000}
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
     depends_on:
       - backend
     restart: unless-stopped

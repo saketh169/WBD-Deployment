@@ -1,23 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import * as Yup from 'yup';
 import { useProfile } from '../contexts/ProfileContext';
-
-// Validation Schema for Change Password
-const changePasswordSchema = Yup.object().shape({
-  oldPassword: Yup.string()
-    .required('Current password is required.')
-    .min(6, 'Password must be at least 6 characters.'),
-  newPassword: Yup.string()
-    .required('New password is required.')
-    .min(6, 'Password must be at least 6 characters.')
-    .max(20, 'Password must not exceed 20 characters.'),
-  confirmPassword: Yup.string()
-    .required('Please confirm your new password.')
-    .oneOf([Yup.ref('newPassword')], 'Passwords must match.')
-});
 
 const ChangePassword = () => {
   const navigate = useNavigate();
@@ -29,6 +12,13 @@ const ChangePassword = () => {
     initializeRole
   } = useProfile();
 
+  const [formData, setFormData] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [errors, setErrors] = useState({});
+
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -38,16 +28,52 @@ const ChangePassword = () => {
     initializeRole();
   }, [initializeRole]);
 
-  // React Hook Form setup
-  const { register, handleSubmit, formState: { errors }, reset } = useForm({
-    resolver: yupResolver(changePasswordSchema),
-    mode: 'onBlur'
-  });
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+  };
 
-  const onSubmit = async (data) => {
-    const result = await changePassword(data.oldPassword, data.newPassword);
+  const validate = () => {
+    const errs = {};
+    if (!formData.oldPassword) {
+      errs.oldPassword = 'Current password is required.';
+    } else if (formData.oldPassword.length < 6) {
+      errs.oldPassword = 'Password must be at least 6 characters.';
+    }
+
+    if (!formData.newPassword) {
+      errs.newPassword = 'New password is required.';
+    } else if (formData.newPassword.length < 6) {
+      errs.newPassword = 'Password must be at least 6 characters.';
+    } else if (formData.newPassword.length > 20) {
+      errs.newPassword = 'Password must not exceed 20 characters.';
+    }
+
+    if (!formData.confirmPassword) {
+      errs.confirmPassword = 'Please confirm your new password.';
+    } else if (formData.confirmPassword !== formData.newPassword) {
+      errs.confirmPassword = 'Passwords must match.';
+    }
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+
+    const result = await changePassword(formData.oldPassword, formData.newPassword);
     if (result.success) {
-      reset();
+      setFormData({
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+      setErrors({});
     }
   };
 
@@ -70,7 +96,7 @@ const ChangePassword = () => {
           <div className="mb-6">
             <button
               onClick={() => navigate(config.dashboardPath)}
-              className="flex items-center gap-2 text-gray-600 hover:text-emerald-600 transition mb-4"
+              className="flex items-center gap-2 text-gray-600 hover:text-emerald-600 transition mb-4 cursor-pointer"
             >
               <i className="fas fa-arrow-left"></i>
               <span>Back to Dashboard</span>
@@ -93,7 +119,7 @@ const ChangePassword = () => {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={onSubmit} className="space-y-6" noValidate>
             {/* Current Password */}
             <div>
               <label htmlFor="oldPassword" className="block text-sm font-medium text-gray-700 mb-2">
@@ -103,7 +129,9 @@ const ChangePassword = () => {
                 <input
                   type={showOldPassword ? 'text' : 'password'}
                   id="oldPassword"
-                  {...register('oldPassword')}
+                  name="oldPassword"
+                  value={formData.oldPassword}
+                  onChange={handleChange}
                   className={`w-full px-4 py-3 rounded-lg border ${
                     errors.oldPassword ? 'border-red-500' : 'border-gray-300'
                   } focus:outline-none focus:ring-2 focus:ring-emerald-600 pr-12`}
@@ -112,13 +140,13 @@ const ChangePassword = () => {
                 <button
                   type="button"
                   onClick={() => setShowOldPassword(!showOldPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer"
                 >
                   <i className={`fas ${showOldPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                 </button>
               </div>
               {errors.oldPassword && (
-                <p className="text-red-500 text-sm mt-1">{errors.oldPassword.message}</p>
+                <p className="text-red-500 text-sm mt-1">{errors.oldPassword}</p>
               )}
             </div>
 
@@ -131,7 +159,9 @@ const ChangePassword = () => {
                 <input
                   type={showNewPassword ? 'text' : 'password'}
                   id="newPassword"
-                  {...register('newPassword')}
+                  name="newPassword"
+                  value={formData.newPassword}
+                  onChange={handleChange}
                   className={`w-full px-4 py-3 rounded-lg border ${
                     errors.newPassword ? 'border-red-500' : 'border-gray-300'
                   } focus:outline-none focus:ring-2 focus:ring-emerald-600 pr-12`}
@@ -140,13 +170,13 @@ const ChangePassword = () => {
                 <button
                   type="button"
                   onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer"
                 >
                   <i className={`fas ${showNewPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                 </button>
               </div>
               {errors.newPassword && (
-                <p className="text-red-500 text-sm mt-1">{errors.newPassword.message}</p>
+                <p className="text-red-500 text-sm mt-1">{errors.newPassword}</p>
               )}
               <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
             </div>
@@ -160,7 +190,9 @@ const ChangePassword = () => {
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   id="confirmPassword"
-                  {...register('confirmPassword')}
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
                   className={`w-full px-4 py-3 rounded-lg border ${
                     errors.confirmPassword ? 'border-red-500' : 'border-gray-300'
                   } focus:outline-none focus:ring-2 focus:ring-emerald-600 pr-12`}
@@ -169,13 +201,13 @@ const ChangePassword = () => {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer"
                 >
                   <i className={`fas ${showConfirmPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                 </button>
               </div>
               {errors.confirmPassword && (
-                <p className="text-red-500 text-sm mt-1">{errors.confirmPassword.message}</p>
+                <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>
               )}
             </div>
 
@@ -184,7 +216,7 @@ const ChangePassword = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-lg hover:bg-emerald-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-lg hover:bg-emerald-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {isLoading ? (
                   <>
@@ -201,7 +233,7 @@ const ChangePassword = () => {
               <button
                 type="button"
                 onClick={() => navigate(config.dashboardPath)}
-                className="flex-1 bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-300 transition"
+                className="flex-1 bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-300 transition cursor-pointer"
               >
                 Cancel
               </button>

@@ -91,22 +91,6 @@ const BookingSchema = new Schema({
     enum: ['completed', 'pending', 'failed'],
     default: 'completed'
   },
-
-  // Virtual consultation details (optional)
-  meetingUrl: {
-    type: String,
-    default: null,
-    trim: true
-  },
-  meetingProvider: {
-    type: String,
-    enum: ['jitsi', 'custom', null],
-    default: null
-  },
-  meetingCreatedAt: {
-    type: Date,
-    default: null
-  },
   
   // Booking Status
   status: { 

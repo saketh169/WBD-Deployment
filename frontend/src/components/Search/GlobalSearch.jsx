@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from '../../axios';
+import { globalSearch } from '../../services/misc/miscService';
 import { useNavigate } from 'react-router-dom';
 
 const GlobalSearch = ({ onClose, currentRole }) => {
@@ -36,22 +36,17 @@ const GlobalSearch = ({ onClose, currentRole }) => {
 
     const fetchResults = async () => {
       setIsLoading(true);
-      try {
-        const response = await axios.get(`/api/search?q=${query}&limit=3`);
-        if (response.data.success) {
-          setResults({
-            dietitians: response.data.results.dietitians || [],
-            blogs: response.data.results.blogs || [],
-            users: response.data.results.users || [],
-            mealplans: response.data.results.mealplans || [],
-            organizations: response.data.results.organizations || []
-          });
-        }
-      } catch (error) {
-        console.error('Search error:', error);
-      } finally {
-        setIsLoading(false);
+      const res = await globalSearch(query, 3);
+      if (!res.isError && res.success) {
+        setResults({
+          dietitians: res.results?.dietitians || [],
+          blogs: res.results?.blogs || [],
+          users: res.results?.users || [],
+          mealplans: res.results?.mealplans || [],
+          organizations: res.results?.organizations || []
+        });
       }
+      setIsLoading(false);
     };
 
     const timer = setTimeout(fetchResults, 300); // debounce
