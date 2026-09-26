@@ -10,6 +10,7 @@ const rateLimiter = rateLimit({
   message: 'Too many requests from this IP, please try again after 15 minutes',
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   skip: (req) => {
     if (req.path === '/api/health') return true;
     return false;
@@ -24,6 +25,7 @@ const authRateLimiter = rateLimit({
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
 });
 
 // OTP-specific rate limiter: 30 OTP requests per 10 minutes per IP (relaxed for testing)
@@ -33,12 +35,12 @@ const otpRateLimiter = rateLimit({
   message: 'Too many OTP requests, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
 });
 
 const sanitizeInput = (req, res, next) => {
   const cleanString = (str) => {
     if (typeof str !== 'string') return str;
-    // Replace & first to avoid double-encoding &lt; → &amp;lt;
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   };
 
