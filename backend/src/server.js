@@ -48,7 +48,7 @@ const PORT = process.env.PORT || 5000;
 // Allowed frontend origins (configure via env for production)
 const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',')
-  : ['http://localhost:5173', 'http://localhost:3000'];
+  : ['http://localhost:5173', 'http://localhost:3000', 'https://nutri-connect-wbd-frontend.vercel.app'];
 
 // Enable CORS with specific origins
 app.use(cors({
