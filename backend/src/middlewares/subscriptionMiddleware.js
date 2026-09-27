@@ -1,7 +1,7 @@
 const Payment = require('../models/paymentModel');
 const Booking = require('../models/bookingModel');
 const { Blog } = require('../models/blogModel');
-const Progress = require('../models/progressModel');
+const MealPlan = require('../models/mealPlanModel');
 const { ChatHistory } = require('../models/chatbotModels');
 
 // Progress plan types available for each subscription tier
@@ -77,13 +77,6 @@ const SUBSCRIPTION_LIMITS = {
 // Get user's subscription and limits
 async function getUserSubscription(userId) {
   try {
-    // First check if there are any payments for this user
-    const allPayments = await Payment.find({ userId }).sort({ createdAt: -1 });
-    
-    if (allPayments.length > 0) {
-      const latestPayment = allPayments[0];
-    }
-    
     const subscription = await Payment.findActiveSubscription(userId);
     
     if (!subscription) {
@@ -273,7 +266,6 @@ async function checkChatbotLimit(req, res, next) {
     
     // If no userId, treat as anonymous free user, use sessionId for tracking
     const isAnonymous = !userId;
-    const identifier = userId || sessionId || 'anonymous';
     
     let planType = 'free';
     let limits = SUBSCRIPTION_LIMITS.free;
@@ -372,7 +364,6 @@ async function checkMealPlanLimit(req, res, next) {
     }
 
     // Count meal plans received this month
-    const MealPlan = require('../models/mealPlanModel');
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
