@@ -111,7 +111,8 @@ export const initializePayment = createAsyncThunk(
       );
       if (ok(response)) {
         const payload = d(response);
-        return payload.payment || payload;
+        // Return full payload so initResult.id and initResult.razorpay.orderId are available
+        return payload.razorpay ? payload : (payload.payment || payload);
       }
       return rejectWithValue(response.data?.message || 'Failed to initialize payment');
     } catch (error) {

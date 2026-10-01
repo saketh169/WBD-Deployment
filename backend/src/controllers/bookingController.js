@@ -7,8 +7,9 @@ const {
   sendBookingNotificationToDietitian,
 } = require("../services/bookingService");
 const razorpayService = require("../services/razorpayService");
-const { notifyDietitianNewBooking, notifyBookingUpdate, notifyUserUpdate } = require("../utils/socket");
 const crypto = require("crypto");
+
+const hold = 30; // Hold duration in seconds
 
 // Lightweight ICS generator (no external deps)
 function buildICS({ uid, start, end, title, description, location, url }) {
@@ -79,6 +80,11 @@ exports.createBookingPaymentOrder = async (req, res) => {
         consultationType: String(consultationType || '')
       }
     });
+
+    // Acquire payment lock so this order stays active
+    const userId = req.user.roleId || req.user.employeeId || req.user.userId;
+    const paymentLockKey = `lock:payment:booking:${userId}:${order.id}`;
+    await acquireLock(paymentLockKey, String(userId), hold);
 
     return res.status(201).json({
       success: true,
@@ -205,6 +211,16 @@ exports.createBooking = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Payment verification failed. Invalid Razorpay signature.",
+      });
+    }
+
+    // Check payment lock — if expired (>10 min), reject
+    const paymentLockKey = `lock:payment:booking:${userId}:${razorpayOrderId}`;
+    const paymentLockHolder = await getLockHolder(paymentLockKey);
+    if (!paymentLockHolder) {
+      return res.status(410).json({
+        success: false,
+        message: "Payment session expired. The 10-minute window has passed. Please initiate a new payment.",
       });
     }
 
@@ -355,6 +371,9 @@ exports.createBooking = async (req, res) => {
     invalidateCache(`dietitians:${dietitianId}:*`);
     invalidateCache(`slots:${dietitianId}:*`);
 
+    // Release payment lock — booking complete
+    releaseLock(paymentLockKey, String(userId));
+
     res.status(201).json({
       success: true,
       message: "Booking created successfully",
@@ -382,7 +401,9 @@ exports.holdSlot = async (req, res) => {
       return res.status(400).json({ success: false, message: "Dietitian, date, and time are required" });
     }
 
-    const lockKey = `lock:booking:${dietitianId}:${date}:${time}`;
+    const slotId = `${dietitianId}:${date}:${time}`;
+    const lockKey = `lock:booking:${slotId}`;
+    const lockedUntil = Date.now() + hold * 1000;
 
     // Verify slot is not already booked in DB
     const [year, month, day] = date.split('-').map(Number);
@@ -402,21 +423,33 @@ exports.holdSlot = async (req, res) => {
       return res.status(409).json({ success: false, message: "This slot is already booked." });
     }
 
-    // Acquire lock for 10 minutes (600 seconds)
-    const acquired = await acquireLock(lockKey, userId.toString(), 600);
+    // Acquire lock for hold duration (seconds)
+    const acquired = await acquireLock(lockKey, userId.toString(), hold);
 
     if (!acquired) {
       const currentHolder = await getLockHolder(lockKey);
       if (currentHolder === userId.toString()) {
-        return res.status(200).json({ success: true, message: "Slot is already held by you", expiresAt: Date.now() + 600000 });
+        return res.status(200).json({
+          success: true,
+          message: "Slot is already held by you",
+          slotId,
+          lockedUntil,
+          expiresAt: lockedUntil
+        });
       }
-      return res.status(423).json({ success: false, message: "This slot is currently being held by another user. Try again in 10 minutes." });
+      return res.status(423).json({
+        success: false,
+        message: `This slot is currently being held by another user. Try again in ${hold} seconds.`,
+        slotId
+      });
     }
 
     res.status(200).json({
       success: true,
-      message: "Slot held successfully for 10 minutes",
-      expiresAt: Date.now() + 600000
+      message: `Slot held successfully for ${hold} seconds`,
+      slotId,
+      lockedUntil,
+      expiresAt: lockedUntil
     });
   } catch (error) {
     console.error("Error holding slot:", error);
@@ -432,10 +465,11 @@ exports.releaseSlot = async (req, res) => {
   try {
     const { dietitianId, date, time } = req.body;
     const userId = req.user?.roleId || req.user?.userId;
-    const lockKey = `lock:booking:${dietitianId}:${date}:${time}`;
+    const slotId = `${dietitianId}:${date}:${time}`;
+    const lockKey = `lock:booking:${slotId}`;
 
     await releaseLock(lockKey, userId?.toString());
-    res.status(200).json({ success: true, message: "Slot hold released" });
+    res.status(200).json({ success: true, message: "Slot hold released", slotId });
   } catch (error) {
     console.error("Error releasing slot:", error);
     res.status(500).json({ success: false, message: "Error releasing slot hold" });
@@ -455,9 +489,9 @@ exports.getDietitianHolds = async (req, res) => {
       return res.status(400).json({ success: false, message: "Dietitian ID and date are required" });
     }
 
-    const pattern = `lock:booking:${dietitianId}:${date}:*`;
-    const keys = await getMatchingLocks(pattern);
-    const heldSlots = keys.map(k => k.split(':').pop());
+    const prefix = `lock:booking:${dietitianId}:${date}:`;
+    const keys = await getMatchingLocks(`${prefix}*`);
+    const heldSlots = keys.map((k) => k.replace(prefix, ""));
 
     res.status(200).json({ success: true, heldSlots });
   } catch (error) {

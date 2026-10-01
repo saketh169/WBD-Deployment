@@ -1,5 +1,9 @@
 const paymentService = require('../services/paymentService');
 const Payment = require('../models/paymentModel');
+const { acquireLock, getLockHolder, releaseLock } = require('../utils/redisClient');
+const razorpayService = require('../services/razorpayService');
+
+const hold = 30; // Hold duration in seconds
 
 /**
  * Initialize a payment
@@ -127,9 +131,35 @@ exports.initializePayment = async (req, res) => {
       });
     }
 
+    // Create Razorpay order
+    if (!razorpayService.isConfigured()) {
+      return res.status(500).json({
+        success: false,
+        message: 'Payment gateway is not configured'
+      });
+    }
+
+    const amountInPaise = Math.round(parseFloat(amount) * 100);
+    const receipt = `SUB_${result.payment.orderId}`.slice(0, 40);
+    const razorpayOrder = await razorpayService.createOrder({
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt,
+      notes: { planType, billingCycle, userId: String(userId) }
+    });
+
+    // Store Razorpay order ID on the payment record for verification later
+    result.payment.paymentGatewayResponse = { razorpayOrderId: razorpayOrder.id };
+    await result.payment.save();
+
+    // Acquire payment lock for this subscription order
+    const paymentLockKey = `lock:payment:subscription:${userId}:${result.payment.orderId}`;
+    await acquireLock(paymentLockKey, String(userId), hold);
+
     return res.status(201).json({
       success: true,
       message: 'Payment initialized successfully',
+      id: result.payment._id,
       payment: {
         id: result.payment._id,
         transactionId: result.payment.transactionId,
@@ -137,6 +167,12 @@ exports.initializePayment = async (req, res) => {
         amount: result.payment.amount,
         currency: result.payment.currency,
         paymentStatus: result.payment.paymentStatus
+      },
+      razorpay: {
+        orderId: razorpayOrder.id,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        keyId: razorpayService.getPublicKey()
       }
     });
   } catch (error) {
@@ -182,6 +218,16 @@ exports.processPayment = async (req, res) => {
       });
     }
 
+    // Check payment lock — if expired (>10 min), reject
+    const paymentLockKey = `lock:payment:subscription:${userIdToCheck}:${payment.orderId}`;
+    const lockHolder = await getLockHolder(paymentLockKey);
+    if (!lockHolder) {
+      return res.status(410).json({
+        success: false,
+        message: 'Payment session expired. The 10-minute window has passed. Please initiate a new payment.'
+      });
+    }
+
     // Process the payment
     const result = await paymentService.processPayment(paymentId, paymentDetails);
 
@@ -191,6 +237,9 @@ exports.processPayment = async (req, res) => {
         message: result.error || 'Payment processing failed'
       });
     }
+
+    // Release payment lock — subscription activated
+    releaseLock(paymentLockKey, String(userIdToCheck));
 
     return res.status(200).json({
       success: true,

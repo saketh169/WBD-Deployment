@@ -43,7 +43,8 @@ router.use(authenticateJWT);
 // POST /api/bookings/check-limits
 router.post("/check-limits", async (req, res) => {
   try {
-    const { userId, date } = req.body;
+    const { userId: bodyUserId, date } = req.body;
+    const userId = bodyUserId || req.user?.roleId || req.user?.employeeId || req.user?.userId;
 
     if (!userId) {
       return res.status(400).json({
@@ -52,19 +53,7 @@ router.post("/check-limits", async (req, res) => {
       });
     }
 
-    const { planType, limits, hasSubscription } = await getUserSubscription(userId);
-
-    // Free users cannot book — require subscription
-    if (!hasSubscription || planType === 'free') {
-      return res.status(403).json({
-        success: false,
-        message: 'Booking consultations requires a subscription. Please subscribe to a plan!',
-        limitReached: true,
-        planType: 'free',
-        requiresSubscription: true,
-        limits: limits
-      });
-    }
+    const { planType, limits } = await getUserSubscription(userId);
 
     // Check monthly booking count
     const startOfMonth = new Date();
@@ -239,6 +228,7 @@ router.post("/payment/order", bookingController.createBookingPaymentOrder);
 router.post("/hold", bookingController.holdSlot);
 router.post("/release", bookingController.releaseSlot);
 router.get("/holds/:dietitianId", bookingController.getDietitianHolds);
+router.get("/dietitian/:dietitianId/holds", bookingController.getDietitianHolds);
 
 // POST /api/bookings/create (with subscription limit check)
 router.post("/create", checkBookingLimit, bookingController.createBooking);
@@ -264,6 +254,7 @@ router.post("/create", checkBookingLimit, bookingController.createBooking);
  */
 // GET /api/bookings/user/:userId
 router.get("/user/:userId", bookingController.getUserBookings);
+router.get("/user/:userId/dietitian-list", bookingController.getUserBookings);
 
 /**
  * @swagger
@@ -315,6 +306,7 @@ router.get("/user/:userId/booked-slots", bookingController.getUserBookedSlots);
  */
 // GET /api/bookings/dietitian/:dietitianId
 router.get("/dietitian/:dietitianId", bookingController.getDietitianBookings);
+router.get("/dietitian/:dietitianId/client-list", bookingController.getDietitianBookings);
 
 /**
  * @swagger

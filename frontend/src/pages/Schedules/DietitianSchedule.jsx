@@ -238,13 +238,13 @@ const DietitianSchedule = () => {
     const handleDownloadICS = async (bookingId) => {
         try {
             const data = await getBookingIcs(bookingId);
-            if (data?.isError) { alert(data.message || 'Unable to download calendar invite'); return; }
-            const url = window.URL.createObjectURL(new Blob([data], { type: 'text/calendar' }));
-            const link = document.createElement('a');
-            link.href = url; link.download = `booking-${bookingId}.ics`;
-            document.body.appendChild(link); link.click(); link.remove();
-            window.URL.revokeObjectURL(url);
-        } catch { alert('Unable to download calendar invite'); }
+            if (data?.isError) { alert(data.message || 'Unable to open calendar'); return; }
+            if (data?.url) {
+                window.open(data.url, '_blank', 'noopener,noreferrer');
+            } else {
+                alert('Unable to open calendar');
+            }
+        } catch { alert('Unable to open calendar'); }
     };
 
     const openDrawerForDate = (date) => { setDrawerDate(date); setIsDrawerOpen(true); fetchDietitianSlots(date); };

@@ -98,7 +98,7 @@ router.get('/dietitians', async (req, res) => {
  *       404:
  *         description: Dietitian not found
  */
-router.get('/dietitians/:id', async (req, res) => {
+router.get(['/dietitians/:id', '/dietitians/:id/profile'], async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -242,11 +242,11 @@ router.get('/dietitians/profile/:id', authenticateJWT, async (req, res) => {
  *       200:
  *         description: List of clients
  */
-router.get('/dietitians/:id/clients', authenticateJWT, async (req, res) => {
+router.get(['/dietitians/:id/clients', '/dietitians/:id/client-list'], authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const cacheKey = `dietitians:${id}:clients`;
+    const cacheKey = `dietitians:${id}:clients:v2`;
     const { data: clients, cacheStatus, duration } = await cacheOrFetch(cacheKey, 300, async () => {
       // Get all bookings for this dietitian with lean projection
       const bookings = await Booking.find({ dietitianId: id })
@@ -278,40 +278,32 @@ router.get('/dietitians/:id/clients', authenticateJWT, async (req, res) => {
         const dateStr = new Date(booking.date).toISOString().split('T')[0];
         const bookingDateTime = new Date(`${dateStr}T${booking.time}`);
         const now = new Date();
-        const hoursSinceAppointment = (now - bookingDateTime) / (1000 * 60 * 60);
-
-        // Skip only if appointment was more than 12 hours ago
-        if (hoursSinceAppointment > 12 && bookingDateTime < now) {
-          return;
-        }
+        const bookingTime = new Date(booking.createdAt || booking.date).getTime();
 
         if (clientMap.has(clientId)) {
           const existing = clientMap.get(clientId);
           existing.totalSessions += 1;
 
-          // Update next appointment if this booking is in the future and earlier
-          if (bookingDateTime > now && (!existing.nextAppointment || bookingDateTime < new Date(existing.nextAppointment))) {
-            existing.nextAppointment = `${dateStr} ${booking.time}`;
+          if (bookingTime > (existing.bookingTimestamp || 0)) {
+            existing.bookingTimestamp = bookingTime;
+            existing.createdAt = booking.createdAt;
           }
 
-          // Update last consultation if this is more recent
-          if (new Date(booking.date) > new Date(existing.lastConsultation)) {
-            existing.lastConsultation = dateStr;
+          // Track upcoming appointment if future
+          if (bookingDateTime >= now) {
+            if (!existing.nextAppointmentDateTime || bookingDateTime < existing.nextAppointmentDateTime) {
+              existing.nextAppointment = `${dateStr} ${booking.time}`;
+              existing.nextAppointmentDateTime = bookingDateTime;
+            }
+          } else {
+            // Track most recent past consultation
+            if (!existing.lastConsultationDateTime || bookingDateTime > existing.lastConsultationDateTime) {
+              existing.lastConsultation = dateStr;
+              existing.lastConsultationDateTime = bookingDateTime;
+            }
           }
         } else {
-          const isUpcoming = bookingDateTime > now;
-          const isPast = bookingDateTime < now;
-
-          // Determine status: Active for upcoming/current, Completed for past
-          let clientStatus = 'Active';
-          if (isPast && booking.status === 'completed') {
-            clientStatus = 'Completed';
-          } else if (isPast) {
-            clientStatus = 'Completed';
-          } else if (booking.status === 'cancelled') {
-            clientStatus = 'Completed';
-          }
-
+          const isUpcoming = bookingDateTime >= now;
           const userProfile = userProfileMap.get(clientId) || {};
 
           clientMap.set(clientId, {
@@ -319,21 +311,45 @@ router.get('/dietitians/:id/clients', authenticateJWT, async (req, res) => {
             name: userProfile.name || booking.username,
             email: userProfile.email || booking.email,
             phone: userProfile.phone || booking.userPhone || 'N/A',
-            age: 'N/A', // Not available in booking
+            age: 'N/A',
             location: userProfile.address || booking.userAddress || 'N/A',
             consultationType: booking.consultationType || 'General Consultation',
             nextAppointment: isUpcoming ? `${dateStr} ${booking.time}` : null,
-            status: clientStatus,
+            nextAppointmentDateTime: isUpcoming ? bookingDateTime : null,
+            lastConsultation: !isUpcoming ? dateStr : null,
+            lastConsultationDateTime: !isUpcoming ? bookingDateTime : null,
+            bookingTimestamp: bookingTime,
+            createdAt: booking.createdAt,
             profileImage: userProfile.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.name || booking.username)}&background=28B463&color=fff&size=128`,
-            lastConsultation: dateStr,
             totalSessions: 1,
-            goals: [booking.dietitianSpecialization || 'General Health'],
-            isPast: isPast
+            goals: [booking.dietitianSpecialization || 'General Health']
           });
         }
       });
 
-      return Array.from(clientMap.values());
+      // Calculate status for each client:
+      // Pending: need to consult (upcoming appointment)
+      // Active: consulted this week (within 7 days)
+      // Completed: consultation older than 7 days
+      const now = new Date();
+      clientMap.forEach(client => {
+        if (client.nextAppointmentDateTime && client.nextAppointmentDateTime >= now) {
+          client.status = 'Pending';
+        } else if (client.lastConsultationDateTime) {
+          const daysSince = (now - client.lastConsultationDateTime) / (1000 * 60 * 60 * 24);
+          if (daysSince <= 7) {
+            client.status = 'Active';
+          } else {
+            client.status = 'Completed';
+          }
+        } else {
+          client.status = 'Active';
+        }
+      });
+
+      const clientList = Array.from(clientMap.values());
+      clientList.sort((a, b) => (b.bookingTimestamp || 0) - (a.bookingTimestamp || 0));
+      return clientList;
     });
 
     if (cacheStatus) {

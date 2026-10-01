@@ -25,6 +25,8 @@ import {
 } from "./BookingTimeSlots";
 import { getDietitianHolds } from "../../services/booking/bookingService";
 
+const hold = 30; // Hold duration in seconds — change once here to update entire page
+
 const BookingSidebar = ({
   isOpen,
   onClose,
@@ -71,9 +73,16 @@ const BookingSidebar = ({
 
   const [message, setMessage] = useState("");
   const [realTimeHeldSlots, setRealTimeHeldSlots] = useState([]);
+  const [holdTimeLeft, setHoldTimeLeft] = useState(hold);
+
+  const formatHoldTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   useEffect(() => {
-    if (!dietitianId) return;
+    if (!isOpen || !dietitianId) return;
     const socketURL = import.meta.env.VITE_API_URL || "http://localhost:5000";
     const socket = io(socketURL);
 
@@ -97,52 +106,42 @@ const BookingSidebar = ({
       socket.emit("leave_dietitian", dietitianId);
       socket.disconnect();
     };
+  }, [isOpen, dietitianId, selectedDate]);
+
+  const fetchInitialHolds = useCallback(async () => {
+    if (!dietitianId || !selectedDate) return;
+    try {
+      const res = await getDietitianHolds(dietitianId, selectedDate);
+      if (!res.isError && res.data) {
+        const held = res.data.heldSlots || (Array.isArray(res.data) ? res.data : []);
+        setRealTimeHeldSlots(held);
+      }
+    } catch (err) {
+      console.error("Error fetching initial holds:", err);
+    }
   }, [dietitianId, selectedDate]);
 
   useEffect(() => {
+    setSelectedTime("");
+    setMessage("");
+    setHoldTimeLeft(hold);
+
     if (!isOpen || !dietitianId || !selectedDate) return;
     const userId = user?.id || '';
+
+    const categorizedSlots = getCategorizedSlots(selectedDate);
+    setAvailableSlots(categorizedSlots);
 
     dispatch(clearBookedSlots());
     dispatch(fetchBookedSlots({ dietitianId, date: selectedDate, userId }));
     if (userId) {
       dispatch(fetchUserBookedSlots({ userId, date: selectedDate }));
     }
-  }, [isOpen, dietitianId, selectedDate, user?.id, dispatch]);
-
-  const fetchDietitianBookedSlots = useCallback(
-    (date) => {
-      if (!dietitianId || !date) return;
-      const userId = user?.id || '';
-      dispatch(fetchBookedSlots({ dietitianId, date, userId }));
-    },
-    [dietitianId, user, dispatch]
-  );
-
-  useEffect(() => {
-    if (!selectedDate || !dietitianId) return;
-
-    setMessage("");
-    const categorizedSlots = getCategorizedSlots(selectedDate);
-    setAvailableSlots(categorizedSlots);
-    fetchDietitianBookedSlots(selectedDate);
-
-    const fetchInitialHolds = async () => {
-      try {
-        const res = await getDietitianHolds(dietitianId, selectedDate);
-        if (!res.isError && res.data) {
-          const held = res.data.heldSlots || (Array.isArray(res.data) ? res.data : []);
-          setRealTimeHeldSlots(held);
-        }
-      } catch (err) {
-        console.error("Error fetching initial holds:", err);
-      }
-    };
 
     fetchInitialHolds();
-    const pollInterval = setInterval(fetchInitialHolds, 60000);
+    const pollInterval = setInterval(fetchInitialHolds, 3000);
     return () => clearInterval(pollInterval);
-  }, [selectedDate, dietitianId, fetchDietitianBookedSlots]);
+  }, [isOpen, dietitianId, selectedDate, user?.id, dispatch, fetchInitialHolds]);
 
   const getUserConflictAt = useCallback((time) => {
     return userBookedSlots.find(
@@ -167,32 +166,73 @@ const BookingSidebar = ({
 
   const handleTimeClick = async (time) => {
     if (isSlotUnavailable(time)) return;
+    if (time === selectedTime) return; // Already selected; double-click releases it
+
+    const previousTime = selectedTime;
+
+    // Instant optimistic update (0ms UI latency)
+    setSelectedTime(time);
+    setHoldTimeLeft(hold);
+    setMessage("");
 
     try {
-      if (selectedTime && selectedTime !== time) {
-        dispatch(releaseSlot({ dietitianId, date: selectedDate, time: selectedTime }));
+      if (previousTime) {
+        dispatch(releaseSlot({ dietitianId, date: selectedDate, time: previousTime }));
       }
 
       const resultAction = await dispatch(holdSlot({ dietitianId, date: selectedDate, time }));
 
-      if (holdSlot.fulfilled.match(resultAction)) {
-        setSelectedTime(time);
-        setMessage("");
-      } else {
-        const payloadMsg = resultAction.payload?.message || "";
-        if (resultAction.payload?.status === 423 || payloadMsg.toLowerCase().includes("another user")) {
-          setMessage(payloadMsg || "This slot is currently being held by another user.");
-        } else {
-          setSelectedTime(time);
-          setMessage("");
-        }
+      if (!holdSlot.fulfilled.match(resultAction)) {
+        const payload = resultAction.payload;
+        const payloadMsg = typeof payload === "string" ? payload : (payload?.message || "");
+
+        // Revert selection if slot is held by someone else or hold failed
+        setSelectedTime("");
+        setMessage(payloadMsg || "This slot is currently being held by another user.");
+
+        // Refresh holds immediately so the slot displays as Held
+        fetchInitialHolds();
       }
     } catch (error) {
       console.error("Error holding slot:", error);
-      setSelectedTime(time);
-      setMessage("");
+      setSelectedTime("");
+      setMessage("Error holding slot. Please try again.");
+      fetchInitialHolds();
     }
   };
+
+  useEffect(() => {
+    if (!selectedTime) {
+      setHoldTimeLeft(hold);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setHoldTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          if (dietitianId && selectedDate && selectedTime) {
+            dispatch(releaseSlot({ dietitianId, date: selectedDate, time: selectedTime }));
+          }
+          setSelectedTime("");
+          setMessage("Hold expired. The slot has been released. Please select a slot again.");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [selectedTime, dietitianId, selectedDate, dispatch]);
+
+  // Auto-clear banner messages after 3 seconds
+  useEffect(() => {
+    if (!message) return;
+    const timer = setTimeout(() => {
+      setMessage("");
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [message]);
 
   useEffect(() => {
     return () => {
@@ -201,6 +241,18 @@ const BookingSidebar = ({
       }
     };
   }, [dispatch, dietitianId, selectedDate, selectedTime]);
+
+  const handleReleaseHeldSlot = (timeToRelease = selectedTime) => {
+    if (!timeToRelease) return;
+    // Instant optimistic release
+    setSelectedTime("");
+    setHoldTimeLeft(hold);
+    setMessage("Slot released.");
+
+    if (dietitianId && selectedDate) {
+      dispatch(releaseSlot({ dietitianId, date: selectedDate, time: timeToRelease }));
+    }
+  };
 
   const handleSubmit = async () => {
     if (!selectedDate || !selectedTime) {
@@ -227,6 +279,7 @@ const BookingSidebar = ({
       if (!result.success && result.limitReached) return;
     } catch (error) {
       console.error('Error checking subscription limits:', error);
+      if (error?.limitReached || error?.requiresSubscription) return;
     }
 
     const dataToSend = {
@@ -330,18 +383,53 @@ const BookingSidebar = ({
             realTimeHeldSlots={realTimeHeldSlots}
             selectedTime={selectedTime}
             onSelectTime={handleTimeClick}
+            onReleaseTime={handleReleaseHeldSlot}
             isLoading={isLoading}
           />
 
           {message && (
-            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
-              {message}
+            <div
+              className={`mb-4 p-3 rounded-xl text-sm font-medium flex items-center justify-between border transition-all ${
+                message.toLowerCase().includes("released")
+                  ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                  : "bg-red-50 border-red-300 text-red-700"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {message.toLowerCase().includes("released") ? (
+                  <span className="text-emerald-600 text-base">✓</span>
+                ) : (
+                  <span className="text-red-600 text-base">⚠</span>
+                )}
+                <span>{message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMessage("")}
+                className="text-xs opacity-60 hover:opacity-100 ml-2 cursor-pointer font-bold"
+                aria-label="Dismiss message"
+              >
+                ✕
+              </button>
             </div>
           )}
 
           {selectedTime && (
-            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-sm font-medium">
-              Selected time: {selectedTime}
+            <div className="mb-4 p-3.5 bg-blue-50 border-2 border-blue-400 text-blue-900 rounded-xl flex items-center justify-between text-sm shadow-xs">
+              <div>
+                <div className="font-semibold text-blue-900 flex items-center gap-2">
+                  <span>Selected: {selectedTime}</span>
+                </div>
+                <p className="text-xs text-blue-600 mt-0.5">
+                  Double-click slot to release
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-blue-600 font-medium block">Expires in</span>
+                <span className="font-mono text-sm font-bold text-blue-700">
+                  {formatHoldTime(holdTimeLeft)}
+                </span>
+              </div>
             </div>
           )}
         </div>

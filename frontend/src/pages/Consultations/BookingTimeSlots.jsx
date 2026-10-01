@@ -38,7 +38,7 @@ export const BookingLegend = () => (
       </span>
       <span className="flex items-center">
         <span className="w-4 h-4 bg-emerald-600 rounded mr-2" />
-        Selected
+        Selected (Held)
       </span>
       <span className="flex items-center">
         <span className="w-4 h-4 bg-red-100 border-2 border-red-300 rounded mr-2" />
@@ -63,7 +63,8 @@ export const TimeSlotButton = ({
   userConflict,
   isRealTimeHeld,
   isSelected,
-  onSelect
+  onSelect,
+  onRelease
 }) => {
   let buttonClass = 'px-4 py-2 rounded-lg transition font-medium text-center relative border-2 cursor-pointer ';
   let isDisabled = false;
@@ -93,10 +94,18 @@ export const TimeSlotButton = ({
     <button
       type="button"
       onClick={() => onSelect(time)}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        if (isSelected && onRelease) {
+          onRelease(time);
+        }
+      }}
       disabled={isDisabled}
       className={buttonClass}
       title={
-        isBookedByCurrentUser
+        isSelected
+          ? 'Selected slot (held). Double-click to release'
+          : isBookedByCurrentUser
           ? 'This slot is booked by you with this dietitian'
           : isBookedByOthers
           ? 'This slot is booked by another user'
@@ -132,6 +141,7 @@ export const TimeSlotSections = ({
   realTimeHeldSlots,
   selectedTime,
   onSelectTime,
+  onReleaseTime,
   isLoading
 }) => {
   const renderSlot = (time) => (
@@ -144,6 +154,7 @@ export const TimeSlotSections = ({
       isRealTimeHeld={realTimeHeldSlots.includes(time) && time !== selectedTime}
       isSelected={selectedTime === time}
       onSelect={onSelectTime}
+      onRelease={onReleaseTime}
     />
   );
 

@@ -18,6 +18,8 @@ const PAYMENT_METHODS = [
   { key: 'upi', title: 'UPI' },
 ];
 
+const hold = 30;
+
 const PaymentNotificationModal = ({ isOpen, onClose, onSubmit, paymentDetails }) => {
   const dispatch = useDispatch();
   const { user } = useAuthContext();
@@ -93,6 +95,7 @@ const PaymentNotificationModal = ({ isOpen, onClose, onSubmit, paymentDetails })
       const razorpay = new window.Razorpay({
         key: keyId, amount: order.amount, currency: order.currency || 'INR',
         name: 'NutriConnect', description: `Consultation Booking with ${bookingBaseData.dietitianName}`, order_id: order.id,
+        timeout: hold,
         prefill: { name: bookingBaseData.username, email: bookingBaseData.email, contact: bookingBaseData.userPhone || '' },
         method: { card: selectedMethod === 'card', netbanking: selectedMethod === 'netbanking', upi: selectedMethod === 'upi', emi: false, wallet: false, paylater: false },
         notes: {
@@ -144,7 +147,7 @@ const PaymentNotificationModal = ({ isOpen, onClose, onSubmit, paymentDetails })
         <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 border border-white/20">
           <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
             <h2 className="text-2xl font-bold" style={{ color: '#1A4A40' }}>Complete Payment</h2>
-            <button onClick={onClose} className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-2xl font-light rounded-full w-8 h-8 flex items-center justify-center transition-colors" aria-label="Close modal">✕</button>
+            <button onClick={onClose} className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-2xl font-light rounded-full w-8 h-8 flex items-center justify-center transition-colors cursor-pointer" aria-label="Close modal">✕</button>
           </div>
 
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">

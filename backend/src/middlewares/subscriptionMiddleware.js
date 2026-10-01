@@ -123,18 +123,7 @@ async function checkBookingLimit(req, res, next) {
       });
     }
 
-    const { planType, limits, hasSubscription } = await getUserSubscription(userId);
-    
-    // Free users cannot book — require a subscription
-    if (!hasSubscription || planType === 'free') {
-      return res.status(403).json({
-        success: false,
-        message: 'Booking consultations requires a subscription. Please subscribe to a plan to book appointments!',
-        limitReached: true,
-        planType: 'free',
-        requiresSubscription: true
-      });
-    }
+    const { planType, limits } = await getUserSubscription(userId);
 
     // Check monthly booking count
     const startOfMonth = new Date();

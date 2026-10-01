@@ -26,6 +26,15 @@ const formatToIndianDate = (dateString) => {
   }
 };
 
+const getInitials = (name) => {
+  if (!name || typeof name !== 'string') return '??';
+  const clean = name.replace(/^(Dr\.|Dr|Mr\.|Mr|Ms\.|Ms|Mrs\.)\s+/i, '').trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return name.slice(0, 2).toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+};
+
 const ClientsList = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -130,24 +139,43 @@ const ClientsList = () => {
     };
   }, [user?.id, token, dispatch]);
 
-  // Use clients data directly from Redux and update status based on appointment time
+  // Use clients data directly from Redux and determine status based on appointment timing
   const clientsFromBookings = useMemo(() => {
     const now = new Date();
     return clients.map(client => {
-      let status = client.status || 'Active';
+      let status = 'Active';
 
-      // Check if appointment is past
+      let nextApptDate = null;
       if (client.nextAppointment) {
-        const appointmentDate = new Date(client.nextAppointment);
-        if (appointmentDate < now) {
-          status = 'Completed';
-        }
-      } else if (client.lastConsultation) {
-        const lastDate = new Date(client.lastConsultation);
-        if (lastDate < now) {
-          status = 'Completed';
+        const apptDate = new Date(client.nextAppointment);
+        if (!isNaN(apptDate.getTime()) && apptDate >= now) {
+          nextApptDate = apptDate;
         }
       }
+
+      if (nextApptDate) {
+        // Pending: need to consult / upcoming appointment
+        status = 'Pending';
+      } else if (client.lastConsultation) {
+        const lastDate = new Date(client.lastConsultation);
+        if (!isNaN(lastDate.getTime())) {
+          const daysSince = (now - lastDate) / (1000 * 60 * 60 * 24);
+          if (daysSince <= 7) {
+            // Active: this week (within 7 days of consultation)
+            status = 'Active';
+          } else {
+            // Completed: older than 7 days of consultation
+            status = 'Completed';
+          }
+        }
+      } else if (client.status) {
+        status = client.status;
+      }
+
+      const bookingTimestamp = client.bookingTimestamp ||
+        (client.createdAt ? new Date(client.createdAt).getTime() : 0) ||
+        (client.nextAppointment ? new Date(client.nextAppointment).getTime() : 0) ||
+        (client.lastConsultation ? new Date(client.lastConsultation).getTime() : 0);
 
       return {
         id: client.id,
@@ -162,27 +190,26 @@ const ClientsList = () => {
         profileImage: client.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(client.name)}&background=28B463&color=fff&size=128`,
         lastConsultation: client.lastConsultation || null,
         totalSessions: client.totalSessions || 1,
-        goals: client.goals || ['General Health']
+        goals: client.goals || ['General Health'],
+        bookingTimestamp
       };
     });
   }, [clients]);
 
-  // Combine mock data with real bookings
-  const allClients = useMemo(() => {
-    // Only show real bookings, remove mock data
-    return clientsFromBookings;
-  }, [clientsFromBookings]);
+  // Filter clients based on search and status, sorted by booking timestamp
+  const filteredClients = useMemo(() => {
+    const list = clientsFromBookings.filter(client => {
+      const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.consultationType.toLowerCase().includes(searchTerm.toLowerCase());
 
-  // Filter clients based on search and status
-  const filteredClients = allClients.filter(client => {
-    const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.consultationType.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'All' || client.status === statusFilter;
 
-    const matchesStatus = statusFilter === 'All' || client.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
 
-    return matchesSearch && matchesStatus;
-  });
+    return list.sort((a, b) => (b.bookingTimestamp || 0) - (a.bookingTimestamp || 0));
+  }, [clientsFromBookings, searchTerm, statusFilter]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -271,15 +298,9 @@ const ClientsList = () => {
                 className="bg-white rounded-2xl shadow-lg border border-emerald-100/50 p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
               >
                 <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-                  {/* Enhanced Profile Image with Gradient Border */}
                   <div className="shrink-0">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-linear-to-r from-emerald-400 to-teal-500 rounded-full blur-sm opacity-75"></div>
-                      <img
-                        src={client.profileImage}
-                        alt={client.name}
-                        className="relative w-24 h-24 rounded-full border-4 border-white shadow-lg object-cover"
-                      />
+                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-linear-to-br from-emerald-500 to-teal-600 text-white font-bold text-xl md:text-2xl flex items-center justify-center shadow-md select-none border-2 border-emerald-100">
+                      {getInitials(client.name)}
                     </div>
                   </div>
 
@@ -436,11 +457,9 @@ const ClientsList = () => {
               <div className="space-y-6">
                 {/* Profile Header */}
                 <div className="flex items-center gap-6 pb-6 border-b-2 border-gray-100">
-                  <img
-                    src={selectedClient.profileImage}
-                    alt={selectedClient.name}
-                    className="w-28 h-28 rounded-full border-4 border-emerald-500 shadow-lg object-cover"
-                  />
+                  <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-linear-to-br from-emerald-500 to-teal-600 text-white font-bold text-2xl md:text-3xl flex items-center justify-center shadow-md select-none border-2 border-emerald-500 shrink-0">
+                    {getInitials(selectedClient.name)}
+                  </div>
                   <div className="flex-1">
                     <h3 className="text-3xl font-bold text-teal-800 mb-2">
                       {selectedClient.name}

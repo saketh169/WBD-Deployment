@@ -29,12 +29,22 @@ const renderStars = (rating) => {
   return stars;
 };
 
+const getInitials = (name) => {
+  if (!name || typeof name !== 'string') return '??';
+  const clean = name.replace(/^(Dr\.|Dr|Mr\.|Mr|Ms\.|Ms|Mrs\.)\s+/i, '').trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return name.slice(0, 2).toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+};
+
 const DietitianCard = ({ dietitian: d, onBook, onMessage, onViewProfile }) => (
   <div className="bg-white rounded-2xl shadow-lg border border-emerald-100/50 p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
     <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-      <div className="shrink-0 relative">
-        <div className="absolute inset-0 bg-linear-to-r from-emerald-400 to-teal-500 rounded-full blur-sm opacity-75" />
-        <img src={d.profileImage} alt={d.name} className="relative w-24 h-24 rounded-full border-4 border-white shadow-lg object-cover" />
+      <div className="shrink-0">
+        <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-linear-to-br from-emerald-500 to-teal-600 text-white font-bold text-xl md:text-2xl flex items-center justify-center shadow-md select-none border-2 border-emerald-100">
+          {getInitials(d.name)}
+        </div>
       </div>
 
       <div className="flex-1 space-y-4">
@@ -130,7 +140,9 @@ const DietitianProfileModal = ({ dietitian: d, onClose, onBook }) => {
         </div>
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)] space-y-4">
           <div className="flex items-center gap-4 pb-4 border-b">
-            <img src={d.profileImage} alt={d.name} className="w-20 h-20 rounded-full border-2 border-emerald-500 object-cover" />
+            <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-linear-to-br from-emerald-500 to-teal-600 text-white font-bold text-xl md:text-2xl flex items-center justify-center shadow-md select-none border-2 border-emerald-500 shrink-0">
+              {getInitials(d.name)}
+            </div>
             <div>
               <h3 className="text-2xl font-bold text-gray-800">{d.name}</h3>
               <p className="text-emerald-600 font-semibold">{d.specialization}</p>
@@ -233,24 +245,37 @@ const DietitiansList = () => {
       const dietitianId = booking.dietitianId;
       const dateStr = new Date(booking.date).toISOString().split('T')[0];
       const bookingDateTime = new Date(`${dateStr}T${booking.time}`);
-      const hoursSinceAppointment = (now - bookingDateTime) / (1000 * 60 * 60);
-      if (hoursSinceAppointment > 12 && bookingDateTime < now) return;
+      const bookingTimestamp = new Date(booking.createdAt || booking.date).getTime();
 
       const profile = dietitianProfiles[dietitianId] || {};
       const bookingType = booking.consultationType || (profile.modes?.includes('In-person') ? 'In-person' : 'Online');
+
       if (dietitianMap.has(dietitianId)) {
         const existing = dietitianMap.get(dietitianId);
         existing.totalSessions += 1;
-        if (bookingDateTime > now && (!existing.nextAppointmentDateTime || bookingDateTime < existing.nextAppointmentDateTime)) {
-          existing.nextAppointment = `${dateStr} ${booking.time}`;
-          existing.nextAppointmentDate = booking.date;
-          existing.nextAppointmentTime = booking.time;
-          existing.nextAppointmentDateTime = bookingDateTime;
-          existing.consultationType = bookingType;
+        if (bookingTimestamp > (existing.bookingTimestamp || 0)) {
+          existing.bookingTimestamp = bookingTimestamp;
+        }
+
+        // Check if upcoming
+        if (bookingDateTime >= now) {
+          if (!existing.nextAppointmentDateTime || bookingDateTime < existing.nextAppointmentDateTime) {
+            existing.nextAppointment = `${dateStr} ${booking.time}`;
+            existing.nextAppointmentDate = booking.date;
+            existing.nextAppointmentTime = booking.time;
+            existing.nextAppointmentDateTime = bookingDateTime;
+            existing.consultationType = bookingType;
+          }
           existing.upcomingSessions += 1;
+        } else {
+          // Past consultation
+          if (!existing.lastConsultationDateTime || bookingDateTime > existing.lastConsultationDateTime) {
+            existing.lastConsultation = booking.date;
+            existing.lastConsultationDateTime = bookingDateTime;
+          }
         }
       } else {
-        const isUpcoming = bookingDateTime > now;
+        const isUpcoming = bookingDateTime >= now;
         dietitianMap.set(dietitianId, {
           id: dietitianId,
           name: profile.name || booking.dietitianName,
@@ -264,7 +289,9 @@ const DietitiansList = () => {
           nextAppointmentDate: isUpcoming ? booking.date : null,
           nextAppointmentTime: isUpcoming ? booking.time : null,
           nextAppointmentDateTime: isUpcoming ? bookingDateTime : null,
-          status: (bookingDateTime < now || booking.status === 'cancelled') ? 'Completed' : 'Active',
+          lastConsultation: !isUpcoming ? booking.date : null,
+          lastConsultationDateTime: !isUpcoming ? bookingDateTime : null,
+          bookingTimestamp,
           profileImage: `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || booking.dietitianName || 'Dietitian')}&background=28B463&color=fff&size=128`,
           totalSessions: 1,
           upcomingSessions: isUpcoming ? 1 : 0,
@@ -273,9 +300,27 @@ const DietitiansList = () => {
           experience: profile.experience || 'N/A',
           location: profile.location || 'N/A',
           languages: profile.languages || ['English'],
-          qualifications: profile.education?.[0] || 'Professional Dietitian',
-          lastConsultation: booking.date
+          qualifications: profile.education?.[0] || 'Professional Dietitian'
         });
+      }
+    });
+
+    // Compute status for each dietitian:
+    // Pending: need to consult (upcoming appointment)
+    // Active: consultation was this week (within 7 days)
+    // Completed: consultation is older than 7 days
+    dietitianMap.forEach(d => {
+      if (d.nextAppointmentDateTime && d.nextAppointmentDateTime >= now) {
+        d.status = 'Pending';
+      } else if (d.lastConsultationDateTime) {
+        const daysSince = (now - d.lastConsultationDateTime) / (1000 * 60 * 60 * 24);
+        if (daysSince <= 7) {
+          d.status = 'Active';
+        } else {
+          d.status = 'Completed';
+        }
+      } else {
+        d.status = 'Active';
       }
     });
 
@@ -283,7 +328,7 @@ const DietitiansList = () => {
   }, [bookings, dietitianProfiles]);
 
   const filteredDietitians = useMemo(() => {
-    return dietitiansFromBookings.filter(d => {
+    const list = dietitiansFromBookings.filter(d => {
       const matchesSearch = d.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         d.specialization.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (d.consultationType && d.consultationType.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -291,6 +336,9 @@ const DietitiansList = () => {
       const matchesStatus = statusFilter === 'All' || d.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
+
+    // Sort by booking timestamp in every filter (newest booking first)
+    return list.sort((a, b) => (b.bookingTimestamp || 0) - (a.bookingTimestamp || 0));
   }, [dietitiansFromBookings, searchTerm, statusFilter]);
 
   return (

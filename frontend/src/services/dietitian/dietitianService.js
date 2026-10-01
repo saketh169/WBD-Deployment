@@ -1,16 +1,40 @@
 import axiosInstance, { makeRequest } from '../../utils/axiosInstance';
 
-export const getAllDietitians = (params = {}) =>
-  makeRequest(() => axiosInstance.get('/api/dietitians', { params }));
+const _dietitiansCache = new Map(); // key → { data, expiresAt }
+const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+const _getCached = (key) => {
+  const entry = _dietitiansCache.get(key);
+  if (entry && Date.now() < entry.expiresAt) return entry.data;
+  _dietitiansCache.delete(key);
+  return null;
+};
+const _setCache = (key, data) =>
+  _dietitiansCache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+
+export const getAllDietitians = async (params = {}) => {
+  const key = `dietitians:${JSON.stringify(params)}`;
+  const cached = _getCached(key);
+  if (cached) return cached;
+  const result = await makeRequest(() => axiosInstance.get('/api/dietitians', { params }));
+  if (!result?.isError) _setCache(key, result);
+  return result;
+};
 
 export const getDietitianById = (id) =>
-  makeRequest(() => axiosInstance.get(`/api/dietitians/${id}`));
+  makeRequest(() => axiosInstance.get(`/api/dietitians/${id}/profile`));
 
 export const getDietitianProfile = (id) =>
   makeRequest(() => axiosInstance.get(`/api/dietitians/profile/${id}`));
 
-export const getDietitianClients = (id) =>
-  makeRequest(() => axiosInstance.get(`/api/dietitians/${id}/clients`));
+export const getDietitianClients = async (id) => {
+  const key = `dietitian:clients:${id}`;
+  const cached = _getCached(key);
+  if (cached) return cached;
+  const result = await makeRequest(() => axiosInstance.get(`/api/dietitians/${id}/client-list`));
+  if (!result?.isError) _setCache(key, result);
+  return result;
+};
 
 export const getDietitianStats = (id) =>
   makeRequest(() => axiosInstance.get(`/api/dietitians/${id}/stats`));

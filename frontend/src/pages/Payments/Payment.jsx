@@ -18,6 +18,8 @@ const PAYMENT_METHODS = [
   { key: "emi", title: "EMI" },
 ];
 
+const hold = 30;
+
 const Payment = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -88,6 +90,7 @@ const Payment = () => {
         key: keyId, amount: initResult.razorpay.amount, currency: initResult.razorpay.currency || 'INR',
         name: 'NutriConnect', description: `${plan?.toUpperCase()} Plan (${billing})`,
         order_id: initResult.razorpay.orderId,
+        timeout: hold,
         method: { card: selectedMethod === 'card', netbanking: selectedMethod === 'netbanking', upi: selectedMethod === 'upi', emi: selectedMethod === 'emi', wallet: false, paylater: false },
         notes: { planType: plan, billingCycle: billing },
         theme: { color: '#27AE60' },
@@ -190,7 +193,9 @@ const Payment = () => {
                   </div>
                 ) : (
                   <>
-                    <h2 className="text-2xl font-bold mb-6" style={{ color: '#1A4A40' }}>Confirm Your Payment</h2>
+                    <div className="flex justify-between items-center mb-6">
+                      <h2 className="text-2xl font-bold" style={{ color: '#1A4A40' }}>Confirm Your Payment</h2>
+                    </div>
                     <div className="bg-gray-50 rounded-lg p-6 mb-6">
                       <div className="mb-4"><p className="text-sm text-gray-600 mb-1">Payment Method</p><p className="text-lg font-semibold" style={{ color: '#1A4A40' }}>{selectedMethodTitle}</p></div>
                       <div className="border-t pt-4"><p className="text-sm text-gray-600 mb-1">Plan Details</p><p className="text-base font-medium" style={{ color: '#2F4F4F' }}>{plan?.toUpperCase()} Plan ({billing})</p></div>

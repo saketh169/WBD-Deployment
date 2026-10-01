@@ -92,11 +92,18 @@ export const fetchUserBookings = createAsyncThunk(
   'booking/fetchUserBookings',
   async ({ userId }, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/user/${userId}`, getAuthConfig('user'));
+      const response = await axios.get(`${API_BASE_URL}/user/${userId}/dietitian-list`, getAuthConfig('user'));
       if (isSuccess(response)) return d(response);
       return rejectWithValue(response.data?.message || 'Failed to fetch user bookings');
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch user bookings');
+    }
+  },
+  {
+    condition: ({ force = false }, { getState }) => {
+      if (force) return true;
+      const { booking } = getState();
+      if (booking?.isLoading) return false;
     }
   }
 );
@@ -105,11 +112,18 @@ export const fetchDietitianBookings = createAsyncThunk(
   'booking/fetchDietitianBookings',
   async ({ dietitianId }, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/dietitian/${dietitianId}`, getAuthConfig('dietitian'));
+      const response = await axios.get(`${API_BASE_URL}/dietitian/${dietitianId}/client-list`, getAuthConfig('dietitian'));
       if (isSuccess(response)) return d(response);
       return rejectWithValue(response.data?.message || 'Failed to fetch dietitian bookings');
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch dietitian bookings');
+    }
+  },
+  {
+    condition: ({ force = false }, { getState }) => {
+      if (force) return true;
+      const { booking } = getState();
+      if (booking?.isLoading) return false;
     }
   }
 );
@@ -220,7 +234,11 @@ export const holdSlot = createAsyncThunk(
       const response = await axios.post(`${API_BASE_URL}/hold`, { dietitianId, date, time }, getAuthConfig('user'));
       return d(response);
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to hold slot');
+      const errData = error.response?.data || {};
+      return rejectWithValue({
+        message: errData.message || error.response?.data?.message || error.message || 'Failed to hold slot',
+        status: error.response?.status
+      });
     }
   }
 );
@@ -241,11 +259,18 @@ export const fetchDietitianClients = createAsyncThunk(
   'booking/fetchDietitianClients',
   async ({ dietitianId }, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${DIETITIAN_API_URL}/${dietitianId}/clients`, getAuthConfig('dietitian'));
+      const response = await axios.get(`${DIETITIAN_API_URL}/${dietitianId}/client-list`, getAuthConfig('dietitian'));
       if (isSuccess(response)) return d(response);
       return rejectWithValue(response.data?.message || 'Failed to fetch clients');
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch clients');
+    }
+  },
+  {
+    condition: ({ force = false }, { getState }) => {
+      if (force) return true;
+      const { booking } = getState();
+      if (booking?.isLoading) return false;
     }
   }
 );
@@ -254,7 +279,7 @@ export const fetchDietitianProfile = createAsyncThunk(
   'booking/fetchDietitianProfile',
   async ({ dietitianId }, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${DIETITIAN_API_URL}/${dietitianId}`, getAuthConfig('user'));
+      const response = await axios.get(`${DIETITIAN_API_URL}/${dietitianId}/profile`, getAuthConfig('user'));
       if (isSuccess(response)) return d(response);
       return rejectWithValue(response.data?.message || 'Failed to fetch dietitian profile');
     } catch (error) {
@@ -443,10 +468,9 @@ const bookingSlice = createSlice({
       .addCase(fetchDietitianProfile.rejected, (state) => { state.isLoading = false; })
 
       // Slot Hold
-      .addCase(holdSlot.pending, (state) => { state.isLoadingSlots = true; })
-      .addCase(holdSlot.fulfilled, (state) => { state.isLoadingSlots = false; })
+      .addCase(holdSlot.pending, () => {})
+      .addCase(holdSlot.fulfilled, () => {})
       .addCase(holdSlot.rejected, (state, action) => {
-        state.isLoadingSlots = false;
         state.error = action.payload?.message || 'Slot is currently held by someone else';
       });
   },

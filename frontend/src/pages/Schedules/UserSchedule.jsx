@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuthContext } from '../../hooks/useAuthContext';
+import { decodeTokenPayload } from '../../utils/jwtUtils';
 import { getUserBookings, getMeetingLink, getBookingIcs } from '../../services/booking/bookingService';
 
 // Helper function to decode HTML entities
@@ -63,7 +64,7 @@ const convertTimeTo24Hour = (time) => {
 
 
 const UserSchedule = () => {
-    const { user, token } = useAuthContext();
+    const { user, token, loading: authLoading } = useAuthContext();
     
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -79,12 +80,12 @@ const UserSchedule = () => {
     // Fetch user bookings from API
     useEffect(() => {
         const fetchBookings = async () => {
-            // Use user ID from AuthContext - this is the correct userId for bookings
-            const userId = user?.id;
+            if (authLoading) return;
+
+            const userId = user?.id || user?._id || decodeTokenPayload(token)?.roleId || decodeTokenPayload(token)?.userId;
             
             if (!userId) {
-                console.error('No user ID available');
-                setLoading(false);
+                if (!token) setLoading(false);
                 return;
             }
 
@@ -92,9 +93,8 @@ const UserSchedule = () => {
                 setLoading(true);
                 const response = await getUserBookings(userId);
                 if (response && !response.isError && response.success) {
-                    setBookings(response.data);
+                    setBookings(response.data || []);
                 } else {
-                    console.error('Failed to fetch bookings:', response?.message);
                     setBookings([]);
                 }
             } catch (error) {
@@ -106,7 +106,7 @@ const UserSchedule = () => {
         };
 
         fetchBookings();
-    }, [user, token]);
+    }, [user?.id, user?._id, token, authLoading]);
 
     // Convert bookings array to bookingsByDay object
     const bookingsByDay = useMemo(() => {
@@ -167,20 +167,18 @@ const UserSchedule = () => {
         try {
             const data = await getBookingIcs(bookingId);
             if (data?.isError) {
-                alert(data.message || 'Failed to download ICS');
+                alert(data.message || 'Unable to open calendar');
                 return;
             }
-            const blobUrl = window.URL.createObjectURL(new Blob([data], { type: 'text/calendar' }));
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            link.download = `booking-${bookingId}.ics`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(blobUrl);
+            const url = data?.url;
+            if (url) {
+                window.open(url, '_blank', 'noopener,noreferrer');
+            } else {
+                alert('Unable to open calendar');
+            }
         } catch (error) {
-            console.error('Error downloading calendar invite:', error);
-            alert(error.response?.data?.message || 'Unable to download calendar invite');
+            console.error('Error opening calendar:', error);
+            alert(error.response?.data?.message || 'Unable to open calendar');
         }
     };
 

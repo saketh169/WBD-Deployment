@@ -41,7 +41,7 @@ class PaymentService {
   }
 
   /**
-   * Process payment (simulate payment gateway)
+   * Process payment with Razorpay signature verification
    */
   async processPayment(paymentId, paymentDetails) {
     try {
@@ -50,37 +50,38 @@ class PaymentService {
         return { success: false, error: 'Payment not found' };
       }
 
-      // Update payment status to processing
-      payment.paymentStatus = 'processing';
-      await payment.save();
+      const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = paymentDetails;
 
-      // Simulate payment processing delay (in real scenario, this would be payment gateway API call)
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Verify Razorpay signature
+      const razorpayService = require('./razorpayService');
+      const isValid = razorpayService.verifySignature({
+        orderId: razorpayOrderId,
+        paymentId: razorpayPaymentId,
+        signature: razorpaySignature
+      });
 
-      // Simulate 95% success rate (for testing purposes)
-      const isSuccess = Math.random() > 0.05;
-
-      if (isSuccess) {
-        // Payment successful - activate subscription
-        await payment.activateSubscription();
-        
-        return {
-          success: true,
-          payment,
-          message: 'Payment processed successfully'
-        };
-      } else {
-        // Payment failed
+      if (!isValid) {
         payment.paymentStatus = 'failed';
-        payment.failureReason = 'Payment declined by bank';
+        payment.failureReason = 'Invalid payment signature';
         await payment.save();
-        
-        return {
-          success: false,
-          error: 'Payment failed',
-          payment
-        };
+        return { success: false, error: 'Payment verification failed. Invalid signature.' };
       }
+
+      // Store gateway response
+      payment.paymentGatewayResponse = {
+        razorpayOrderId,
+        razorpayPaymentId,
+        razorpaySignature
+      };
+
+      // Activate subscription
+      await payment.activateSubscription();
+
+      return {
+        success: true,
+        payment,
+        message: 'Payment processed successfully'
+      };
     } catch (error) {
       console.error('Error processing payment:', error);
       return { success: false, error: error.message };
