@@ -121,7 +121,6 @@ const swaggerOptions = {
       { name: 'Profile', description: 'User profile management' },
       { name: 'Bookings', description: 'Consultation bookings' },
       { name: 'Payments', description: 'Payment processing' },
-      { name: 'NutriAgent', description: 'NutriAgent AI clinical assistant and MCP server' },
       { name: 'Chatbot', description: 'Chatbot interaction' },
       { name: 'Blog', description: 'Blog management' },
       { name: 'Meal Plans', description: 'Meal plan operations' },
@@ -147,7 +146,6 @@ const swaggerOptions = {
     './src/routes/profileRoutes.js',
     './src/routes/bookingRoutes.js',
     './src/routes/paymentRoutes.js',
-    './src/agent/index.js',
     './src/routes/blogRoutes.js',
     './src/routes/mealPlanRoutes.js',
     './src/routes/healthReportRoutes.js',
@@ -185,6 +183,11 @@ app.use('/api', profileRoutes);
 app.use('/api', progressRoutes);
 
 // NutriAgent AI routes mounted at '/api/agent'
+// Standalone Swagger documentation is served by Fastify at http://localhost:5001/docs
+app.get('/api/agent/docs', (req, res) => {
+  const agentPort = process.env.AGENT_PORT || 5001;
+  res.redirect(`http://localhost:${agentPort}/docs`);
+});
 app.use('/api/agent', agentRoutes);
 
 // Verify routes mounted at '/api/verify'
@@ -279,3 +282,11 @@ const server = app.listen(PORT, () => {
 
 // Initialize Socket.io
 require('./utils/socket').init(server, ALLOWED_ORIGINS);
+
+// Initialize Standalone Fastify NutriAgent Server (Swagger UI & MCP protocol)
+const { start: startFastifyAgent } = require('./agent/fastifyAgentServer');
+if (process.env.AUTO_START_AGENT !== 'false') {
+  startFastifyAgent().catch((err) => {
+    console.warn('[Fastify Agent Auto-Start Notice]:', err.message);
+  });
+}
