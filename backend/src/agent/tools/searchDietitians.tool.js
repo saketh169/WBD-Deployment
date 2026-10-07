@@ -263,7 +263,7 @@ async function executeSearchDietitians(
       if (directMatches.length > 0) {
         matched = directMatches;
       } else {
-        matched = scored.filter((d) => d.semScore >= 0.51);
+        matched = scored.filter((d) => d.semScore >= 0.495);
       }
 
       if (matched.length === 0) {
