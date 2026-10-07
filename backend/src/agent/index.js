@@ -164,6 +164,55 @@ function applyBookingToMessageCards(messages, b) {
  * SIMPLY UNCOMMENT `checkAgentLimit` in the middleware chain below:
  * ==============================================================================
  */
+/**
+ * @swagger
+ * /api/agent/chat:
+ *   post:
+ *     tags: ['NutriAgent']
+ *     summary: Interact with NutriAgent clinical AI assistant
+ *     description: Runs clinical reasoning via LangGraph and Google Gemini with multi-tool dispatch (specialist discovery, USDA nutrition, meal planning, slot booking). Supports attached health documents.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - message
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 example: "Find verified dietitians specializing in PCOS and insulin resistance"
+ *               sessionId:
+ *                 type: string
+ *                 nullable: true
+ *                 example: "session-1710000000"
+ *               history:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *               file:
+ *                 type: object
+ *                 nullable: true
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                   type:
+ *                     type: string
+ *                   base64:
+ *                     type: string
+ *     responses:
+ *       200:
+ *         description: AI response with reasoning text, interactive card payloads, and executed tool logs
+ *       400:
+ *         description: Message or document required
+ *       401:
+ *         description: Unauthorized - JWT required
+ *       500:
+ *         description: Internal error processing consultation query
+ */
 // router.post('/chat', checkAgentLimit, async (req, res) => {
 router.post("/chat", authenticateJWT, async (req, res) => {
   try {
@@ -301,7 +350,21 @@ router.post("/chat", authenticateJWT, async (req, res) => {
 });
 
 /**
- * GET /api/agent/sessions - Fetch all past consultation sessions for the authenticated user
+ * @swagger
+ * /api/agent/sessions:
+ *   get:
+ *     tags: ['NutriAgent']
+ *     summary: Retrieve consultation sessions list
+ *     description: Fetch all past consultation sessions and conversation previews for the authenticated user
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of consultation sessions
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Failed to fetch consultation sessions
  */
 router.get("/sessions", authenticateJWT, async (req, res) => {
   try {
@@ -341,7 +404,30 @@ router.get("/sessions", authenticateJWT, async (req, res) => {
 });
 
 /**
- * GET /api/agent/session/:sessionId - Fetch full message history for a specific owned session
+ * @swagger
+ * /api/agent/session/{sessionId}:
+ *   get:
+ *     tags: ['NutriAgent']
+ *     summary: Retrieve full consultation session history
+ *     description: Fetch complete message logs, reasoning steps, and clinical cards for a specific session
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Unique consultation session ID
+ *     responses:
+ *       200:
+ *         description: Session details and message history
+ *       404:
+ *         description: Session not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Failed to fetch session history
  */
 router.get("/session/:sessionId", authenticateJWT, async (req, res) => {
   try {
@@ -391,7 +477,51 @@ router.get("/session/:sessionId", authenticateJWT, async (req, res) => {
 });
 
 /**
- * POST /api/agent/session/:sessionId/message - Append and persist a message to owned session history
+ * @swagger
+ * /api/agent/session/{sessionId}/message:
+ *   post:
+ *     tags: ['NutriAgent']
+ *     summary: Append message to consultation session
+ *     description: Save user or bot message card payload into the session chat history
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Consultation session ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - message
+ *             properties:
+ *               message:
+ *                 type: object
+ *                 properties:
+ *                   content:
+ *                     type: string
+ *                   type:
+ *                     type: string
+ *                     enum: [user, bot]
+ *                   cards:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *     responses:
+ *       200:
+ *         description: Message appended successfully
+ *       400:
+ *         description: Invalid message payload
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Failed to save message
  */
 router.post(
   "/session/:sessionId/message",
@@ -460,7 +590,30 @@ router.post(
 );
 
 /**
- * DELETE /api/agent/session/:sessionId - Delete a specific owned consultation session
+ * @swagger
+ * /api/agent/session/{sessionId}:
+ *   delete:
+ *     tags: ['NutriAgent']
+ *     summary: Delete a consultation session
+ *     description: Permanently remove a specific consultation session and its message logs
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Consultation session ID
+ *     responses:
+ *       200:
+ *         description: Session deleted successfully
+ *       404:
+ *         description: Session not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Failed to delete session
  */
 router.delete("/session/:sessionId", authenticateJWT, async (req, res) => {
   try {
@@ -493,7 +646,21 @@ router.delete("/session/:sessionId", authenticateJWT, async (req, res) => {
 });
 
 /**
- * DELETE /api/agent/sessions/clear - Clear all sessions for the authenticated user
+ * @swagger
+ * /api/agent/sessions/clear:
+ *   delete:
+ *     tags: ['NutriAgent']
+ *     summary: Clear all consultation sessions
+ *     description: Permanently deletes all consultation session histories for the authenticated user
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All consultation history cleared
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Failed to clear consultation history
  */
 router.delete("/sessions/clear", authenticateJWT, async (req, res) => {
   try {
@@ -519,9 +686,75 @@ router.delete("/sessions/clear", authenticateJWT, async (req, res) => {
 });
 
 // --- Model Context Protocol (MCP) Endpoints ---
-// Uses optionalAuthenticateJWT so external hosts (Claude Desktop, Cursor, MCP Inspector)
-// can discover and run tools seamlessly, while binding userId when token is provided.
+/**
+ * @swagger
+ * /api/agent/mcp/sse:
+ *   get:
+ *     tags: ['NutriAgent']
+ *     summary: Establish Model Context Protocol (MCP) SSE stream
+ *     description: Establishes a persistent Server-Sent Events (SSE) stream for Model Context Protocol hosts (Claude Desktop, Cursor IDE, VS Code Copilot, MCP Inspector). Provides 6 clinical tools and healthcare guidelines.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: token
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Optional JWT token to bind session to patient profile
+ *     responses:
+ *       200:
+ *         description: Real-time SSE event stream initiated
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ */
 router.get("/mcp/sse", optionalAuthenticateJWT, handleMCPSSE);
+
+/**
+ * @swagger
+ * /api/agent/mcp/messages:
+ *   post:
+ *     tags: ['NutriAgent']
+ *     summary: Submit JSON-RPC message to MCP session
+ *     description: Handles incoming JSON-RPC 2.0 messages (e.g. tools/list, tools/call) keyed by sessionId for connected MCP clients
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Active MCP session ID received from SSE handshake
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - jsonrpc
+ *               - method
+ *             properties:
+ *               jsonrpc:
+ *                 type: string
+ *                 example: "2.0"
+ *               id:
+ *                 type: integer
+ *                 example: 1
+ *               method:
+ *                 type: string
+ *                 example: "tools/call"
+ *               params:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: JSON-RPC response or accepted acknowledgement
+ *       400:
+ *         description: Missing sessionId or invalid JSON-RPC payload
+ */
 router.post("/mcp/messages", optionalAuthenticateJWT, handleMCPMessages);
 
 module.exports = router;

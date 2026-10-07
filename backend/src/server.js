@@ -102,7 +102,7 @@ const swaggerOptions = {
         description: 'Development Server'
       },
       {
-        url: process.env.PRODUCTION_URL || 'https://api.nutriconnect.com',
+        url: process.env.PRODUCTION_URL || 'https://nutri-connect-wbd-backend.vercel.app',
         description: 'Production Server'
       }
     ],
@@ -121,6 +121,7 @@ const swaggerOptions = {
       { name: 'Profile', description: 'User profile management' },
       { name: 'Bookings', description: 'Consultation bookings' },
       { name: 'Payments', description: 'Payment processing' },
+      { name: 'NutriAgent', description: 'NutriAgent AI clinical assistant and MCP server' },
       { name: 'Chatbot', description: 'Chatbot interaction' },
       { name: 'Blog', description: 'Blog management' },
       { name: 'Meal Plans', description: 'Meal plan operations' },

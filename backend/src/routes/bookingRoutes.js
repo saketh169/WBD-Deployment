@@ -225,12 +225,93 @@ router.post("/check-limits", async (req, res) => {
 router.post("/payment/order", bookingController.createBookingPaymentOrder);
 
 // Slot Holding & Double-Booking Prevention Routes (10-min Redis hold)
+/**
+ * @swagger
+ * /api/bookings/hold:
+ *   post:
+ *     tags: ['Bookings']
+ *     summary: Hold consultation slot temporarily
+ *     description: Places a temporary hold (10 minutes) on a dietitian's calendar slot to prevent double-booking during checkout
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - dietitianId
+ *               - date
+ *               - time
+ *             properties:
+ *               dietitianId:
+ *                 type: string
+ *               date:
+ *                 type: string
+ *                 format: date
+ *               time:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Slot held successfully
+ *       409:
+ *         description: Slot already reserved or booked
+ */
 router.post("/hold", bookingController.holdSlot);
+
+/**
+ * @swagger
+ * /api/bookings/release:
+ *   post:
+ *     tags: ['Bookings']
+ *     summary: Release held consultation slot
+ *     description: Releases an active temporary hold on a consultation slot when checkout is canceled
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - dietitianId
+ *               - date
+ *               - time
+ *             properties:
+ *               dietitianId:
+ *                 type: string
+ *               date:
+ *                 type: string
+ *               time:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Slot released successfully
+ */
 router.post("/release", bookingController.releaseSlot);
+
+/**
+ * @swagger
+ * /api/bookings/holds/{dietitianId}:
+ *   get:
+ *     tags: ['Bookings']
+ *     summary: Get active holds for dietitian
+ *     description: Retrieve all currently held slots for a dietitian
+ *     parameters:
+ *       - in: path
+ *         name: dietitianId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of active slot holds
+ */
 router.get("/holds/:dietitianId", bookingController.getDietitianHolds);
 router.get("/dietitian/:dietitianId/holds", bookingController.getDietitianHolds);
 
-// POST /api/bookings/create (with subscription limit check)
 router.post("/create", checkBookingLimit, bookingController.createBooking);
 
 /**

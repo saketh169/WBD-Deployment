@@ -7,6 +7,7 @@ import Footer from './components/Footer/Footer';
 import Home from './pages/Home';
 import Aboutus from './pages/Aboutus';
 import Blog from './pages/Blog';
+import BlogPost from './pages/Blog/BlogPost';
 import Guide from './pages/Guide';
 
 import Contactus from './pages/Contactus';
@@ -56,6 +57,7 @@ const App = () => {
                       <Route path="/" element={<Home />} />
                       <Route path="/about-us" element={<Aboutus />} />
                       <Route path="/blog" element={<Blog />} />
+                      <Route path="/blog/:id" element={<BlogPost />} />
                       <Route path="/guide" element={<Guide />} />
                       <Route path="/nutriagent" element={<NutriAgentPage />} />
                       <Route path="/chatbot" element={<Navigate to="/nutriagent" replace />} />

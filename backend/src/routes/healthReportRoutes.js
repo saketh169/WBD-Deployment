@@ -195,7 +195,56 @@ router.get('/client/:clientId', authenticateJWT, getClientHealthReports);
 router.put('/:reportId/viewed', authenticateJWT, markHealthReportViewed);
 
 // Stream and download health report attachments
+/**
+ * @swagger
+ * /api/health-reports/{reportId}/files/{fileId}/download:
+ *   get:
+ *     tags: ['Health Reports']
+ *     summary: Download health report attachment file
+ *     description: Stream and download an attached file from a health report
+ *     parameters:
+ *       - in: path
+ *         name: reportId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Binary file stream for download
+ *       404:
+ *         description: Report or file not found
+ */
 router.get('/:reportId/files/:fileId/download', downloadHealthReportFile);
+
+/**
+ * @swagger
+ * /api/health-reports/{reportId}/files/{fileId}/view:
+ *   get:
+ *     tags: ['Health Reports']
+ *     summary: Inline view health report attachment
+ *     description: Stream attachment file with inline content-disposition for browser preview
+ *     parameters:
+ *       - in: path
+ *         name: reportId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Inline document or image stream
+ *       404:
+ *         description: Report or file not found
+ */
 router.get('/:reportId/files/:fileId/view', viewHealthReportFile);
 
 module.exports = router;

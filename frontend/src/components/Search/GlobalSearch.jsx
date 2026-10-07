@@ -56,8 +56,16 @@ const GlobalSearch = ({ onClose, currentRole }) => {
   // Static navigation shortcuts
   const staticNavigations = [
     // --- General Action ---
-    { keywords: ['dashboard', 'home', 'main'], title: 'Dashboard', icon: 'fa-home', path: `/${currentRole || 'user'}/home` },
+    { keywords: ['dashboard', 'home', 'main'], title: 'Home / Dashboard', icon: 'fa-home', path: currentRole ? `/${currentRole}/home` : '/' },
     
+    // --- Public & Legal Pages (Accessible from any page including Privacy / Terms) ---
+    { keywords: ['privacy', 'privacy policy', 'policy', 'confidentiality', 'data protection', 'gdpr'], title: 'Privacy Policy', icon: 'fa-shield-halved', path: '/privacy-policy' },
+    { keywords: ['terms', 'terms of use', 'terms and conditions', 'tos', 'conditions', 'legal', 'user agreement', 'rules'], title: 'Terms of Use', icon: 'fa-file-contract', path: '/terms-of-use' },
+    { keywords: ['about', 'about us', 'mission', 'who we are', 'company', 'team'], title: 'About Us', icon: 'fa-info-circle', path: '/about-us' },
+    { keywords: ['contact', 'contact us', 'support', 'help', 'email', 'get in touch'], title: 'Contact Us', icon: 'fa-headset', path: currentRole ? `/${currentRole}/contact-us` : '/contact-us' },
+    { keywords: ['guide', 'how to use', 'manual', 'documentation', 'walkthrough', 'instructions'], title: 'User Guide', icon: 'fa-book-open', path: '/guide' },
+    { keywords: ['blog', 'blogs', 'articles', 'posts', 'news', 'stories'], title: 'Community Blogs', icon: 'fa-blog', path: currentRole ? `/${currentRole}/blog` : '/blog' },
+
     // --- Role-Specific Actions (Admin) ---
     ...(currentRole === 'admin' ? [
       { keywords: ['analytics', 'stats', 'data', 'metrics'], title: 'Admin Analytics', icon: 'fa-chart-bar', path: '/admin/analytics' },
@@ -91,7 +99,7 @@ const GlobalSearch = ({ onClose, currentRole }) => {
     ] : []),
 
     // --- General Actions (Client/User) ---
-    ...(currentRole === 'user' || !currentRole ? [
+    ...(currentRole === 'user' ? [
       { keywords: ['dietitians', 'specialists', 'find', 'doctors'], title: 'Find Dietitians', icon: 'fa-user-md', path: '/user/dietitian-profiles' },
       { keywords: ['appointments', 'my bookings', 'consultations'], title: 'My Appointments', icon: 'fa-calendar-check', path: '/user/my-dietitians' },
       { keywords: ['schedule', 'calendar', 'time'], title: 'My Schedule', icon: 'fa-calendar-alt', path: '/user/schedule' },
@@ -101,10 +109,15 @@ const GlobalSearch = ({ onClose, currentRole }) => {
       { keywords: ['nutriagent', 'agent', 'ai', 'assistant'], title: 'NutriAgent AI', icon: 'fa-robot', path: '/user/nutriagent' },
     ] : []),
 
-    // --- Universal Settings ---
-    { keywords: ['profile', 'account', 'view profile'], title: 'My Profile', icon: 'fa-user-circle', path: `/${currentRole || 'user'}/profile` },
-    { keywords: ['edit profile', 'update profile'], title: 'Edit Profile', icon: 'fa-user-edit', path: `/${currentRole || 'user'}/edit-profile` },
-    { keywords: ['password', 'security', 'change pass'], title: 'Security Settings', icon: 'fa-shield-alt', path: `/${currentRole || 'user'}/change-pass` },
+    // --- Universal Settings (Only if logged in) ---
+    ...(currentRole ? [
+      { keywords: ['profile', 'account', 'view profile'], title: 'My Profile', icon: 'fa-user-circle', path: `/${currentRole}/profile` },
+      { keywords: ['edit profile', 'update profile'], title: 'Edit Profile', icon: 'fa-user-edit', path: `/${currentRole}/edit-profile` },
+      { keywords: ['password', 'security', 'change pass'], title: 'Security Settings', icon: 'fa-shield-alt', path: `/${currentRole}/change-pass` },
+    ] : [
+      { keywords: ['login', 'signin', 'sign in', 'log in'], title: 'Sign In', icon: 'fa-sign-in-alt', path: '/signin' },
+      { keywords: ['signup', 'register', 'create account', 'join'], title: 'Sign Up', icon: 'fa-user-plus', path: '/signup' },
+    ])
   ];
 
   const matchedNavs = query.trim().length >= 2 
@@ -121,7 +134,6 @@ const GlobalSearch = ({ onClose, currentRole }) => {
 
   const handleDietitianClick = (id) => {
     onClose();
-    // Dietitian profile route is under /user/dietitian-profiles/:id
     navigate(`/user/dietitian-profiles/${id}`);
   };
 
@@ -133,8 +145,8 @@ const GlobalSearch = ({ onClose, currentRole }) => {
 
   const handleBlogClick = (id) => {
     onClose();
-    const basePath = currentRole ? `/${currentRole}` : '/user';
-    navigate(`${basePath}/blog/${id}`);
+    const targetPath = currentRole ? `/${currentRole}/blog/${id}` : `/blog/${id}`;
+    navigate(targetPath);
   };
 
   const hasNoResults = !isLoading && query.trim().length >= 2 && 

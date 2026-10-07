@@ -142,7 +142,23 @@ router.get('/active-diet-plans', ...adminAuth, getActiveDietPlans);
  */
 router.get('/subscriptions', ...adminAuth, getSubscriptions);
 
-// Membership revenue endpoint - removed from swagger
+/**
+ * @swagger
+ * /api/membership-revenue:
+ *   get:
+ *     tags: ['Analytics']
+ *     summary: Get membership subscription revenue
+ *     description: Retrieve total revenue and breakdown from patient membership subscriptions
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Membership subscription revenue data
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin only
+ */
 router.get('/membership-revenue', ...adminAuth, getMembershipRevenue);
 
 /**

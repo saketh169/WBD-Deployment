@@ -109,6 +109,39 @@ router.post('/signup/user',
 );
 
 // 1b. User Google Signup Route: POST /api/signup/user/google
+/**
+ * @swagger
+ * /api/signup/user/google:
+ *   post:
+ *     tags: ['Auth']
+ *     summary: User registration via Google OAuth
+ *     description: Register a new patient/user using Google OAuth profile token or verified details
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - name
+ *             properties:
+ *               email:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               googleId:
+ *                 type: string
+ *               picture:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: User registered successfully via Google
+ *       400:
+ *         description: Invalid registration payload
+ *       409:
+ *         description: User already exists
+ */
 router.post('/signup/user/google',
     authRateLimiter,
     authController.userGoogleSignupController
@@ -422,6 +455,34 @@ router.post('/signin/user',
 );
 
 // 6b. User Google Signin Route: POST /api/signin/user/google
+/**
+ * @swagger
+ * /api/signin/user/google:
+ *   post:
+ *     tags: ['Auth']
+ *     summary: User login via Google OAuth
+ *     description: Authenticate patient/user using Google ID token or verified Google credential
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *               googleId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful with JWT authentication token
+ *       400:
+ *         description: Missing credentials
+ *       404:
+ *         description: User not found
+ */
 router.post('/signin/user/google',
     authRateLimiter,
     authController.userGoogleSigninController
@@ -884,6 +945,17 @@ router.post('/resend-login-otp', otpRateLimiter, authController.resendLoginOTPCo
 router.post('/refresh-token', authController.refreshTokenController);
 
 // 21. Logout: POST /api/logout (clears httpOnly refresh token cookie)
+/**
+ * @swagger
+ * /api/logout:
+ *   post:
+ *     tags: ['Auth']
+ *     summary: User logout
+ *     description: Invalidate user session and clear authentication cookies
+ *     responses:
+ *       200:
+ *         description: Logout successful
+ */
 router.post('/logout', authController.logoutController);
 
 module.exports = router;

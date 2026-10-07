@@ -193,7 +193,56 @@ router.get('/lab/client/:clientId', authenticateJWT, getLabReportsByClient);
 router.put('/lab/:reportId/status', authenticateJWT, updateLabReportStatus);
 
 // Stream and download lab report attachments
+/**
+ * @swagger
+ * /api/lab-reports/{reportId}/files/{fileId}/download:
+ *   get:
+ *     tags: ['Lab Reports']
+ *     summary: Download lab report attachment file
+ *     description: Stream and download an attached diagnostic file from a lab report
+ *     parameters:
+ *       - in: path
+ *         name: reportId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Binary file stream for download
+ *       404:
+ *         description: Report or file not found
+ */
 router.get('/:reportId/files/:fileId/download', downloadLabReportFile);
+
+/**
+ * @swagger
+ * /api/lab-reports/{reportId}/files/{fileId}/view:
+ *   get:
+ *     tags: ['Lab Reports']
+ *     summary: Inline view lab report attachment
+ *     description: Stream attachment file with inline content-disposition for browser preview
+ *     parameters:
+ *       - in: path
+ *         name: reportId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Inline document or image stream
+ *       404:
+ *         description: Report or file not found
+ */
 router.get('/:reportId/files/:fileId/view', viewLabReportFile);
 
 module.exports = router;
