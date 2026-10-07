@@ -64,6 +64,8 @@ module.exports = {
   notifyDietitianNewBooking: (dietitianId, bookingData) => {
     if (io) {
       io.to(`dietitian_${dietitianId}`).emit('new_booking', bookingData);
+      io.emit('new_booking', bookingData);
+      io.emit('booking_updated', bookingData);
     }
   },
 
@@ -76,6 +78,7 @@ module.exports = {
   notifyBookingUpdate: (dietitianId, bookingData) => {
     if (io) {
       io.to(`dietitian_${dietitianId}`).emit('booking_updated', bookingData);
+      io.emit('booking_updated', bookingData);
     }
   },
 

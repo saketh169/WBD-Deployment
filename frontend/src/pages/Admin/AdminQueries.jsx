@@ -110,6 +110,7 @@ const AdminQueries = () => {
       case 'dietitian': return 'bg-green-100 text-green-800';
       case 'certifyingorganization':
       case 'organization': return 'bg-purple-100 text-purple-800';
+      case 'employee': return 'bg-amber-100 text-amber-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -121,6 +122,7 @@ const AdminQueries = () => {
       case 'dietitian': return 'Dietitian';
       case 'certifyingorganization':
       case 'organization': return 'Organization';
+      case 'employee': return 'Employee';
       default: return role;
     }
   };

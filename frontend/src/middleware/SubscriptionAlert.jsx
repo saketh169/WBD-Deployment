@@ -30,8 +30,14 @@ const SubscriptionAlert = ({
     },
     chatbot: {
       icon: 'fas fa-robot',
-      title: 'Chatbot Limit Reached',
-      upgradeMessage: 'Upgrade for more chatbot queries',
+      title: 'NutriAgent AI Limit Reached',
+      upgradeMessage: 'Upgrade for more NutriAgent AI queries',
+      color: '#27AE60'
+    },
+    agent: {
+      icon: 'fas fa-robot',
+      title: 'NutriAgent AI Limit Reached',
+      upgradeMessage: 'Upgrade for more NutriAgent AI queries',
       color: '#27AE60'
     },
     blog: {
@@ -45,10 +51,10 @@ const SubscriptionAlert = ({
   const info = limitInfo[limitType] || limitInfo.booking;
 
   const planBenefits = {
-    free: ['3 consultations/month', '5 progress plans', '25 chatbot queries/day'],
-    basic: ['5 consultations/month', '10 progress plans', '40 chatbot queries/day'],
-    premium: ['12 consultations/month', '20 progress plans', '75 chatbot queries/day'],
-    ultimate: ['Unlimited consultations', 'Unlimited progress plans', 'Unlimited chatbot']
+    free: ['3 consultations/month', '5 progress plans', '25 NutriAgent queries/day'],
+    basic: ['5 consultations/month', '10 progress plans', '40 NutriAgent queries/day'],
+    premium: ['12 consultations/month', '20 progress plans', '75 NutriAgent queries/day'],
+    ultimate: ['Unlimited consultations', 'Unlimited progress plans', 'Unlimited NutriAgent queries']
   };
 
   return (

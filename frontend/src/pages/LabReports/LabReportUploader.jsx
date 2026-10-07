@@ -475,8 +475,8 @@ const LabReportUploader = () => {
         <header className="bg-linear-to-r from-emerald-500 to-teal-600 text-white p-6 flex justify-between items-center">
           <button onClick={() => navigate(-1)} className="px-4 py-2 bg-emerald-700 rounded-xl font-semibold cursor-pointer">Back</button>
           <div className="text-center flex-1">
-            <h1 className="text-4xl font-bold mb-2">Lab Report Upload</h1>
-            <p className="text-emerald-100 text-lg">Upload your health reports and metrics for analysis by your Dietitian.</p>
+            <h1 className="text-4xl font-bold mb-2">Medical Report Upload</h1>
+            <p className="text-emerald-100 text-lg">Upload your medical reports and metrics for analysis by your Dietitian.</p>
           </div>
           <button onClick={() => navigate(`/user/lab-reports/${dietitianId}`)} className="px-4 py-2 bg-emerald-700 rounded-xl font-semibold cursor-pointer">Report History</button>
         </header>

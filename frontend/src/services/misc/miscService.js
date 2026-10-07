@@ -21,25 +21,31 @@ export const getDocumentStatus = (role, id = null) => {
   return makeRequest(() => axiosInstance.get(endpoint));
 };
 
-export const getChatbotResponse = async (message, sessionId, userId = null) => {
+export const getAgentResponse = async (message, history = [], userId = null, file = null, sessionId = null) => {
   try {
-    return await makeRequest(() => axiosInstance.post('/api/chatbot/message', { message, sessionId, userId }));
+    return await makeRequest(() => axiosInstance.post('/api/agent/chat', { message, history, userId, file, sessionId }, { timeout: 120000 }));
   } catch (error) {
-    if (error.response?.data?.limitReached) {
-      return { isError: true, limitReached: true, limitData: error.response.data, message: error.response.data.message, data: null };
-    }
-    return { isError: true, message: error.message || 'Chatbot unavailable', data: null };
+    return { isError: true, message: error.response?.data?.message || error.message || 'Agent service unavailable', data: null };
   }
 };
 
-export const getChatbotHistory = (sessionId) =>
-  makeRequest(() => axiosInstance.get(`/api/chatbot/history/${sessionId}`));
+export const getAgentSessions = (userId) =>
+  makeRequest(() => axiosInstance.get('/api/agent/sessions', { params: { userId } }));
+
+export const getAgentSessionHistory = (sessionId) =>
+  makeRequest(() => axiosInstance.get(`/api/agent/session/${sessionId}`));
+
+export const saveAgentMessage = (sessionId, message, userId = null) =>
+  makeRequest(() => axiosInstance.post(`/api/agent/session/${sessionId}/message`, { message, userId }));
+
+export const deleteAgentSession = (sessionId) =>
+  makeRequest(() => axiosInstance.delete(`/api/agent/session/${sessionId}`));
+
+export const clearAgentSessions = (userId) =>
+  makeRequest(() => axiosInstance.delete('/api/agent/sessions/clear', { params: { userId } }));
 
 export const searchDietitians = (params = {}) =>
   makeRequest(() => axiosInstance.get('/api/dietitians', { params }));
-
-export const getChatbotFAQs = () =>
-  makeRequest(() => axiosInstance.get('/api/chatbot/top-faqs'));
 
 export const getUserProgressData = () =>
   makeRequest(() => axiosInstance.get('/api/user-progress'));

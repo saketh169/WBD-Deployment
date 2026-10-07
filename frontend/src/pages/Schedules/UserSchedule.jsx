@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../../hooks/useAuthContext';
 import { decodeTokenPayload } from '../../utils/jwtUtils';
 import { getUserBookings, getMeetingLink, getBookingIcs } from '../../services/booking/bookingService';
+import { getOrCreateConversation } from '../../services/chat/chatService';
 
 // Helper function to decode HTML entities
 const decodeHtmlEntities = (text) => {
@@ -64,6 +66,7 @@ const convertTimeTo24Hour = (time) => {
 
 
 const UserSchedule = () => {
+    const navigate = useNavigate();
     const { user, token, loading: authLoading } = useAuthContext();
     
     const [bookings, setBookings] = useState([]);
@@ -122,6 +125,7 @@ const UserSchedule = () => {
                 time: booking.time,
                 consultationType: booking.consultationType,
                 specialization: booking.dietitianSpecialization || 'General Consultation',
+                dietitianId: booking.dietitianId?._id || booking.dietitianId,
                 dietitianName: booking.dietitianName,
                 dietitianEmail: booking.dietitianEmail,
                 dietitianPhone: booking.dietitianPhone,
@@ -160,6 +164,45 @@ const UserSchedule = () => {
         } catch (error) {
             console.error('Error creating meeting link:', error);
             alert(error.response?.data?.message || 'Unable to create meeting link');
+        }
+    };
+
+    const handleGoToChat = async (appointment) => {
+        try {
+            const authToken = token || localStorage.getItem('authToken_user');
+            const userId = user?.id || user?._id || decodeTokenPayload(token)?.roleId || decodeTokenPayload(token)?.userId;
+            if (!userId || !authToken) {
+                alert('Session expired. Please login again.');
+                navigate('/signin?role=user');
+                return;
+            }
+            const dietitianId = appointment.dietitianId;
+            if (!dietitianId) {
+                alert('Dietitian details not found for this consultation.');
+                return;
+            }
+            const res = await getOrCreateConversation({ clientId: userId, dietitianId });
+            if (!res.isError && (res.success || res.data)) {
+                const conversation = res.data || res;
+                navigate(`/user/chat/${conversation._id}`, {
+                    state: {
+                        otherParticipant: {
+                            id: dietitianId,
+                            name: appointment.dietitianName,
+                            email: appointment.dietitianEmail
+                        },
+                        bookingInfo: {
+                            date: activeDayInfo?.fullDateKey,
+                            time: appointment.time
+                        }
+                    }
+                });
+            } else {
+                alert(res?.message || 'Unable to open chat with dietitian.');
+            }
+        } catch (error) {
+            console.error('Error starting chat:', error);
+            alert(`Failed to start chat: ${error.response?.data?.message || error.message}`);
         }
     };
 
@@ -310,35 +353,26 @@ const UserSchedule = () => {
                                     </p>
 
                                     <div className="mt-0 pt-3 border-t-2 border-gray-100 flex items-center justify-between gap-3">
-                                        <div className="flex items-center gap-3">
-                                            {appointment.dietitianEmail ? (
-                                                <a 
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                className="text-xs px-3.5 py-1.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex items-center gap-1.5 font-semibold cursor-pointer shadow-xs"
+                                                onClick={() => handleGoToChat(appointment)}
+                                                title={`Chat with ${appointment.dietitianName || 'Dietitian'}`}
+                                            >
+                                                <i className="fas fa-comment-dots"></i>
+                                                Go to Chat
+                                            </button>
+                                            {appointment.dietitianEmail && (
+                                                <a
                                                     href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(appointment.dietitianEmail)}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="text-sm text-emerald-600 hover:text-emerald-700 underline truncate transition-colors"
-                                                    title={`Email ${appointment.dietitianEmail} via Gmail`}
+                                                    className="text-xs px-3 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 font-medium transition-colors shadow-2xs"
+                                                    title={`Email ${appointment.dietitianEmail}`}
                                                 >
-                                                    <i className="fas fa-envelope mr-1"></i>
-                                                    Contact
+                                                    <i className="fas fa-envelope text-xs"></i>
+                                                    Email
                                                 </a>
-                                            ) : (
-                                                <span className="text-sm text-gray-400">No email</span>
-                                            )}
-                                            <button
-                                                className="text-xs px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-                                                onClick={() => handleDownloadICS(appointment.bookingId)}
-                                            >
-                                                <i className="fas fa-calendar-plus mr-1"></i>Add to Calendar
-                                            </button>
-                                            {appointment.consultationType?.toLowerCase() === 'online' && (
-                                                <button
-                                                    className="text-xs px-3 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100"
-                                                    onClick={() => handleGenerateMeetingLink(appointment.bookingId, appointment.consultationType)}
-                                                    title={meetingLinks[appointment.bookingId] || appointment.meetingUrl || 'Create meeting link'}
-                                                >
-                                                    <i className="fas fa-video mr-1"></i>{meetingLinks[appointment.bookingId] || appointment.meetingUrl ? 'Open Link' : 'Get Link'}
-                                                </button>
                                             )}
                                         </div>
                                         {appointment.amount && (

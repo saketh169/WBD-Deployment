@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { getAdminSettings, updateAdminSettings, sendAdminEmail } from '../../services/admin/adminService';
 
@@ -162,7 +163,20 @@ const ContentSettingsTab = ({ settings, handleInputChange }) => (
           <label className="block text-lg font-semibold" style={{ color: THEME.primary }}>
             <i className="fas fa-file-contract mr-2" /> Terms of Service
           </label>
-          <span className="text-sm text-gray-500">Last updated: {new Date().toLocaleDateString()}</span>
+          <div className="flex items-center gap-4">
+            <Link
+              to="/terms-of-use"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium hover:underline flex items-center gap-1.5 transition-colors"
+              style={{ color: THEME.primary }}
+              title="View live Terms of Use page in new tab"
+            >
+              <span>View Live Page</span>
+              <i className="fas fa-external-link-alt text-xs" />
+            </Link>
+            <span className="text-sm text-gray-500">Last updated: {new Date().toLocaleDateString()}</span>
+          </div>
         </div>
         <textarea
           rows="10"
@@ -179,7 +193,20 @@ const ContentSettingsTab = ({ settings, handleInputChange }) => (
           <label className="block text-lg font-semibold" style={{ color: THEME.primary }}>
             <i className="fas fa-shield-alt mr-2" /> Privacy Policy
           </label>
-          <span className="text-sm text-gray-500">Last updated: {new Date().toLocaleDateString()}</span>
+          <div className="flex items-center gap-4">
+            <Link
+              to="/privacy-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium hover:underline flex items-center gap-1.5 transition-colors"
+              style={{ color: THEME.primary }}
+              title="View live Privacy Policy page in new tab"
+            >
+              <span>View Live Page</span>
+              <i className="fas fa-external-link-alt text-xs" />
+            </Link>
+            <span className="text-sm text-gray-500">Last updated: {new Date().toLocaleDateString()}</span>
+          </div>
         </div>
         <textarea
           rows="10"

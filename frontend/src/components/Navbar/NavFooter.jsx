@@ -17,7 +17,8 @@ const NavFooter = ({ handleScrollToTop }) => {
     { name: 'About Us', href: '/about-us' },
     { name: 'Guide', href: '/guide' },
     { name: 'Blog', href: '/blog' },
-    { name: 'Chatbot', href: '/chatbot' },
+    { name: 'Terms of Use', href: '/terms-of-use' },
+    { name: 'Privacy Policy', href: '/privacy-policy' },
   ];
 
   // 2. Links for a general 'user' role (matching userNavLinks from NavHeader)
@@ -28,7 +29,7 @@ const NavFooter = ({ handleScrollToTop }) => {
     { name: 'Schedule', href: '/user/schedule' },
     { name: 'Pricing', href: '/user/pricing' },
     { name: 'Blog', href: '/user/blog' },
-    { name: 'Chatbot', href: '/user/chatbot' },
+    { name: 'NutriAgent', href: '/user/nutriagent' },
   ];
 
   // 3. Links for the 'dietitian' role (matching dietitianNavLinks from NavHeader)

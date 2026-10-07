@@ -1,15 +1,12 @@
 const mongoose = require('mongoose');
 const path = require('path');
-const Settings = require('../models/settingsModel');
 
 require('dotenv').config({ 
-  path: path.join(__dirname, '..', 'utils', '.env') 
+  path: path.join(__dirname, '..', '.env') 
 });
 
-const connectDB = require('../utils/db');
-
-// Connect to MongoDB
-connectDB();
+const Settings = require('../src/models/settingsModel');
+const connectDB = require('../src/utils/db');
 
 // Default content for terms of service and privacy policy
 const DEFAULT_TERMS_OF_SERVICE = `# Terms of Service
@@ -211,14 +208,14 @@ const seedSettings = async () => {
       }
     );
 
-    console.log('✅ Settings seeded/updated successfully with default content');
+    console.log('[SUCCESS] Settings seeded/updated successfully with default content');
 
     // Close the connection
     await mongoose.connection.close();
     console.log('Database connection closed.');
 
   } catch (error) {
-    console.error('❌ Error seeding settings:', error);
+    console.error('[ERROR] Error seeding settings:', error);
     process.exit(1);
   }
 };

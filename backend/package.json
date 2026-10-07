@@ -13,8 +13,7 @@
     "seed:settings": "node src/scripts/seedSettings.js",
     "seed:images": "node scripts/seedImages.js",
     "redis:clear": "node scripts/clear_redis.js",
-    "benchmark:redis": "python scripts/benchmark_redis.py",
-    "elastic:sync": "node src/scripts/syncElastic.js"
+    "benchmark:redis": "python scripts/benchmark_redis.py"
   },
   "jest": {
     "testEnvironment": "node",
@@ -34,13 +33,16 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@elastic/elasticsearch": "^8.13.1",
     "@google/generative-ai": "^0.24.1",
+    "@langchain/core": "^1.2.14",
+    "@langchain/langgraph": "^1.4.19",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.8.0",
     "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
     "dotenv": "^17.2.2",

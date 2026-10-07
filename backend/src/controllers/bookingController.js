@@ -8,6 +8,11 @@ const {
 } = require("../services/bookingService");
 const razorpayService = require("../services/razorpayService");
 const crypto = require("crypto");
+const {
+  notifyDietitianNewBooking,
+  notifyBookingUpdate,
+  notifyUserUpdate
+} = require("../utils/socket");
 
 const hold = 30; // Hold duration in seconds
 

@@ -16,10 +16,7 @@ jobs:
         cat > backend/.env << EOF
         PORT=5000
         MONGODB_URL=${{ secrets.MONGODB_URL }}
-        REDIS_HOST=${{ secrets.REDIS_HOST }}
-        REDIS_PORT=${{ secrets.REDIS_PORT }}
-        REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-        ELASTICSEARCH_URL=${{ secrets.ELASTICSEARCH_URL }}
+        REDIS_URL=${{ secrets.REDIS_URL }}
         CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
         CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
         CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}

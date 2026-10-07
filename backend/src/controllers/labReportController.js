@@ -339,10 +339,28 @@ const updateLabReportStatus = async (req, res) => {
     }
 };
 
+// Stream or download attached file from lab report
+const serveLabReportFile = async (req, res) => {
+    try {
+        const { reportId, fileId } = req.params;
+        const report = await LabReport.findById(reportId);
+        const file = report?.uploadedFiles?.id(fileId) || report?.uploadedFiles?.find(f => f._id?.toString() === fileId || f.filename === fileId);
+        if (!file?.data) return res.status(404).json({ success: false, message: 'File not found' });
+
+        res.setHeader('Content-Type', file.mimetype || 'application/pdf');
+        res.setHeader('Content-Disposition', `${req.path.includes('/download') ? 'attachment' : 'inline'}; filename="${encodeURIComponent(file.originalName || 'file')}"`);
+        return res.send(file.data);
+    } catch {
+        res.status(500).json({ success: false, message: 'File retrieval failed' });
+    }
+};
+
 module.exports = {
     submitLabReport,
     getClientLabReports,
     getLabReportsByClient,
     updateLabReportStatus,
+    downloadLabReportFile: serveLabReportFile,
+    viewLabReportFile: serveLabReportFile,
     uploadFields
 };

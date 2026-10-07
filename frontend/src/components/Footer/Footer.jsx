@@ -72,6 +72,10 @@ const Footer = () => {
   const servicesLinks = getServicesLinks();
   const isUserPage = currentPath.startsWith('/user');
 
+  if (currentPath.includes('nutriagent') || currentPath.includes('chatbot')) {
+    return null;
+  }
+
   return (
     <footer className="bg-[#1E6F5C] text-white pt-16 font-poppins">
 

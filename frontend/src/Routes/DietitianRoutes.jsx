@@ -78,9 +78,11 @@ export default function DietitianRoutes() {
          {/* Chat Route */}
          <Route path="chat/:conversationId" element={<ChatPage />} />
          
-         {/* Lab Reports Route */}
+         {/* Medical & Lab Reports Route */}
          <Route path="lab-reports" element={<DietitianLabReportViewer />} />
          <Route path="lab-reports/:clientId" element={<DietitianLabReportViewer />} />
+         <Route path="medical-reports" element={<DietitianLabReportViewer />} />
+         <Route path="medical-reports/:clientId" element={<DietitianLabReportViewer />} />
 
          {/* Health Reports Route */}
          <Route path="health-reports/:clientId" element={<DietitianHealthReportPage />} />

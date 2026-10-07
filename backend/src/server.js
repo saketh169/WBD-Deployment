@@ -8,7 +8,6 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const connectDB = require('./utils/db');
 const authRoutes = require('./routes/authRoutes');
 const profileRoutes = require('./routes/profileRoutes');
-const chatbotRoutes = require('./routes/chatbotRoutes');
 const progressRoutes = require('./routes/progressRoutes');
 const verifyRoutes = require('./routes/verifyRoutes');
 const statusRoutes = require('./routes/statusRoutes');
@@ -28,6 +27,8 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const teamBoardRoutes = require('./routes/teamBoardRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
+const searchRoutes = require('./routes/searchRoutes');
+const agentRoutes = require('./agent');
 
 // Middleware imports
 const { helmetMiddleware, rateLimiter, sanitizeInput } = require('./middlewares/securityMiddleware');
@@ -35,6 +36,7 @@ const { requestLogger } = require('./middlewares/loggerMiddleware');
 const { errorHandler, notFoundHandler } = require('./middlewares/errorMiddleware');
 const { formatResponseMiddleware } = require('./middlewares/responseMiddleware');
 const compression = require('compression');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 
@@ -69,9 +71,10 @@ app.use(rateLimiter);
 // Request logger
 app.use(requestLogger);
 
-// Parse incoming JSON requests with increased limits for image uploads
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// Parse incoming JSON requests with increased limits for medical document uploads
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ limit: '25mb', extended: true }));
+app.use(cookieParser());
 
 // Sanitize input for XSS protection
 app.use(sanitizeInput);
@@ -143,7 +146,7 @@ const swaggerOptions = {
     './src/routes/profileRoutes.js',
     './src/routes/bookingRoutes.js',
     './src/routes/paymentRoutes.js',
-    './src/routes/chatbotRoutes.js',
+    './src/agent/index.js',
     './src/routes/blogRoutes.js',
     './src/routes/mealPlanRoutes.js',
     './src/routes/healthReportRoutes.js',
@@ -180,8 +183,8 @@ app.use('/api', profileRoutes);
 // Progress routes mounted at '/api'
 app.use('/api', progressRoutes);
 
-// Chatbot routes mounted at '/api/chatbot'
-app.use('/api/chatbot', chatbotRoutes);
+// NutriAgent AI routes mounted at '/api/agent'
+app.use('/api/agent', agentRoutes);
 
 // Verify routes mounted at '/api/verify'
 app.use('/api/verify', verifyRoutes);
@@ -236,6 +239,9 @@ app.use('/api/organization', activityLogRoutes);
 
 // Team Board routes mounted at '/api/teamboard'
 app.use('/api/teamboard', teamBoardRoutes);
+
+// Global Search routes mounted at '/api/search'
+app.use('/api/search', searchRoutes);
 
 // Health check endpoint for frontend error handling
 app.get('/api/health', (req, res) => {

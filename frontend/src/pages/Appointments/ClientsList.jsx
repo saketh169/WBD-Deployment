@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import AuthContext from '../../contexts/AuthContext';
 import { getOrCreateConversation } from '../../services/chat/chatService';
-import { io } from 'socket.io-client';
 import {
   fetchDietitianClients,
   selectDietitianClients,
@@ -107,37 +106,6 @@ const ClientsList = () => {
     // Dispatch fetchDietitianClients thunk
     dispatch(fetchDietitianClients({ dietitianId: user.id }));
   }, [dispatch, user?.id]);
-
-  // Real-time WebSocket listener for booking changes
-  useEffect(() => {
-    if (!user?.id || !token) return;
-
-    // Connect to backend Socket.IO server
-    const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
-      withCredentials: true,
-    });
-
-    socket.on('connect', () => {
-      console.log('Connected to real-time server (ClientsList)');
-      socket.emit('register_dietitian', user.id);
-    });
-
-    socket.on('new_booking', (bookingData) => {
-      console.log('New booking received in ClientsList!', bookingData);
-      // Refresh clients list instantly
-      dispatch(fetchDietitianClients({ dietitianId: user.id }));
-    });
-
-    socket.on('booking_updated', (bookingData) => {
-      console.log('Booking updated received in ClientsList!', bookingData);
-      // Refresh clients list instantly
-      dispatch(fetchDietitianClients({ dietitianId: user.id }));
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [user?.id, token, dispatch]);
 
   // Use clients data directly from Redux and determine status based on appointment timing
   const clientsFromBookings = useMemo(() => {

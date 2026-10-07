@@ -23,7 +23,7 @@ const DietitianLabReportViewer = () => {
 
   // Set page title
   useEffect(() => {
-    const title = clientId && clientInfo ? `${clientInfo.name}'s Lab Reports` : 'Client Lab Reports';
+    const title = clientId && clientInfo ? `${clientInfo.name}'s Medical Reports` : 'Client Medical Reports';
     document.title = title;
   }, [clientId, clientInfo]);
 
@@ -224,14 +224,14 @@ const DietitianLabReportViewer = () => {
                         </div>
                         <div className="flex gap-3">
                           <button
-                            onClick={() => openFilePreview(file)}
+                            onClick={() => openFilePreview(file, report)}
                             className="text-emerald-600 hover:text-emerald-800 p-3 rounded-lg hover:bg-emerald-50"
                             title="View File"
                           >
                             <Eye className="w-6 h-6" />
                           </button>
                           <button
-                            onClick={() => downloadFile(file)}
+                            onClick={() => downloadFile(file, report)}
                             className="text-emerald-600 hover:text-emerald-800 p-3 rounded-lg hover:bg-emerald-50"
                             title="Download File"
                           >
@@ -248,14 +248,13 @@ const DietitianLabReportViewer = () => {
     };
 
   // ---- File preview / download helpers ----
-  const openFilePreview = (file) => {
+  const openFilePreview = (file, report) => {
     try {
-      if (!file || !file.data) return;
-      const raw = file.data.data ? file.data.data : file.data;
-      const uint8 = new Uint8Array(raw);
-      const blob = new Blob([uint8], { type: file.mimetype });
-      const url = URL.createObjectURL(blob);
-      setPreviewFile({ url, name: file.originalName, mimetype: file.mimetype });
+      const rep = report || selectedReport;
+      if (!file || !rep?._id) return;
+      const fileId = file._id || file.filename;
+      const url = `/api/lab-reports/${rep._id}/files/${fileId}/view`;
+      setPreviewFile({ url, name: file.originalName || file.filename, mimetype: file.mimetype });
       setShowPreview(true);
     } catch (err) {
       console.error('Failed to open file preview', err);
@@ -264,25 +263,22 @@ const DietitianLabReportViewer = () => {
   };
 
   const closePreview = () => {
-    if (previewFile?.url) URL.revokeObjectURL(previewFile.url);
     setShowPreview(false);
     setPreviewFile(null);
   };
 
-  const downloadFile = (file) => {
+  const downloadFile = (file, report) => {
     try {
-      if (!file || !file.data) return;
-      const raw = file.data.data ? file.data.data : file.data;
-      const uint8 = new Uint8Array(raw);
-      const blob = new Blob([uint8], { type: file.mimetype });
-      const url = URL.createObjectURL(blob);
+      const rep = report || selectedReport;
+      if (!file || !rep?._id) return;
+      const fileId = file._id || file.filename;
+      const downloadUrl = `/api/lab-reports/${rep._id}/files/${fileId}/download`;
       const a = document.createElement('a');
-      a.href = url;
-      a.download = file.originalName || file.filename || 'download';
+      a.href = downloadUrl;
+      a.download = file.originalName || file.filename || 'medical-report-file';
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to download file', err);
       alert('Unable to download file.');
@@ -339,7 +335,7 @@ const DietitianLabReportViewer = () => {
               Back
             </button>
             <h1 className="absolute left-1/2 transform -translate-x-1/2 text-4xl font-bold">
-              {clientId && clientInfo ? `${clientInfo.name}'s Lab Reports` : 'Client Lab Reports'}
+              {clientId && clientInfo ? `${clientInfo.name}'s Medical Reports` : 'Client Medical Reports'}
             </h1>
           </div>
         </header>
@@ -347,12 +343,12 @@ const DietitianLabReportViewer = () => {
         {loading ? (
           <div className="text-center py-16">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
-            <p className="text-emerald-700">Loading client lab reports...</p>
+            <p className="text-emerald-700">Loading client medical reports...</p>
           </div>
         ) : error ? (
           <div className="text-center py-16">
             <FileText className="w-16 h-16 text-red-300 mx-auto mb-4" />
-            <p className="text-red-700 text-lg font-bold">Error loading lab reports</p>
+            <p className="text-red-700 text-lg font-bold">Error loading medical reports</p>
             <p className="text-red-600 mt-2">{error}</p>
             <button
               onClick={() => window.location.reload()}
@@ -366,8 +362,8 @@ const DietitianLabReportViewer = () => {
             <FileText className="w-16 h-16 text-emerald-300 mx-auto mb-4" />
             <p className="text-teal-900 text-lg font-bold">
               {clientId && clientInfo 
-                ? `No lab reports found from ${clientInfo.name}.`
-                : 'No lab reports found from your clients.'
+                ? `No medical reports found from ${clientInfo.name}.`
+                : 'No medical reports found from your clients.'
               }
             </p>
             <p className="text-emerald-600 mt-2">

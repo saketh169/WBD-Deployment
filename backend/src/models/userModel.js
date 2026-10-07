@@ -88,6 +88,8 @@ const DietitianSchema = new Schema({
     rating: { type: Number },
     online: { type: Boolean },
     offline: { type: Boolean },
+    gender: { type: String, enum: ['male', 'female', 'other'] },
+    embedding: [{ type: Number }],
     about: { type: String },
     education: [{ type: String }],
     bookedslots: [{

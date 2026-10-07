@@ -36,3 +36,10 @@ export const uploadDocuments = (role, formData) =>
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   );
+
+export const refreshToken = () =>
+  makeRequest(() => axiosInstance.post('/api/refresh-token'));
+
+export const logoutUser = () =>
+  makeRequest(() => axiosInstance.post('/api/logout'));
+

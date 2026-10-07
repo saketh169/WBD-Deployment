@@ -60,12 +60,22 @@ const LabReportSchema = new Schema({
         dateOfReport: { type: Date },
         bmiValue: { type: Number },
         currentWeight: { type: Number },
-        heightCm: { type: Number }
+        heightCm: { type: Number },
+        hemoglobin: { type: Number },
+        serumCreatinine: { type: Number },
+        uricAcid: { type: Number },
+        vitaminB12: { type: Number },
+        sgptAlt: { type: Number },
+        sgotAst: { type: Number }
     },
     bloodSugarFocus: {
         fastingGlucose: { type: Number },
+        postPrandialGlucose: { type: Number },
         hba1c: { type: Number },
         cholesterolTotal: { type: Number },
+        hdlCholesterol: { type: Number },
+        ldlCholesterol: { type: Number },
+        vldlCholesterol: { type: Number },
         triglycerides: { type: Number }
     },
     thyroid: {
@@ -80,14 +90,14 @@ const LabReportSchema = new Schema({
         spO2: { type: Number },
         restingHeartRate: { type: Number }
     },
-    // File uploads - embedded directly in main schema
+    // File uploads - optional attachments
     uploadedFiles: [{
-        fieldName: { type: String, required: true },
-        originalName: { type: String, required: true },
-        filename: { type: String, required: true },
-        data: { type: Buffer, required: true }, // File data as buffer
-        size: { type: Number, required: true },
-        mimetype: { type: String, required: true },
+        fieldName: { type: String },
+        originalName: { type: String },
+        filename: { type: String },
+        data: { type: Buffer },
+        size: { type: Number },
+        mimetype: { type: String },
         uploadedAt: { type: Date, default: Date.now }
     }],
     // Status

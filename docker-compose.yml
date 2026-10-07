@@ -8,10 +8,7 @@ services:
     environment:
       - PORT=${PORT:-5000}
       - MONGODB_URL=${MONGODB_URL}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL:-http://elasticsearch:9200}
+      - REDIS_URL=${REDIS_URL}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:3000,http://localhost:80}
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
@@ -27,9 +24,6 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
-    depends_on:
-      - redis
-      - elasticsearch
     restart: unless-stopped
     networks:
       - wbd-network
@@ -44,35 +38,6 @@ services:
       - VITE_API_URL=${VITE_API_URL:-http://backend:5000}
     depends_on:
       - backend
-    restart: unless-stopped
-    networks:
-      - wbd-network
-
-
-  # ── Redis Cache ──
-  redis:
-    image: public.ecr.aws/docker/library/redis:7-alpine
-    container_name: wbd-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-    networks:
-      - wbd-network
-
-  # ── Elasticsearch ──
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
-    container_name: wbd-elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "9200:9200"
-    volumes:
-      - elastic_data:/usr/share/elasticsearch/data
     restart: unless-stopped
     networks:
       - wbd-network
@@ -94,12 +59,6 @@ services:
     restart: unless-stopped
     networks:
       - wbd-network
-
-volumes:
-  redis_data:
-    driver: local
-  elastic_data:
-    driver: local
 
 networks:
   wbd-network:

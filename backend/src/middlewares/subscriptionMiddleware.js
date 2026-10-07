@@ -2,7 +2,7 @@ const Payment = require('../models/paymentModel');
 const Booking = require('../models/bookingModel');
 const { Blog } = require('../models/blogModel');
 const Progress = require('../models/progressModel');
-const { ChatHistory } = require('../models/chatbotModels');
+const { ChatHistory } = require('../models/agentModel');
 
 // Progress plan types available for each subscription tier
 const PROGRESS_PLAN_ACCESS = {
@@ -256,9 +256,9 @@ async function checkBlogLimit(req, res, next) {
 // Check chatbot query limits
 async function checkChatbotLimit(req, res, next) {
   try {
-    // Use roleId from JWT to match userId in payments collection
-    const userId = req.user?.roleId || req.user?.employeeId || req.user?.userId;
-    const sessionId = req.body.sessionId;
+    // Use roleId from JWT or req.body.userId to match userId in payments collection
+    const userId = req.user?.roleId || req.user?.employeeId || req.user?.userId || req.body?.userId;
+    const sessionId = req.body?.sessionId;
     
     // If no userId, treat as anonymous free user, use sessionId for tracking
     const isAnonymous = !userId;
@@ -308,7 +308,7 @@ async function checkChatbotLimit(req, res, next) {
     if (queriesUsedToday >= limits.chatbotDailyQueries) {
       return res.status(403).json({
         success: false,
-        message: `Daily chatbot query limit reached. Your ${planType} plan allows ${limits.chatbotDailyQueries} queries per day. Upgrade for more queries!`,
+        message: `Daily NutriAgent AI query limit reached. Your ${planType} plan allows ${limits.chatbotDailyQueries} queries per day. Upgrade for more queries!`,
         limitReached: true,
         currentCount: queriesUsedToday,
         limit: limits.chatbotDailyQueries,
@@ -556,6 +556,7 @@ async function getSubscriptionStatus(req, res) {
 module.exports = {
   checkBookingLimit,
   checkBlogLimit,
+  checkAgentLimit: checkChatbotLimit,
   checkChatbotLimit,
   checkMealPlanLimit,
   checkProgressLimit,

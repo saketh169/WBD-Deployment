@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from '../contexts/AuthContext';
 import ScrollToTop from '../components/ScrollToTop';
 import NotFoundPage from '../pages/Error/NotFoundPage';
@@ -14,7 +14,7 @@ import EditProfile from '../pages/EditProfile';
 import UserGetPlanForm from '../pages/MealPlans/UserGetPlanForm'; 
 
 
-import Chatbot from '../pages/Chatbot';
+import NutriAgentPage from '../agent/NutriAgentPage';
 import Blog from '../pages/Blog';
 import Contact from '../pages/Contactus';
 import CreateBlog from '../pages/Blog/CreateBlog';
@@ -42,10 +42,13 @@ import UserActivities from '../pages/Activities/UserActivities';
 
 
 export default function UserRoutes() {
+  const location = useLocation();
+  const isAgent = location.pathname.includes('nutriagent') || location.pathname.includes('chatbot');
+
   return (
     <AuthProvider currentRole="user">
       <ScrollToTop />
-      <div className="p-6">
+      <div className={isAgent ? "w-full h-[calc(100dvh-72px)] overflow-hidden" : "p-6"}>
         <Routes>
           <Route index element={<Navigate to="home" replace />} />
 
@@ -54,6 +57,7 @@ export default function UserRoutes() {
         <Route path="profile" element={<UserDashboard />} />
         <Route path="activities" element={<UserActivities />} />
         <Route path="schedule" element={<UserSchedule />} />
+        <Route path="consultations" element={<Navigate to="/user/schedule" replace />} />
         <Route path="progress" element={<UserProgress />} />  
         <Route path="get-plans" element={<UserGetPlanForm />} />   
 
@@ -66,17 +70,20 @@ export default function UserRoutes() {
         <Route path="create-blog" element={<CreateBlog />} />
         <Route path="edit-blog/:id" element={<CreateBlog />} />
         
-        {/* Optional: Chatbot, Blog, Contact (can be public or protected) */}
+        {/* NutriAgent, Blog, Contact */}
         <Route path="blog" element={<Blog/>} />
         <Route path="contact-us" element={<Contact/>} />
-        <Route path="chatbot" element={<Chatbot/>} />
+        <Route path="nutriagent" element={<NutriAgentPage />} />
+        <Route path="chatbot" element={<Navigate to="/user/nutriagent" replace />} />
         
         {/* Chat Route */}
         <Route path="chat/:conversationId" element={<ChatPage />} />
         
-        {/* Lab Reports Routes */}
+        {/* Medical & Lab Reports Routes */}
         <Route path="lab-reports/:dietitianId" element={<ClientLabReportViewer />} />
         <Route path="submit-lab-report/:dietitianId" element={<LabReportUploader />} />
+        <Route path="medical-reports/:dietitianId" element={<ClientLabReportViewer />} />
+        <Route path="submit-medical-report/:dietitianId" element={<LabReportUploader />} />
 
         {/* Health Reports Route */}
         <Route path="health-reports/:dietitianId" element={<ClientHealthReportViewer />} />

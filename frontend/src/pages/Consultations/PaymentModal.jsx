@@ -11,6 +11,7 @@ import {
   selectShowSubscriptionAlert,
   clearSubscriptionAlert
 } from "../../redux/slices/bookingSlice";
+import { getDietitianProfile } from "../../services/dietitian/dietitianService";
 
 const PAYMENT_METHODS = [
   { key: 'card', title: 'Credit/Debit Card' },
@@ -56,12 +57,20 @@ const PaymentNotificationModal = ({ isOpen, onClose, onSubmit, paymentDetails })
       if (!userId || !authToken) { alert('User session not found or expired. Please log in again.'); setIsProcessing(false); return; }
 
       const consultationType = paymentDetails?.consultationType || paymentDetails?.type || 'Online';
+      let dietitianEmail = paymentDetails?.dietitianEmail;
+      if (!dietitianEmail && paymentDetails?.dietitianId) {
+        try {
+          const prof = await getDietitianProfile(paymentDetails.dietitianId);
+          dietitianEmail = prof?.data?.email || prof?.email || prof?.data?.dietitian?.email;
+        } catch {}
+      }
+
       const bookingBaseData = {
         userId, username: user?.name || paymentDetails?.userName || email.split('@')[0], email,
         userPhone: user?.phone || paymentDetails?.userPhone || '',
         userAddress: user?.address || paymentDetails?.userAddress || '',
         dietitianId: paymentDetails?.dietitianId, dietitianName: paymentDetails?.dietitianName,
-        dietitianEmail: paymentDetails?.dietitianEmail, dietitianPhone: paymentDetails?.dietitianPhone || '',
+        dietitianEmail: dietitianEmail || '', dietitianPhone: paymentDetails?.dietitianPhone || '',
         dietitianSpecialization: paymentDetails?.dietitianSpecialization || '',
         date: paymentDetails?.date, time: paymentDetails?.time,
         consultationType, amount: Number(paymentDetails?.amount), paymentMethod: selectedMethod,

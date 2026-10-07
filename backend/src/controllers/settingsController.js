@@ -4,10 +4,11 @@ const { sendPolicyChangeEmail } = require('../services/emailService');
 // Get settings
 const getSettings = async (req, res) => {
   try {
-    let settings = await Settings.findOne();
+    let settings = await Settings.findOne().lean();
     if (!settings) {
-      settings = new Settings();
-      await settings.save();
+      const newSettings = new Settings();
+      await newSettings.save();
+      settings = newSettings.toObject();
     }
     res.status(200).json(settings);
   } catch (error) {
@@ -72,7 +73,7 @@ const updateSettings = async (req, res) => {
 
     res.status(200).json({
       message: 'Settings updated successfully',
-      settings,
+      settings: settings.toObject(),
       updatedFields: Object.keys(updates)
     });
   } catch (error) {

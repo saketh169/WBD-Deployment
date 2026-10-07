@@ -242,12 +242,10 @@ const ClientLabReportViewer = () => {
   // ---- File preview / download helpers ----
   const openFilePreview = (file) => {
     try {
-      if (!file || !file.data) return;
-      const raw = file.data.data ? file.data.data : file.data;
-      const uint8 = new Uint8Array(raw);
-      const blob = new Blob([uint8], { type: file.mimetype });
-      const url = URL.createObjectURL(blob);
-      setPreviewFile({ url, name: file.originalName, mimetype: file.mimetype });
+      if (!file || !selectedReport?._id) return;
+      const fileId = file._id || file.filename;
+      const url = `/api/lab-reports/${selectedReport._id}/files/${fileId}/view`;
+      setPreviewFile({ url, name: file.originalName || file.filename, mimetype: file.mimetype });
       setShowPreview(true);
     } catch (err) {
       console.error('Failed to open file preview', err);
@@ -256,25 +254,21 @@ const ClientLabReportViewer = () => {
   };
 
   const closePreview = () => {
-    if (previewFile?.url) URL.revokeObjectURL(previewFile.url);
     setShowPreview(false);
     setPreviewFile(null);
   };
 
   const downloadFile = (file) => {
     try {
-      if (!file || !file.data) return;
-      const raw = file.data.data ? file.data.data : file.data;
-      const uint8 = new Uint8Array(raw);
-      const blob = new Blob([uint8], { type: file.mimetype });
-      const url = URL.createObjectURL(blob);
+      if (!file || !selectedReport?._id) return;
+      const fileId = file._id || file.filename;
+      const downloadUrl = `/api/lab-reports/${selectedReport._id}/files/${fileId}/download`;
       const a = document.createElement('a');
-      a.href = url;
-      a.download = file.originalName || file.filename || 'download';
+      a.href = downloadUrl;
+      a.download = file.originalName || file.filename || 'lab-report-file';
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to download file', err);
       alert('Unable to download file.');
@@ -331,10 +325,10 @@ const ClientLabReportViewer = () => {
           </button>
           <div className="text-center">
             <h1 className="text-4xl font-bold mb-2">
-              My Lab Reports
+              My Medical Reports
             </h1>
             <p className="text-emerald-100 text-lg">
-              View and manage your submitted lab reports
+              View and manage your submitted medical reports
             </p>
           </div>
 
@@ -343,12 +337,12 @@ const ClientLabReportViewer = () => {
         {loading ? (
           <div className="text-center py-16">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
-            <p className="text-emerald-700">Loading lab reports...</p>
+            <p className="text-emerald-700">Loading medical reports...</p>
           </div>
         ) : error ? (
           <div className="text-center py-16">
             <FileText className="w-16 h-16 text-red-300 mx-auto mb-4" />
-            <p className="text-red-700 text-lg font-bold">Error loading lab reports</p>
+            <p className="text-red-700 text-lg font-bold">Error loading medical reports</p>
             <p className="text-red-600 mt-2">{error}</p>
             <button
               onClick={() => window.location.reload()}
@@ -360,8 +354,8 @@ const ClientLabReportViewer = () => {
         ) : reports.length === 0 ? (
           <div className="text-center py-16">
             <FileText className="w-16 h-16 text-emerald-300 mx-auto mb-4" />
-            <p className="text-teal-900 text-lg font-bold">No lab reports found.</p>
-            <p className="text-emerald-600 mt-2">Submit your first lab report to get started.</p>
+            <p className="text-teal-900 text-lg font-bold">No medical reports found.</p>
+            <p className="text-emerald-600 mt-2">Submit your first medical report to get started.</p>
             <button
               onClick={() => navigate(`/user/submit-lab-report/${dietitianId}`)}
               className="mt-4 px-6 py-2 bg-linear-to-r from-emerald-500 to-teal-600 text-white rounded-xl hover:from-emerald-600 hover:to-teal-700 shadow-lg font-semibold"

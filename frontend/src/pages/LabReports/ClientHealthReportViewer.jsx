@@ -81,12 +81,10 @@ const ClientHealthReportViewer = () => {
   // File helpers
   const openFilePreview = (file) => {
     try {
-      if (!file || !file.data) return;
-      const raw = file.data.data ? file.data.data : file.data;
-      const uint8 = new Uint8Array(raw);
-      const blob = new Blob([uint8], { type: file.mimetype });
-      const url = URL.createObjectURL(blob);
-      setPreviewFile({ url, name: file.originalName, mimetype: file.mimetype });
+      if (!file || !selectedReport?._id) return;
+      const fileId = file._id || file.filename;
+      const url = `/api/health-reports/${selectedReport._id}/files/${fileId}/view`;
+      setPreviewFile({ url, name: file.originalName || file.filename, mimetype: file.mimetype });
       setShowPreview(true);
     } catch (err) {
       console.error('Failed to open file preview', err);
@@ -95,25 +93,21 @@ const ClientHealthReportViewer = () => {
   };
 
   const closePreview = () => {
-    if (previewFile?.url) URL.revokeObjectURL(previewFile.url);
     setShowPreview(false);
     setPreviewFile(null);
   };
 
   const downloadFile = (file) => {
     try {
-      if (!file || !file.data) return;
-      const raw = file.data.data ? file.data.data : file.data;
-      const uint8 = new Uint8Array(raw);
-      const blob = new Blob([uint8], { type: file.mimetype });
-      const url = URL.createObjectURL(blob);
+      if (!file || !selectedReport?._id) return;
+      const fileId = file._id || file.filename;
+      const downloadUrl = `/api/health-reports/${selectedReport._id}/files/${fileId}/download`;
       const a = document.createElement('a');
-      a.href = url;
-      a.download = file.originalName || file.filename || 'download';
+      a.href = downloadUrl;
+      a.download = file.originalName || file.filename || 'health-report-file';
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to download file', err);
       alert('Unable to download file.');

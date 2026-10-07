@@ -880,7 +880,10 @@ router.post('/resend-login-otp', otpRateLimiter, authController.resendLoginOTPCo
  *       401:
  *         description: Unauthorized
  */
-// 20. Refresh Token: POST /api/refresh-token (requires valid JWT)
-router.post('/refresh-token', authenticateJWT, authController.refreshTokenController);
+// 20. Refresh Token: POST /api/refresh-token (uses httpOnly cookie or body token)
+router.post('/refresh-token', authController.refreshTokenController);
+
+// 21. Logout: POST /api/logout (clears httpOnly refresh token cookie)
+router.post('/logout', authController.logoutController);
 
 module.exports = router;

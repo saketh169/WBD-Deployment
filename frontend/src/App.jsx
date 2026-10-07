@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 import Header from './components/Header/Header';
 import Footer from './components/Footer/Footer';
@@ -14,7 +14,7 @@ import Contactus from './pages/Contactus';
 import Signin from './pages/Auth/Signin';
 import Signup from './pages/Auth/Signup';
 import ForgotPassword from './pages/Auth/ForgotPassword';
-import ChatbotPage from './pages/Chatbot';
+import NutriAgentPage from './agent/NutriAgentPage';
 import RoleModal from './pages/RoleModal';
 import DocUpload from './pages/Auth/DocUpload';
 
@@ -57,7 +57,8 @@ const App = () => {
                       <Route path="/about-us" element={<Aboutus />} />
                       <Route path="/blog" element={<Blog />} />
                       <Route path="/guide" element={<Guide />} />
-                      <Route path="/chatbot" element={<ChatbotPage />} />
+                      <Route path="/nutriagent" element={<NutriAgentPage />} />
+                      <Route path="/chatbot" element={<Navigate to="/nutriagent" replace />} />
                       <Route path="/contact-us" element={<Contactus />} />
                       <Route path="/signin" element={<Signin />} />
                       <Route path="/signup" element={<Signup />} />
@@ -66,7 +67,9 @@ const App = () => {
                       <Route path="/upload-documents" element={<DocUpload />} />
 
                       <Route path="/privacy-policy" element={<LegalPrivacy />} />
-                      <Route path="/terms-of-use" element={<TermsOfUse/>} />
+                      <Route path="/policy" element={<LegalPrivacy />} />
+                      <Route path="/terms-of-use" element={<TermsOfUse />} />
+                      <Route path="/terms" element={<TermsOfUse />} />
 
                       {/* Role-Specific Routes (handled by Layout.jsx) */}
                       <Route path="/*" element={<Layout />} />

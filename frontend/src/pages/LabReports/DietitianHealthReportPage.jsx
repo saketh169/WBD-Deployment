@@ -343,7 +343,9 @@ const DietitianHealthReportPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedReport, setSelectedReport] = useState(null);
-  const [showForm, setShowForm] = useState(false);
+  const searchParams = new URLSearchParams(location.search);
+  const shouldOpenCreateForm = searchParams.get('create') === 'true' || location.state?.create === true;
+  const [showForm, setShowForm] = useState(shouldOpenCreateForm);
   const [submitting, setSubmitting] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -458,12 +460,10 @@ const DietitianHealthReportPage = () => {
 
   const openFilePreview = (file) => {
     try {
-      if (!file || !file.data) return;
-      const raw = file.data.data ? file.data.data : file.data;
-      const uint8 = new Uint8Array(raw);
-      const blob = new Blob([uint8], { type: file.mimetype });
-      const url = URL.createObjectURL(blob);
-      setPreviewFile({ url, name: file.originalName, mimetype: file.mimetype });
+      if (!file || !selectedReport?._id) return;
+      const fileId = file._id || file.filename;
+      const url = `/api/health-reports/${selectedReport._id}/files/${fileId}/view`;
+      setPreviewFile({ url, name: file.originalName || file.filename, mimetype: file.mimetype });
       setShowPreview(true);
     } catch (err) {
       console.error('Failed to open file preview', err);
@@ -472,25 +472,21 @@ const DietitianHealthReportPage = () => {
   };
 
   const closePreview = () => {
-    if (previewFile?.url) URL.revokeObjectURL(previewFile.url);
     setShowPreview(false);
     setPreviewFile(null);
   };
 
   const downloadFile = (file) => {
     try {
-      if (!file || !file.data) return;
-      const raw = file.data.data ? file.data.data : file.data;
-      const uint8 = new Uint8Array(raw);
-      const blob = new Blob([uint8], { type: file.mimetype });
-      const url = URL.createObjectURL(blob);
+      if (!file || !selectedReport?._id) return;
+      const fileId = file._id || file.filename;
+      const downloadUrl = `/api/health-reports/${selectedReport._id}/files/${fileId}/download`;
       const a = document.createElement('a');
-      a.href = url;
-      a.download = file.originalName || file.filename || 'download';
+      a.href = downloadUrl;
+      a.download = file.originalName || file.filename || 'health-report-file';
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to download file', err);
       alert('Unable to download file.');
@@ -518,13 +514,7 @@ const DietitianHealthReportPage = () => {
             <h1 className="absolute left-1/2 transform -translate-x-1/2 text-2xl md:text-3xl font-bold whitespace-nowrap">
               {clientInfo ? `Health Reports — ${clientInfo.name}` : 'Health Assessment Reports'}
             </h1>
-            <button
-              onClick={() => { setShowForm(true); setSelectedReport(null); }}
-              className="px-4 py-2 bg-white text-emerald-700 rounded-lg hover:bg-emerald-50 font-semibold flex items-center gap-2 transition-all shadow-md cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">New Report</span>
-            </button>
+            <div className="w-20" />
           </div>
         </header>
 

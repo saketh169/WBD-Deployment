@@ -1,17 +1,28 @@
 const mongoose = require('mongoose');
 const path = require('path');
-const { UserAuth, Dietitian } = require('../models/userModel');
+const { UserAuth, Dietitian } = require('../src/models/userModel');
 
 require('dotenv').config({
-  path: path.join(__dirname, '..', 'utils', '.env')
+  path: path.join(__dirname, '..', '.env')
 });
 
+const MALE_NAMES = [
+  'Amit Patel', 'Vikram Singh', 'Rajesh Kumar', 'Karan Mehta', 'Arjun Reddy',
+  'Rohit Agarwal', 'Naveen Joshi', 'Imran Khan', 'Aravind Nair', 'Vikash Gupta',
+  'Sameer Desai', 'Sankurathiri Pedabalma'
+];
+
+function determineGender(name) {
+  if (!name) return 'female';
+  const isMale = MALE_NAMES.some(m => name.toLowerCase().includes(m.toLowerCase()));
+  return isMale ? 'male' : 'female';
+}
 
 const connectDB = async () => {
   try {
     const MONGODB_URI = process.env.MONGODB_URL || "mongodb://localhost:27017/NutriConnectDatabase";
     if (!MONGODB_URI) {
-      throw new Error('MONGODB_URI is not defined');
+      throw new Error('MONGODB_URL is not defined');
     }
     await mongoose.connect(MONGODB_URI);
     console.log('✅ MongoDB Connected Successfully!');
@@ -583,11 +594,22 @@ async function seedDietitians() {
     for (const mock of mockDietitians) {
       // Generate fake data for required fields
       const email = mock.name === 'Dr.Neha Agarwal' ? 'dietitian1@gmail.com' : mock.name.toLowerCase().replace(/\s+/g, '').replace(/\./g, '') + '@dietitian.com';
+      const gender = mock.gender || determineGender(mock.name);
 
-      // Check if already exists
+      // Check if already exists in UserAuth
       const existingUser = await UserAuth.findOne({ email });
       if (existingUser) {
-        console.log(`Dietitian ${mock.name} already exists, skipping...`);
+        if (existingUser.roleId) {
+          await Dietitian.updateOne({ _id: existingUser.roleId }, { $set: { gender } });
+          console.log(`Updated existing dietitian: ${mock.name} -> gender: ${gender}`);
+        }
+        continue;
+      }
+
+      const existingDietitian = await Dietitian.findOne({ name: mock.name });
+      if (existingDietitian) {
+        await Dietitian.updateOne({ _id: existingDietitian._id }, { $set: { gender } });
+        console.log(`Updated existing dietitian: ${mock.name} -> gender: ${gender}`);
         continue;
       }
 
@@ -623,6 +645,7 @@ async function seedDietitians() {
       const dietitian = new Dietitian({
         name: mock.name,
         email,
+        gender,
         age,
         phone,
         licenseNumber,
@@ -687,7 +710,17 @@ async function seedDietitians() {
       console.log(`Seeded dietitian: ${mock.name}`);
     }
 
-    console.log('Seeding completed');
+    // Sweep all existing dietitians in MongoDB to ensure gender is populated
+    const allDbDietitians = await Dietitian.find({});
+    for (const d of allDbDietitians) {
+      if (!d.gender) {
+        const g = determineGender(d.name);
+        await Dietitian.updateOne({ _id: d._id }, { $set: { gender: g } });
+        console.log(`Populated gender for ${d.name} -> ${g}`);
+      }
+    }
+
+    console.log('Seeding and gender updates completed successfully!');
   } catch (error) {
     console.error('Seeding error:', error);
   } finally {

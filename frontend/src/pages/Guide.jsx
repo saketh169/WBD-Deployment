@@ -4,17 +4,18 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 const ROLES_DATA = [
   {
     slug: 'user', title: 'User', subtitle: 'Health Seeker', icon: 'fas fa-user',
-    description: 'Personalized nutrition plans and expert guidance',
-    features: ['Personalized meal plans', 'Expert consultations', 'Progress tracking', 'Health insights'],
+    description: 'Personalized nutrition plans, clinical NutriAgent AI, and expert guidance',
+    features: ['Personalized meal plans', 'Expert consultations', 'NutriAgent Clinical AI', 'Progress tracking'],
     guide: {
       title: 'Your Nutrition Journey Begins',
-      subtitle: 'Transform your health with personalized nutrition guidance',
+      subtitle: 'Transform your health with personalized nutrition guidance and AI support',
       steps: [
         { step: 1, title: 'Create Your Profile', description: 'Sign up and share your health goals, preferences, and lifestyle details.', details: ['Basic information', 'Health goals', 'Dietary preferences', 'Medical history'] },
-        { step: 2, title: 'Discover Dietitians', description: 'Browse certified nutrition experts by specialization and location.', details: ['Specialization filters', 'Rating & reviews', 'Availability check', 'Consultation fees'] },
-        { step: 3, title: 'Book Consultation', description: 'Schedule your first consultation with your chosen dietitian.', details: ['Time slot selection', 'Secure payment', 'Confirmation email', 'Preparation tips'] },
-        { step: 4, title: 'Receive Meal Plan', description: 'Get your customized nutrition plan and start your journey.', details: ['Personalized recipes', 'Portion guidance', 'Shopping lists', 'Weekly adjustments'] },
-        { step: 5, title: 'Track & Succeed', description: 'Monitor progress, log meals, and achieve your health goals.', details: ['Daily logging', 'Progress charts', 'Dietitian feedback', 'Goal celebrations'] },
+        { step: 2, title: 'Consult NutriAgent', description: 'Interact with our LangGraph-powered clinical agent for diet insights, lab analysis, and instant booking.', details: ['24/7 nutrition queries', 'Dietitian slot booking', 'Lab report interpretation', 'Food nutrition lookup'] },
+        { step: 3, title: 'Discover Dietitians', description: 'Browse certified nutrition experts by specialization and location.', details: ['Specialization filters', 'Rating & reviews', 'Availability check', 'Consultation fees'] },
+        { step: 4, title: 'Book Consultation', description: 'Schedule your consultation with your chosen dietitian online or in-person.', details: ['Time slot selection', 'Secure payment', 'Confirmation email', 'Preparation tips'] },
+        { step: 5, title: 'Receive Meal Plan', description: 'Get your customized nutrition plan and start your journey.', details: ['Personalized recipes', 'Portion guidance', 'Shopping lists', 'Weekly adjustments'] },
+        { step: 6, title: 'Track & Succeed', description: 'Monitor progress, log meals, and achieve your health goals.', details: ['Daily logging', 'Progress charts', 'Dietitian feedback', 'Goal celebrations'] },
       ]
     }
   },

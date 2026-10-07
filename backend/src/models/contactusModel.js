@@ -21,7 +21,7 @@ const querySchema = new mongoose.Schema({
   role: {
     type: String,
     required: [true, 'Role is required'],
-    enum: ['User', 'Dietitian', 'Certifying Organization'],
+    enum: ['User', 'Dietitian', 'Certifying Organization', 'Employee', 'Others'],
     default: 'User'
   },
   query: {

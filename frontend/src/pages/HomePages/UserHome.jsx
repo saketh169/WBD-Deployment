@@ -10,7 +10,7 @@ const UserHome = () => {
     { title: 'Unlock Premium Features!', text: 'Get 2 months free on yearly plans.', cta: 'Explore Plans', link: '/user/get-plans' },
     { title: 'Connect with a New Dietitian', text: '50% off your first video consultation.', cta: 'Book Now', link: '/user/schedule' },
     { title: 'New Healthy Recipes Posted!', text: 'Check out our latest 15-minute meal ideas.', cta: 'Read Blog', link: '/user/blog' },
-    { title: 'Need Help? Use Our Chatbot', text: 'Instant answers to all your nutrition queries.', cta: 'Ask AI', link: '/user/chatbot' },
+    { title: 'Need Help? Consult NutriAgent', text: 'Instant answers to all your nutrition queries.', cta: 'Ask AI', link: '/user/nutriagent' },
   ];
 
   useEffect(() => {

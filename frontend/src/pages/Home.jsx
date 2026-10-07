@@ -29,7 +29,7 @@ const Home = () => {
       { icon: 'fas fa-chart-line', title: 'Personalized Plans', text: 'Tailored nutrition and fitness plans to meet your unique health goals.' },
       { icon: 'fas fa-user-friends', title: 'Expert Consultations', text: 'Connect with certified dietitians for one-on-one video and chat consultations.' },
       { icon: 'fas fa-mobile-alt', title: 'Progress Tracking', text: 'Seamlessly log your meals and track your health metrics on the go.' },
-      { icon: 'fas fa-robot', title: 'Chatbot Feature', text: 'Get instant answers to your nutrition questions with our AI-powered chatbot.' },
+      { icon: 'fas fa-file-medical-alt', title: 'Clinical Lab Reports', text: 'Securely upload medical lab reports and track health biomarkers over time.' },
       { icon: 'fas fa-heartbeat', title: 'Health Insights', text: 'Get detailed insights into your health with our advanced analytics.' },
       { icon: 'fas fa-calendar-alt', title: 'Appointment Scheduling', text: 'Easily book and manage consultations with dietitians.' },
     ];

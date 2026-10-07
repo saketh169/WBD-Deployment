@@ -33,7 +33,7 @@ export const ChatHeader = ({
     <div className="px-6">
       <div className="flex items-center justify-between h-20">
         <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+          <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-lg transition-colors cursor-pointer">
             <i className="fas fa-arrow-left text-white" />
           </button>
           <div className="flex items-center gap-3">
@@ -49,32 +49,47 @@ export const ChatHeader = ({
 
         <div className="flex items-center gap-2">
           {userType === 'dietitian' && (
-            <button
-              onClick={onOpenVideoModal}
-              className="px-4 py-2 bg-linear-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all flex items-center gap-2"
-            >
-              <i className="fas fa-video" />
-              <span className="hidden sm:inline">Video Link</span>
-            </button>
+            <>
+              <button
+                onClick={onOpenVideoModal}
+                title="Send Video Consultation Link"
+                className="px-4 py-2 bg-white text-gray-800 border border-gray-200 hover:bg-gray-50 rounded-lg shadow-2xs font-medium transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <i className="fas fa-video text-emerald-600" />
+                <span className="hidden sm:inline">Video Link</span>
+              </button>
+              <button
+                onClick={() => navigate(`/dietitian/health-reports/${otherParticipant?._id || otherParticipant?.id}?create=true`, {
+                  state: { clientInfo: otherParticipant, create: true }
+                })}
+                title="Upload Health Assessment"
+                className="px-4 py-2 bg-white text-gray-800 border border-gray-200 hover:bg-gray-50 rounded-lg shadow-2xs font-medium transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <i className="fas fa-notes-medical text-teal-600" />
+                <span className="hidden sm:inline">Upload</span>
+              </button>
+            </>
           )}
 
           {userType === 'client' && (
             <>
               <button
                 onClick={() => navigate(`/user/submit-lab-report/${otherParticipant?._id || otherParticipant?.id}`)}
-                className="px-4 py-2 bg-linear-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all flex items-center gap-2"
+                title="Upload Medical Reports"
+                className="px-4 py-2 bg-white text-gray-800 border border-gray-200 hover:bg-gray-50 rounded-lg shadow-2xs font-medium transition-all flex items-center gap-2 cursor-pointer"
               >
-                <i className="fas fa-file-upload" />
-                <span className="hidden sm:inline">Upload Report</span>
+                <i className="fas fa-flask text-emerald-600" />
+                <span className="hidden sm:inline">Upload</span>
               </button>
               <div className="relative" ref={reportsDropdownRef}>
                 <button
                   onClick={() => setShowReportsDropdown(!showReportsDropdown)}
-                  className="px-4 py-2 bg-linear-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all flex items-center gap-2"
+                  title="View My Reports & Health Assessments"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-md font-medium transition-all flex items-center gap-2 cursor-pointer"
                 >
-                  <i className="fas fa-file-medical" />
+                  <i className="fas fa-file-medical text-white" />
                   <span className="hidden sm:inline">My Reports</span>
-                  <i className={`fas fa-chevron-${showReportsDropdown ? 'up' : 'down'} text-xs ml-1`} />
+                  <i className={`fas fa-chevron-${showReportsDropdown ? 'up' : 'down'} text-xs text-white/80 ml-1`} />
                 </button>
                 {showReportsDropdown && (
                   <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-emerald-200 overflow-hidden z-50">
@@ -83,14 +98,14 @@ export const ChatHeader = ({
                         setShowReportsDropdown(false);
                         navigate(`/user/lab-reports/${otherParticipant?._id || otherParticipant?.id}`);
                       }}
-                      className="w-full px-4 py-3 text-left hover:bg-emerald-50 transition flex items-center gap-3 border-b border-gray-100"
+                      className="w-full px-4 py-3 text-left hover:bg-emerald-50 transition flex items-center gap-3 border-b border-gray-100 cursor-pointer"
                     >
                       <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
                         <i className="fas fa-flask text-emerald-600 text-sm" />
                       </div>
                       <div>
-                        <div className="font-semibold text-gray-800 text-sm">Lab Reports</div>
-                        <div className="text-xs text-gray-500">Your submitted lab reports</div>
+                        <div className="font-semibold text-gray-800 text-sm">Medical Reports</div>
+                        <div className="text-xs text-gray-500">Your submitted medical reports</div>
                       </div>
                     </button>
                     <button
@@ -98,7 +113,7 @@ export const ChatHeader = ({
                         setShowReportsDropdown(false);
                         navigate(`/user/health-reports/${otherParticipant?._id || otherParticipant?.id}`);
                       }}
-                      className="w-full px-4 py-3 text-left hover:bg-emerald-50 transition flex items-center gap-3"
+                      className="w-full px-4 py-3 text-left hover:bg-emerald-50 transition flex items-center gap-3 cursor-pointer"
                     >
                       <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
                         <i className="fas fa-notes-medical text-teal-600 text-sm" />
@@ -118,11 +133,12 @@ export const ChatHeader = ({
             <div className="relative" ref={reportsDropdownRef}>
               <button
                 onClick={() => setShowReportsDropdown(!showReportsDropdown)}
-                className="px-4 py-2 bg-linear-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all flex items-center gap-2"
+                title="View Client Reports & Health Assessments"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-md font-medium transition-all flex items-center gap-2 cursor-pointer"
               >
-                <i className="fas fa-file-medical" />
+                <i className="fas fa-file-medical text-white" />
                 <span className="hidden sm:inline">Client Reports</span>
-                <i className={`fas fa-chevron-${showReportsDropdown ? 'up' : 'down'} text-xs ml-1`} />
+                <i className={`fas fa-chevron-${showReportsDropdown ? 'up' : 'down'} text-xs text-white/80 ml-1`} />
               </button>
               {showReportsDropdown && (
                 <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-emerald-200 overflow-hidden z-50">
@@ -133,14 +149,14 @@ export const ChatHeader = ({
                         state: { clientInfo: otherParticipant }
                       });
                     }}
-                    className="w-full px-4 py-3 text-left hover:bg-emerald-50 transition flex items-center gap-3 border-b border-gray-100"
+                    className="w-full px-4 py-3 text-left hover:bg-emerald-50 transition flex items-center gap-3 border-b border-gray-100 cursor-pointer"
                   >
                     <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
                       <i className="fas fa-flask text-emerald-600 text-sm" />
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-800 text-sm">Lab Reports</div>
-                      <div className="text-xs text-gray-500">View client's lab reports</div>
+                      <div className="font-semibold text-gray-800 text-sm">Medical Reports</div>
+                      <div className="text-xs text-gray-500">View client's medical reports</div>
                     </div>
                   </button>
                   <button
@@ -150,7 +166,7 @@ export const ChatHeader = ({
                         state: { clientInfo: otherParticipant }
                       });
                     }}
-                    className="w-full px-4 py-3 text-left hover:bg-emerald-50 transition flex items-center gap-3"
+                    className="w-full px-4 py-3 text-left hover:bg-emerald-50 transition flex items-center gap-3 cursor-pointer"
                   >
                     <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
                       <i className="fas fa-notes-medical text-teal-600 text-sm" />
@@ -317,7 +333,7 @@ export const VideoLinkModal = ({
       <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-gray-900">Send Video Consultation Link</h3>
-          <button onClick={() => setShowVideoModal(false)} className="text-gray-400 hover:text-gray-600">
+          <button onClick={() => setShowVideoModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
             <i className="fas fa-times" />
           </button>
         </div>

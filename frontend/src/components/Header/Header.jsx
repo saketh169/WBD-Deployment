@@ -263,8 +263,15 @@ const Header = () => {
                 </span>
               </NavLink>
             </div>
-            {/* Logout button with right padding */}
-            <div className="pr-4 md:pr-8 lg:pr-16">
+            {/* Actions: Search + Logout */}
+            <div className="pr-4 md:pr-8 lg:pr-16 flex items-center space-x-3">
+              <button 
+                onClick={() => setShowSearch(true)}
+                className="text-[#28B463] hover:text-[#1E6F5C] p-2 transition-colors duration-300 transform hover:scale-110"
+                aria-label="Search"
+              >
+                <i className="fas fa-search text-2xl"></i>
+              </button>
               <button
                 onClick={handleLogout}
                 className={`${iconButtonBaseClass} bg-[#28B463] text-white hover:bg-[#1E6F5C]`}

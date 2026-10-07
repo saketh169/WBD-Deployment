@@ -263,12 +263,23 @@ export default function DietitianProfile() {
                   <i className="fas fa-briefcase text-emerald-600" />
                   <span className="text-gray-600">{dietitian.experience || 10}+ years experience</span>
                 </div>
+                {dietitian.gender && (
+                  <div className="flex items-center gap-2">
+                    <i className={`fas fa-${dietitian.gender === 'male' ? 'mars' : dietitian.gender === 'female' ? 'venus' : 'genderless'} text-emerald-600`} />
+                    <span className="text-gray-600 capitalize">{dietitian.gender}</span>
+                  </div>
+                )}
               </div>
               <div className="mb-3">
                 <span className="text-sm font-semibold mr-2 text-teal-900">Languages:</span>
                 <span className="text-gray-600">{dietitian.languages?.join(', ') || 'English'}</span>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                {dietitian.gender && (
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 capitalize">
+                    {dietitian.gender}
+                  </span>
+                )}
                 {dietitian.online && <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-white">Online Consultation</span>}
                 {dietitian.offline && <span className="px-3 py-1 rounded-full text-xs font-semibold bg-teal-600 text-white">Offline Consultation</span>}
               </div>

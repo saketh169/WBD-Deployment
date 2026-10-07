@@ -1,11 +1,11 @@
-﻿const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const { JWT_SECRET } = require('../utils/jwtConfig');
 
 // Core JWT authentication — extracts and verifies token, sets req.user
 function authenticateJWT(req, res, next) {
   const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
 
   if (!token) {
     return res.status(401).json({ success: false, message: 'No token provided' });
@@ -14,7 +14,7 @@ function authenticateJWT(req, res, next) {
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) {
       const message = err.name === 'TokenExpiredError' ? 'Token expired' : 'Invalid token';
-      return res.status(403).json({ success: false, message });
+      return res.status(401).json({ success: false, message });
     }
     req.user = decoded;
     next();
@@ -24,7 +24,7 @@ function authenticateJWT(req, res, next) {
 // Optional JWT — sets req.user if token is present and valid, but does NOT reject anonymous requests
 function optionalAuthenticateJWT(req, res, next) {
   const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
 
   if (!token) {
     return next(); // No token — continue as anonymous

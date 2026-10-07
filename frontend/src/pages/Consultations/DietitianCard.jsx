@@ -33,6 +33,7 @@ const DietitianCard = ({ dietitian, onBookAppointment }) => {
     photo,
     profileImage,
     name,
+    gender,
     specialties = [],
     experience = 0,
     fees: consultationFee = 0,
@@ -90,6 +91,11 @@ const DietitianCard = ({ dietitian, onBookAppointment }) => {
           <div className="flex items-center gap-3 mb-3">
             <RatingStars rating={rating} />
             <span className="text-sm text-[#1E6F5C] font-medium">({experience}+ years)</span>
+            {gender && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-[#E8F5E9] text-[#1E6F5C] font-semibold border border-[#28B463]/30 capitalize">
+                {gender}
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2 mb-3">

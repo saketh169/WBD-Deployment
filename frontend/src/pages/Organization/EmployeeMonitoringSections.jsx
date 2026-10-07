@@ -71,10 +71,9 @@ export const PendingQueriesCard = ({
         ) : (
             <div ref={queriesContainerRef} className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
                 {pendingQueries.map(q => {
-                    const queryText = q.query || '';
-                    const catMatch = queryText.match(/^\[([^\]]+)\]\s*(.+?)(?:\n|$)/);
-                    const catLabel = catMatch ? catMatch[1] : 'General';
-                    const subject = catMatch ? catMatch[2] : queryText.split('\n')[0];
+                    const displaySubject = q.subject || (q.query ? q.query.split('\n')[0] : 'No Subject');
+                    const displayMessage = q.query || '';
+                    const catLabel = q.category || 'General';
                     return (
                         <div key={q._id} className="px-5 py-4">
                             <div className="flex items-start gap-3">
@@ -82,10 +81,17 @@ export const PendingQueriesCard = ({
                                     <i className="fas fa-comment-dots text-blue-600 text-xs" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-gray-900 text-sm truncate">{subject}</p>
-                                    <p className="text-xs text-gray-500 truncate">by {q.empName || q.name}</p>
-                                    <div className="flex items-center gap-2 mt-1">
+                                    <p className="font-semibold text-gray-900 text-sm">{displaySubject}</p>
+                                    {displayMessage && (
+                                        <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap bg-gray-50 p-2 rounded border border-gray-100">
+                                            {displayMessage}
+                                        </p>
+                                    )}
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <span className="text-xs text-gray-500 font-medium">by {q.name || q.empName || 'Employee'}</span>
+                                        <span className="text-gray-300">•</span>
                                         <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">{catLabel}</span>
+                                        <span className="text-gray-300">•</span>
                                         <span className="text-xs text-gray-400">
                                             {new Date(q.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
@@ -177,10 +183,9 @@ export const ResolvedQueriesSection = ({
                 <>
                     <div ref={resolvedContainerRef} className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
                         {paginatedQueries.map(q => {
-                            const queryText = q.query || '';
-                            const catMatch = queryText.match(/^\[([^\]]+)\]\s*(.+?)(?:\n|$)/);
-                            const catLabel = catMatch ? catMatch[1] : 'General';
-                            const subject = catMatch ? catMatch[2] : queryText.split('\n')[0];
+                            const displaySubject = q.subject || (q.query ? q.query.split('\n')[0] : 'No Subject');
+                            const displayMessage = q.query || '';
+                            const catLabel = q.category || 'General';
                             return (
                                 <div key={q._id} className="px-5 py-4 hover:bg-gray-50 transition">
                                     <div className="flex items-start gap-3 mb-3">
@@ -188,10 +193,17 @@ export const ResolvedQueriesSection = ({
                                             <i className="fas fa-check-circle text-green-600 text-xs" />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="font-medium text-gray-900 text-sm truncate">{subject}</p>
-                                            <p className="text-xs text-gray-500 truncate">by {q.empName || q.name}</p>
-                                            <div className="flex items-center gap-2 mt-1">
+                                            <p className="font-semibold text-gray-900 text-sm">{displaySubject}</p>
+                                            {displayMessage && (
+                                                <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap bg-gray-50 p-2 rounded border border-gray-100">
+                                                    {displayMessage}
+                                                </p>
+                                            )}
+                                            <div className="flex items-center gap-2 mt-2">
+                                                <span className="text-xs text-gray-500 font-medium">by {q.name || q.empName || 'Employee'}</span>
+                                                <span className="text-gray-300">•</span>
                                                 <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">{catLabel}</span>
+                                                <span className="text-gray-300">•</span>
                                                 <span className="text-xs text-gray-400">{new Date(q.created_at).toLocaleDateString()}</span>
                                             </div>
                                         </div>

@@ -5,6 +5,8 @@ const {
     getClientLabReports,
     getLabReportsByClient,
     updateLabReportStatus,
+    downloadLabReportFile,
+    viewLabReportFile,
     uploadFields
 } = require('../controllers/labReportController');
 const { authenticateJWT } = require('../middlewares/authMiddleware');
@@ -189,5 +191,9 @@ router.get('/lab/client/:clientId', authenticateJWT, getLabReportsByClient);
  */
 // Update lab report status (for dietitians) - requires authentication
 router.put('/lab/:reportId/status', authenticateJWT, updateLabReportStatus);
+
+// Stream and download lab report attachments
+router.get('/:reportId/files/:fileId/download', downloadLabReportFile);
+router.get('/:reportId/files/:fileId/view', viewLabReportFile);
 
 module.exports = router;

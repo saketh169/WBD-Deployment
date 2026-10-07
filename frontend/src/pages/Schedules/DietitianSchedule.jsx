@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useEffect, useContext, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AuthContext from '../../contexts/AuthContext';
+import { decodeTokenPayload } from '../../utils/jwtUtils';
 import { getDietitianBookings, getDietitianBookedSlots, getMeetingLink, getBookingIcs, rescheduleBooking } from '../../services/booking/bookingService';
+import { getOrCreateConversation } from '../../services/chat/chatService';
 import { blockSlot, unblockSlot, blockDay, unblockDay, notifyLeave } from '../../services/dietitian/dietitianService';
-import { io } from 'socket.io-client';
 import { DietitianScheduleSlotDrawer, BlockDaysModal, UnblockDaysModal } from './DietitianScheduleModals';
 
 const decodeHtmlEntities = (text) => {
@@ -93,6 +95,7 @@ const getCalendarDates = () => {
 };
 
 const DietitianSchedule = () => {
+    const navigate = useNavigate();
     const { user, token } = useContext(AuthContext);
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -182,20 +185,6 @@ const DietitianSchedule = () => {
         } catch { /* non-fatal */ }
     }, [user?.id, activeDayInfo?.fullDateKey]);
 
-    useEffect(() => {
-        if (!user?.id || !token) return;
-        const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', { withCredentials: true });
-        socket.on('connect', () => { socket.emit('register_dietitian', user.id); });
-        const refreshData = () => {
-            fetchBookings();
-            if (isDrawerOpen && drawerDate) fetchDietitianSlots(drawerDate);
-            fetchBlockedDays();
-        };
-        socket.on('new_booking', refreshData);
-        socket.on('booking_updated', refreshData);
-        return () => socket.disconnect();
-    }, [user?.id, token, isDrawerOpen, drawerDate, fetchBookings, fetchDietitianSlots, fetchBlockedDays]);
-
     const bookingsByDay = useMemo(() => {
         const grouped = {};
         bookings.forEach(b => {
@@ -205,6 +194,7 @@ const DietitianSchedule = () => {
                 time: b.time, consultationType: b.consultationType,
                 specialization: b.dietitianSpecialization || 'General Consultation',
                 clientName: b.username, clientEmail: b.email,
+                clientId: b.userId?._id || b.userId || b.clientId,
                 status: b.status, bookingId: b._id, amount: b.amount, meetingUrl: b.meetingUrl,
             });
         });
@@ -223,6 +213,24 @@ const DietitianSchedule = () => {
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, [showBlockingMenu]);
+
+    const handleGoToChat = async (appt) => {
+        try {
+            const dietitianId = user?.id || user?._id || decodeTokenPayload(token)?.roleId || decodeTokenPayload(token)?.userId;
+            const clientId = appt.clientId;
+            if (!clientId) return alert('Client details not found for this consultation.');
+            const res = await getOrCreateConversation({ clientId, dietitianId });
+            if (!res.isError && (res.success || res.data)) {
+                const conv = res.data || res;
+                navigate(`/dietitian/chat/${conv._id}`, {
+                    state: {
+                        otherParticipant: { id: clientId, name: appt.clientName, email: appt.clientEmail },
+                        bookingInfo: { date: activeDayInfo?.fullDateKey, time: appt.time }
+                    }
+                });
+            } else alert(res?.message || 'Unable to open chat with client.');
+        } catch (err) { alert(`Failed to start chat: ${err.response?.data?.message || err.message}`); }
+    };
 
     const handleGenerateMeetingLink = async (bookingId, consultationType) => {
         if (consultationType?.toLowerCase() !== 'online') { alert('Meeting links are available only for online consultations.'); return; }
@@ -391,13 +399,32 @@ const DietitianSchedule = () => {
                                 <h3 className="appointment-title text-lg font-bold text-gray-800 mb-2 truncate">{appt.clientName || 'Booked Client'}</h3>
                                 <p className="text-sm text-gray-600 mb-2 flex items-center gap-2 min-w-0"><i className="fas fa-notes-medical text-emerald-600 opacity-70 text-sm shrink-0" /><span className="flex-1 min-w-0">{decodeHtmlEntities(appt.specialization)}</span></p>
                                 <p className="text-sm text-gray-600 mb-3 flex items-center gap-2"><i className="fas fa-video text-emerald-600 opacity-70 text-sm" />{appt.consultationType}</p>
-                                <div className="flex items-center gap-3 pt-3 border-t-2 border-gray-100">
+                                <div className="flex flex-wrap items-center gap-2 pt-3 border-t-2 border-gray-100">
+                                    <button
+                                        className="text-xs px-3 py-1.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex items-center gap-1.5 font-semibold cursor-pointer shadow-xs"
+                                        onClick={() => handleGoToChat(appt)}
+                                        title={`Chat with ${appt.clientName || 'Client'}`}
+                                    >
+                                        <i className="fas fa-comment-dots text-xs" />
+                                        Go to Chat
+                                    </button>
                                     {appt.clientEmail ? (
-                                        <a href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(appt.clientEmail)}`} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-600 hover:text-emerald-700 underline transition-colors"><i className="fas fa-envelope mr-1" />Contact</a>
-                                    ) : <span className="text-sm text-gray-400">No email</span>}
-                                    <button className="text-xs px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" onClick={() => handleDownloadICS(appt.bookingId)}><i className="fas fa-calendar-plus mr-1" />Add to Calendar</button>
+                                        <a
+                                            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(appt.clientEmail)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs px-3 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 font-medium transition-colors shadow-2xs"
+                                            title={`Email ${appt.clientEmail}`}
+                                        >
+                                            <i className="fas fa-envelope text-xs" />
+                                            Email
+                                        </a>
+                                    ) : null}
+                                    <button className="text-xs px-2.5 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" onClick={() => handleDownloadICS(appt.bookingId)} title="Add to Calendar">
+                                        <i className="fas fa-calendar-plus mr-1" />Calendar
+                                    </button>
                                     {appt.consultationType?.toLowerCase() === 'online' && (
-                                        <button className="text-xs px-3 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100" onClick={() => handleGenerateMeetingLink(appt.bookingId, appt.consultationType)}>
+                                        <button className="text-xs px-2.5 py-1.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100" onClick={() => handleGenerateMeetingLink(appt.bookingId, appt.consultationType)}>
                                             <i className="fas fa-video mr-1" />{meetingLinks[appt.bookingId] || appt.meetingUrl ? 'Open Link' : 'Get Link'}
                                         </button>
                                     )}

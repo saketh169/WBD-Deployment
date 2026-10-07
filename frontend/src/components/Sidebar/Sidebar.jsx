@@ -29,7 +29,8 @@ const Sidebar = () => {
     { name: 'About Us', href: '/about-us', icon: 'fas fa-info-circle' },
     { name: 'Guide', href: '/guide', icon: 'fas fa-book' },
     { name: 'Blog', href: '/blog', icon: 'fas fa-blog' },
-    { name: 'Chatbot', href: '/chatbot', icon: 'fas fa-robot' },
+    { name: 'Terms of Use', href: '/terms-of-use', icon: 'fas fa-file-contract' },
+    { name: 'Privacy Policy', href: '/privacy-policy', icon: 'fas fa-user-shield' },
   ];
 
   const userNavLinks = [
@@ -40,7 +41,7 @@ const Sidebar = () => {
     { name: 'Pricing', href: '/user/pricing', icon: 'fas fa-tag' },
     { name: 'MealPlans', href: '/user/get-plans', icon: 'fas fa-utensils' },
     { name: 'Blog', href: '/user/blog', icon: 'fas fa-blog' },
-    { name: 'Chatbot', href: '/user/chatbot', icon: 'fas fa-robot' },
+    { name: 'NutriAgent', href: '/user/nutriagent', icon: 'fas fa-user-md' },
   ];
 
   const dietitianNavLinks = [

@@ -63,14 +63,45 @@ const HealthReportSchema = new Schema({
         type: String,
         trim: true
     },
-    // Uploaded files (PDFs, images)
+    // Clinical targets & goals
+    targetCalories: {
+        type: Number,
+        default: null
+    },
+    targetMacros: {
+        proteinGrams: { type: Number, default: null },
+        carbsGrams: { type: Number, default: null },
+        fatsGrams: { type: Number, default: null }
+    },
+    targetHydrationLiters: {
+        type: Number,
+        default: null
+    },
+    allergies: [{
+        type: String
+    }],
+    healthGoals: [{
+        type: String
+    }],
+    clinicalStatus: {
+        type: String,
+        default: 'active'
+    },
+    nextFollowUpDate: {
+        type: Date,
+        default: null
+    },
+    keyBiomarkersFlagged: [{
+        type: String
+    }],
+    // Uploaded files (PDFs, images) - optional attachments
     uploadedFiles: [{
-        fieldName: { type: String, required: true },
-        originalName: { type: String, required: true },
-        filename: { type: String, required: true },
-        data: { type: Buffer, required: true },
-        size: { type: Number, required: true },
-        mimetype: { type: String, required: true },
+        fieldName: { type: String },
+        originalName: { type: String },
+        filename: { type: String },
+        data: { type: Buffer },
+        size: { type: Number },
+        mimetype: { type: String },
         uploadedAt: { type: Date, default: Date.now }
     }],
     // Status

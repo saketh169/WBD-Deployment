@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import SubscriptionAlert from '../../middleware/SubscriptionAlert';
-import { io } from "socket.io-client";
 import {
   fetchBookedSlots,
   fetchUserBookedSlots,
@@ -80,33 +79,6 @@ const BookingSidebar = ({
     const secs = seconds % 60;
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
-
-  useEffect(() => {
-    if (!isOpen || !dietitianId) return;
-    const socketURL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-    const socket = io(socketURL);
-
-    socket.emit("viewing_dietitian", dietitianId);
-
-    socket.on("slot_lock_change", (data) => {
-      if (data.date === selectedDate) {
-        setRealTimeHeldSlots((prev) => {
-          if (data.action === "hold") {
-            if (!prev.includes(data.time)) return [...prev, data.time];
-            return prev;
-          } else if (data.action === "release") {
-            return prev.filter((t) => t !== data.time);
-          }
-          return prev;
-        });
-      }
-    });
-
-    return () => {
-      socket.emit("leave_dietitian", dietitianId);
-      socket.disconnect();
-    };
-  }, [isOpen, dietitianId, selectedDate]);
 
   const fetchInitialHolds = useCallback(async () => {
     if (!dietitianId || !selectedDate) return;

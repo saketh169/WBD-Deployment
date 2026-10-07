@@ -62,43 +62,49 @@ const GlobalSearch = ({ onClose, currentRole }) => {
     ...(currentRole === 'admin' ? [
       { keywords: ['analytics', 'stats', 'data', 'metrics'], title: 'Admin Analytics', icon: 'fa-chart-bar', path: '/admin/analytics' },
       { keywords: ['users', 'clients', 'management', 'accounts'], title: 'User Management', icon: 'fa-users-cog', path: '/admin/users' },
-      { keywords: ['dietitians', 'experts', 'verification'], title: 'Dietitian Verification', icon: 'fa-user-md', path: '/admin/dietitians' },
+      { keywords: ['organizations', 'verification', 'verify'], title: 'Verify Organizations', icon: 'fa-shield-halved', path: '/admin/verify-organizations' },
+      { keywords: ['queries', 'help', 'tickets'], title: 'Admin Queries', icon: 'fa-question-circle', path: '/admin/queries' },
       { keywords: ['settings', 'config', 'system'], title: 'System Settings', icon: 'fa-cogs', path: '/admin/settings' },
     ] : []),
 
     // --- Role-Specific Actions (Organization) ---
     ...(currentRole === 'organization' ? [
-      { keywords: ['analytics', 'stats', 'performance'], title: 'Org Analytics', icon: 'fa-chart-pie', path: '/organization/analytics' },
-      { keywords: ['employees', 'staff', 'management'], title: 'Employee Management', icon: 'fa-user-tie', path: '/organization/employees' },
-      { keywords: ['monitoring', 'tracking', 'activity'], title: 'Employee Monitoring', icon: 'fa-desktop', path: '/organization/employee-monitoring' },
-      { keywords: ['blogs', 'content', 'management'], title: 'Organization Blogs', icon: 'fa-blog', path: '/organization/blogs' },
+      { keywords: ['dietitians', 'verify', 'credentials'], title: 'Verify Dietitians', icon: 'fa-user-check', path: '/organization/verify-dietitian' },
+      { keywords: ['employees', 'staff', 'management'], title: 'Employee Management', icon: 'fa-user-tie', path: '/organization/employee-management' },
+      { keywords: ['monitoring', 'tracking', 'activity', 'overview'], title: 'Staff Overview', icon: 'fa-desktop', path: '/organization/employee-monitoring' },
+      { keywords: ['blogs', 'content', 'moderation'], title: 'Blog Moderation', icon: 'fa-blog', path: '/organization/blog-moderation' },
     ] : []),
 
     // --- Role-Specific Actions (Employee) ---
     ...(currentRole === 'employee' ? [
-      { keywords: ['tasks', 'work', 'board'], title: 'Team Board', icon: 'fa-clipboard-list', path: '/employee/team-board' },
-      { keywords: ['chat', 'messages', 'communication'], title: 'Employee Chat', icon: 'fa-comments', path: '/employee/chat' },
-      { keywords: ['monitoring', 'status'], title: 'Monitoring Access', icon: 'fa-eye', path: '/employee/monitoring' },
+      { keywords: ['dietitians', 'verify', 'credentials'], title: 'Verify Dietitians', icon: 'fa-user-check', path: '/employee/verify-dietitian' },
+      { keywords: ['blogs', 'moderation', 'content'], title: 'Blog Moderation', icon: 'fa-shield-alt', path: '/employee/blog-moderation' },
+      { keywords: ['support', 'help', 'assistance'], title: 'Employee Support', icon: 'fa-headset', path: '/employee/support' },
     ] : []),
 
     // --- Role-Specific Actions (Dietitian) ---
     ...(currentRole === 'dietitian' ? [
-      { keywords: ['schedule', 'appointments', 'book', 'calendar'], title: 'Patient Appointments', icon: 'fa-calendar-check', path: '/dietitian/appointments' },
-      { keywords: ['patients', 'clients', 'list'], title: 'My Patients', icon: 'fa-user-friends', path: '/dietitian/all-patients' },
-      { keywords: ['meal plan', 'meals', 'diet'], title: 'Meal Plan Creator', icon: 'fa-utensils', path: '/dietitian/meal-plans' },
+      { keywords: ['schedule', 'calendar', 'slots', 'timing'], title: 'My Schedule', icon: 'fa-calendar-check', path: '/dietitian/schedule' },
+      { keywords: ['patients', 'clients', 'appointments'], title: 'My Clients', icon: 'fa-user-friends', path: '/dietitian/clients-profiles' },
+      { keywords: ['meal plan', 'meals', 'diet', 'add plan'], title: 'Meal Plans', icon: 'fa-utensils', path: '/dietitian/add-plans' },
+      { keywords: ['lab reports', 'medical reports', 'records'], title: 'Lab Reports', icon: 'fa-file-medical', path: '/dietitian/lab-reports' },
     ] : []),
 
     // --- General Actions (Client/User) ---
     ...(currentRole === 'user' || !currentRole ? [
-      { keywords: ['schedule', 'appointments', 'book'], title: 'Book Appointment', icon: 'fa-calendar-plus', path: '/user/schedule' },
-      { keywords: ['meal plan', 'meals', 'diet'], title: 'Get Meal Plans', icon: 'fa-utensils', path: '/user/get-plans' },
-      { keywords: ['progress', 'goals', 'tracking'], title: 'My Health Progress', icon: 'fa-heartbeat', path: '/user/progress' },
-      { keywords: ['reports', 'lab', 'health'], title: 'My Lab Reports', icon: 'fa-file-invoice', path: '/user/progress' },
+      { keywords: ['dietitians', 'specialists', 'find', 'doctors'], title: 'Find Dietitians', icon: 'fa-user-md', path: '/user/dietitian-profiles' },
+      { keywords: ['appointments', 'my bookings', 'consultations'], title: 'My Appointments', icon: 'fa-calendar-check', path: '/user/my-dietitians' },
+      { keywords: ['schedule', 'calendar', 'time'], title: 'My Schedule', icon: 'fa-calendar-alt', path: '/user/schedule' },
+      { keywords: ['meal plan', 'meals', 'diet'], title: 'My Meal Plans', icon: 'fa-utensils', path: '/user/get-plans' },
+      { keywords: ['progress', 'goals', 'tracking', 'health'], title: 'My Health Progress', icon: 'fa-heartbeat', path: '/user/progress' },
+      { keywords: ['pricing', 'subscription', 'plans'], title: 'Membership Pricing', icon: 'fa-credit-card', path: '/user/pricing' },
+      { keywords: ['nutriagent', 'agent', 'ai', 'assistant'], title: 'NutriAgent AI', icon: 'fa-robot', path: '/user/nutriagent' },
     ] : []),
 
     // --- Universal Settings ---
-    { keywords: ['profile', 'update', 'edit'], title: 'Edit Profile', icon: 'fa-user-edit', path: `/${currentRole || 'user'}/edit-profile` },
-    { keywords: ['password', 'security', 'key'], title: 'Security Settings', icon: 'fa-shield-alt', path: `/${currentRole || 'user'}/change-pass` },
+    { keywords: ['profile', 'account', 'view profile'], title: 'My Profile', icon: 'fa-user-circle', path: `/${currentRole || 'user'}/profile` },
+    { keywords: ['edit profile', 'update profile'], title: 'Edit Profile', icon: 'fa-user-edit', path: `/${currentRole || 'user'}/edit-profile` },
+    { keywords: ['password', 'security', 'change pass'], title: 'Security Settings', icon: 'fa-shield-alt', path: `/${currentRole || 'user'}/change-pass` },
   ];
 
   const matchedNavs = query.trim().length >= 2 
@@ -115,15 +121,14 @@ const GlobalSearch = ({ onClose, currentRole }) => {
 
   const handleDietitianClick = (id) => {
     onClose();
-    // Navigate to dietitian profile depending on current role context
-    const basePath = currentRole ? `/${currentRole}` : '/user';
-    navigate(`${basePath}/dietitian-profiles/${id}`);
+    // Dietitian profile route is under /user/dietitian-profiles/:id
+    navigate(`/user/dietitian-profiles/${id}`);
   };
 
-  const handleMealPlanClick = (id) => {
+  const handleMealPlanClick = () => {
     onClose();
-    const basePath = currentRole ? `/${currentRole}` : '/user';
-    navigate(`${basePath}/get-plans/${id}`); // Navigate to plans page
+    const targetPath = currentRole === 'dietitian' ? '/dietitian/add-plans' : '/user/get-plans';
+    navigate(targetPath);
   };
 
   const handleBlogClick = (id) => {
@@ -137,10 +142,10 @@ const GlobalSearch = ({ onClose, currentRole }) => {
     results.users.length === 0 && results.mealplans.length === 0 && results.organizations.length === 0 && matchedNavs.length === 0;
 
   return (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 pb-4 px-4 bg-transparent transition-all duration-300">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 pb-4 px-4 bg-black/40 backdrop-blur-xs transition-all duration-300">
       <div 
         ref={searchRef}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in-down border border-gray-200"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200"
       >
         {/* Search Input */}
         <div className="flex items-center p-4 border-b border-gray-100 relative">

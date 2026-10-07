@@ -2,7 +2,6 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AuthContext from '../../contexts/AuthContext';
 import { getDietitianBookings } from '../../services/booking/bookingService';
-import { io } from 'socket.io-client';
 
 // Helper to get formatted date for comparison
 const getTodayKey = () => new Date().toISOString().split('T')[0];
@@ -57,24 +56,6 @@ const DietitianHome = () => {
 
   useEffect(() => {
     fetchRealSchedule();
-  }, [user?.id, token]);
-
-  // Real-time WebSocket listener
-  useEffect(() => {
-    if (!user?.id || !token) return;
-
-    const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
-      withCredentials: true,
-    });
-
-    socket.on('connect', () => {
-      socket.emit('register_dietitian', user.id);
-    });
-
-    socket.on('new_booking', () => fetchRealSchedule());
-    socket.on('booking_updated', () => fetchRealSchedule());
-
-    return () => socket.disconnect();
   }, [user?.id, token]);
 
   // === 3. Blog Data (Placeholder - Matches User Blog Structure) ===

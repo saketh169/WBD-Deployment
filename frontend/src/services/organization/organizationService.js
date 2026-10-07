@@ -47,7 +47,7 @@ export const getResolvedEmployeeQueries = () =>
   makeRequest(() => axiosInstance.get('/api/contact/employee-resolved-queries'));
 
 export const replyToQuery = (queryId, replyMessage) =>
-  makeRequest(() => axiosInstance.post('/api/contact/reply', { queryId, replyMessage }));
+  makeRequest(() => axiosInstance.post('/api/contact/employee-reply', { queryId, replyMessage }));
 
 export const getEmployeeWorkSummary = () =>
   makeRequest(() => axiosInstance.get('/api/organization/employee-work-summary'));

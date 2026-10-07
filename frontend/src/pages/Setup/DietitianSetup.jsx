@@ -7,6 +7,7 @@ import ProfessionalDetailsStep from './ProfessionalDetailsStep';
 const initialFormData = {
   name: '',
   email: '',
+  gender: '',
   age: '',
   phone: '',
   specializationDomain: '',
@@ -76,6 +77,7 @@ const DietitianSetup = () => {
     setFormData({
       name: user?.name || userProfile?.name || '',
       email: user?.email || userProfile?.email || '',
+      gender: userProfile?.gender || user?.gender || '',
       phone: user?.phone || userProfile?.phone || '',
       age: user?.age || userProfile?.age || '',
       specializationDomain: userProfile?.specializationDomain || '',
@@ -123,6 +125,7 @@ const DietitianSetup = () => {
     if (!formData.name?.trim()) errs.name = 'Name is required';
     if (!formData.age) errs.age = 'Age is required';
     else if (Number(formData.age) < 18) errs.age = 'Must be at least 18';
+    if (!formData.gender) errs.gender = 'Gender is required';
 
     if (!formData.specialization?.trim()) errs.specialization = 'Specializations are required';
     if (formData.experience === '' || formData.experience === null) errs.experience = 'Experience is required';
@@ -185,6 +188,7 @@ const DietitianSetup = () => {
         name: formData.name.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
+        gender: formData.gender || 'other',
         age: parseInt(formData.age),
         specialization: formData.specialization
           ? formData.specialization.split(',').map((s) => s.trim()).filter(Boolean)
@@ -308,8 +312,8 @@ const DietitianSetup = () => {
                 </div>
               </div>
 
-              {/* Age & Phone */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+              {/* Age, Gender & Phone */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Age * 
@@ -324,6 +328,23 @@ const DietitianSetup = () => {
                     placeholder="e.g., 30"
                   />
                   {errors.age && <span className="text-red-500 text-sm mt-1">{errors.age}</span>}
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Gender *
+                  </label>
+                  <select
+                    name="gender"
+                    value={formData.gender}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-3 rounded-lg border-2 ${errors.gender ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:border-[#27AE60] transition-all bg-white`}
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="female">Female</option>
+                    <option value="male">Male</option>
+                    <option value="other">Other</option>
+                  </select>
+                  {errors.gender && <span className="text-red-500 text-sm mt-1">{errors.gender}</span>}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">

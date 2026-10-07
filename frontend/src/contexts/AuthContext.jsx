@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
-import { loginUser } from '../services/auth/authService';
+import { loginUser, refreshToken, logoutUser } from '../services/auth/authService';
 import { getProfileByRole, clearProfileCache } from '../services/profile/profileService';
 import { isTokenExpired } from '../utils/jwtUtils';
 
@@ -20,74 +20,49 @@ export const AuthProvider = ({ children, currentRole }) => {
     const initializeAuth = async () => {
       setLoading(true);
 
-      if (currentRole) {
-        // If currentRole is provided, use it specifically
-        const token = localStorage.getItem(`authToken_${currentRole}`);
-        const user = localStorage.getItem(`authUser_${currentRole}`);
+      const targetRoles = currentRole
+        ? [currentRole]
+        : ['user', 'admin', 'employee', 'organization', 'dietitian'];
 
-        if (token) {
-          // Check if token is expired before using
-          if (isTokenExpired(token)) {
-            localStorage.removeItem(`authToken_${currentRole}`);
-            localStorage.removeItem(`authUser_${currentRole}`);
-            setToken(null);
-            setRole(null);
-            setUser(null);
-            setIsAuthenticated(false);
-            setLoading(false);
-            return;
-          }
+      let activeRole = null;
+      let activeToken = null;
 
-          setToken(token);
-          setRole(currentRole);
-          setIsAuthenticated(true);
+      for (const r of targetRoles) {
+        let t = localStorage.getItem(`authToken_${r}`);
+        if (!t) continue;
 
-          // Use cached data from localStorage immediately
-          if (user) {
-            try {
-              const cachedUser = JSON.parse(user);
-              setUser(cachedUser);
-            } catch { /* ignore parse errors */ }
-          }
-
-          // Fetch fresh data in background (for profileImage, etc.)
-          fetchUserDetails(token, currentRole);
-        } else {
-          // No token for this role, clear state
-          setToken(null);
-          setRole(null);
-          setUser(null);
-          setIsAuthenticated(false);
+        if (isTokenExpired(t)) {
+          const res = await refreshToken();
+          t = res?.token || null;
+          if (t) localStorage.setItem(`authToken_${r}`, t);
         }
+
+        if (t) {
+          activeRole = r;
+          activeToken = t;
+          break;
+        } else {
+          localStorage.removeItem(`authToken_${r}`);
+          localStorage.removeItem(`authUser_${r}`);
+        }
+      }
+
+      if (activeToken && activeRole) {
+        setToken(activeToken);
+        setRole(activeRole);
+        setIsAuthenticated(true);
+
+        const user = localStorage.getItem(`authUser_${activeRole}`);
+        if (user) {
+          try { setUser(JSON.parse(user)); } catch {}
+        }
+
+        fetchUserDetails(activeToken, activeRole);
       } else {
-        // Fallback: check all roles if no currentRole provided
-        // employee must come before organization to avoid picking org token for employee sessions
-        const roles = ['user', 'admin', 'employee', 'organization', 'dietitian'];
-        let foundToken = null;
-        let foundRole = null;
-
-        for (const r of roles) {
-          const token = localStorage.getItem(`authToken_${r}`);
-          if (token && !isTokenExpired(token)) {
-            foundToken = token;
-            foundRole = r;
-            break;
-          }
-        }
-
-        if (foundToken && foundRole) {
-          setToken(foundToken);
-          setRole(foundRole);
-          setIsAuthenticated(true);
-
-          // Fetch fresh user details if token exists (since profileImage isn't stored locally)
-          await fetchUserDetails(foundToken, foundRole);
-        } else {
-          setToken(null);
-          setRole(null);
-          setUser(null);
-          setIsAuthenticated(false);
-        }
+        setToken(null);
+        setRole(null);
+        setUser(null);
+        setIsAuthenticated(false);
       }
       setLoading(false);
     };
@@ -185,7 +160,7 @@ export const AuthProvider = ({ children, currentRole }) => {
   };
 
   // Logout function
-  const logout = () => {
+  const logout = async () => {
     let logoutRole = role;
     if (!logoutRole) {
       const path = window.location.pathname;
@@ -194,6 +169,12 @@ export const AuthProvider = ({ children, currentRole }) => {
       else if (path.startsWith('/organization')) logoutRole = 'organization';
       else if (path.startsWith('/employee')) logoutRole = 'employee';
       else logoutRole = 'user';
+    }
+
+    try {
+      await logoutUser();
+    } catch {
+      // Ignore network errors during logout
     }
 
     if (logoutRole) {

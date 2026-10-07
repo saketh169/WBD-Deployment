@@ -38,7 +38,7 @@ try {
 
     redis.on('connect', () => {
       isRedisConnected = true;
-      console.log('✅ Upstash Redis Connected Successfully!');
+      console.log('[Upstash Redis] Connected successfully.');
     });
 
     redis.on('error', (err) => {
@@ -52,14 +52,14 @@ try {
 
     // Attempt non-blocking connection
     redis.connect().catch((err) => {
-      console.warn(`⚠️ [Upstash Redis] Could not connect (${err.message}). Using in-memory fallback.`);
+      console.warn(`[Upstash Redis] Could not connect (${err.message}). Using in-memory fallback.`);
       isRedisConnected = false;
     });
   } else {
     console.log('[Redis] Running with in-memory fallback (REDIS_URL not configured).');
   }
 } catch (err) {
-  console.warn(`⚠️ [Upstash Redis] Init failed (${err.message}). Using in-memory fallback.`);
+  console.warn(`[Upstash Redis] Init failed (${err.message}). Using in-memory fallback.`);
   isRedisConnected = false;
 }
 

@@ -12,7 +12,8 @@ const NavHeader = ({ renderActionButtons, handleScrollToTop }) => {
     { name: 'About Us', href: '/about-us' },
     { name: 'Guide', href: '/guide' },
     { name: 'Blog', href: '/blog' },
-    { name: 'Chatbot', href: '/chatbot' },
+    { name: 'Terms of Use', href: '/terms-of-use' },
+    { name: 'Privacy Policy', href: '/privacy-policy' },
   ];
 
   // --- Role-Specific Links ---
@@ -25,7 +26,7 @@ const NavHeader = ({ renderActionButtons, handleScrollToTop }) => {
     { name: 'Pricing', href: '/user/pricing' },
 
     { name: 'Blog', href: '/user/blog' },
-    { name: 'Chatbot', href: '/user/chatbot' },
+    { name: 'NutriAgent', href: '/user/nutriagent', isAgent: true },
 
   ];
 
@@ -91,17 +92,36 @@ const NavHeader = ({ renderActionButtons, handleScrollToTop }) => {
         <ul className="flex items-center space-x-6 lg:space-x-8">
           {navLinks.map((link) => (
             <li key={link.name}>
-              <NavLink
-                to={link.href}
-                end
-                onClick={handleScrollToTop}
-                className={({ isActive }) =>
-                  `font-poppins text-base lg:text-lg font-medium text-[#2C3E50] transition-colors duration-300 hover:text-[#28B463] hover:underline hover:underline-offset-4 ${isActive ? 'text-[#1E6F5C] underline underline-offset-4' : ''
-                  }`
-                }
-              >
-                {link.name}
-              </NavLink>
+              {link.isAgent ? (
+                <NavLink
+                  to={link.href}
+                  end
+                  onClick={handleScrollToTop}
+                  className={({ isActive }) =>
+                    `flex items-center gap-2 px-4 py-2 rounded-xl text-sm lg:text-base font-bold transition-all duration-300 shadow-xs ${
+                      isActive
+                        ? 'bg-emerald-700 text-white ring-2 ring-emerald-400 ring-offset-2 shadow-md scale-105'
+                        : 'bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white hover:scale-105 hover:shadow-md'
+                    }`
+                  }
+                >
+                  <i className="fas fa-robot text-base text-white" />
+                  <span>{link.name}</span>
+                </NavLink>
+              ) : (
+                <NavLink
+                  to={link.href}
+                  end
+                  onClick={handleScrollToTop}
+                  className={({ isActive }) =>
+                    `font-poppins text-base lg:text-lg font-medium text-[#2C3E50] transition-colors duration-300 hover:text-[#28B463] hover:underline hover:underline-offset-4 ${
+                      isActive ? 'text-[#1E6F5C] underline underline-offset-4' : ''
+                    }`
+                  }
+                >
+                  {link.name}
+                </NavLink>
+              )}
             </li>
           ))}
         </ul>
@@ -131,20 +151,41 @@ const NavHeader = ({ renderActionButtons, handleScrollToTop }) => {
           <ul className="flex flex-col items-center space-y-5 mb-6">
             {navLinks.map((link) => (
               <li key={link.name}>
-                <NavLink
-                  to={link.href}
-                  end
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    handleScrollToTop();
-                  }}
-                  className={({ isActive }) =>
-                    `font-poppins text-lg font-medium text-[#2C3E50] transition-colors duration-300 hover:text-[#28B463] ${isActive ? 'text-[#1E6F5C]' : ''
-                    }`
-                  }
-                >
-                  {link.name}
-                </NavLink>
+                {link.isAgent ? (
+                  <NavLink
+                    to={link.href}
+                    end
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      handleScrollToTop();
+                    }}
+                    className={({ isActive }) =>
+                      `flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition-all text-white shadow-md ${
+                        isActive
+                          ? 'bg-emerald-700 ring-2 ring-emerald-400 ring-offset-2'
+                          : 'bg-linear-to-r from-emerald-600 to-teal-600'
+                      }`
+                    }
+                  >
+                    <i className="fas fa-robot text-base text-white" />
+                    <span>{link.name}</span>
+                  </NavLink>
+                ) : (
+                  <NavLink
+                    to={link.href}
+                    end
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      handleScrollToTop();
+                    }}
+                    className={({ isActive }) =>
+                      `font-poppins text-lg font-medium text-[#2C3E50] transition-colors duration-300 hover:text-[#28B463] ${isActive ? 'text-[#1E6F5C]' : ''
+                      }`
+                    }
+                  >
+                    {link.name}
+                  </NavLink>
+                )}
               </li>
             ))}
           </ul>

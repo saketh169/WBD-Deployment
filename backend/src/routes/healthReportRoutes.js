@@ -6,6 +6,8 @@ const {
     getDietitianHealthReports,
     getClientHealthReports,
     markHealthReportViewed,
+    downloadHealthReportFile,
+    viewHealthReportFile,
     healthReportUploadFields
 } = require('../controllers/healthReportController');
 const { authenticateJWT } = require('../middlewares/authMiddleware');
@@ -191,5 +193,9 @@ router.get('/client/:clientId', authenticateJWT, getClientHealthReports);
  */
 // Mark report as viewed
 router.put('/:reportId/viewed', authenticateJWT, markHealthReportViewed);
+
+// Stream and download health report attachments
+router.get('/:reportId/files/:fileId/download', downloadHealthReportFile);
+router.get('/:reportId/files/:fileId/view', viewHealthReportFile);
 
 module.exports = router;

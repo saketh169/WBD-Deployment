@@ -233,6 +233,13 @@ async function finalApproveDietitian(req, res) {
         dietitian.documentUploadStatus = 'verified'; // Update overall status
         await dietitian.save();
 
+        try {
+            const { invalidateDietitianEmbeddingsCache } = require('../agent/services/ragRetriever');
+            invalidateDietitianEmbeddingsCache();
+        } catch (e) {
+            console.warn('[verifyDietitian] Embedding cache invalidation warning:', e.message);
+        }
+
         console.log(`Final Approval Submitted: ${dietitian.name} - Final Report: Verified`);
 
         res.status(200).json(dietitian);

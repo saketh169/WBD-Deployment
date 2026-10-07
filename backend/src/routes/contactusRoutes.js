@@ -50,7 +50,7 @@ const requireOrganization = (req, res, next) => {
  *                 example: "john@example.com"
  *               role:
  *                 type: string
- *                 enum: [User, Dietitian, Certifying Organization, Others]
+ *                 enum: [User, Dietitian, Certifying Organization, Employee, Others]
  *                 example: "User"
  *               query:
  *                 type: string

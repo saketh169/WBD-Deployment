@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getSettings, updateSettings, sendPolicyEmail } = require('../controllers/settingsController');
-const { authenticateJWT, ensureAdminAuthenticated } = require('../middlewares/authMiddleware');
+const { authenticateJWT, optionalAuthenticateJWT, ensureAdminAuthenticated } = require('../middlewares/authMiddleware');
 
 /**
  * @swagger
@@ -9,15 +9,13 @@ const { authenticateJWT, ensureAdminAuthenticated } = require('../middlewares/au
  *   get:
  *     tags: ['Settings']
  *     summary: Get platform settings
- *     security:
- *       - BearerAuth: []
  *     responses:
  *       200:
  *         description: Platform settings retrieved
- *       401:
- *         description: Authentication required
+ *       500:
+ *         description: Server error
  */
-router.get('/', authenticateJWT, getSettings);
+router.get('/', optionalAuthenticateJWT, getSettings);
 
 /**
  * @swagger

@@ -5,7 +5,15 @@ const crypto = require('crypto');
 // Mongoose Models
 const { UserAuth, User, Admin, Dietitian, Organization, Employee } = require('../models/userModel');
 const otpService = require('../services/otpService');
-const { JWT_SECRET, ADMIN_SIGNIN_KEY } = require('../utils/jwtConfig');
+const { JWT_SECRET, REFRESH_TOKEN_SECRET, ADMIN_SIGNIN_KEY, sendRefreshTokenCookie, clearRefreshTokenCookie } = require('../utils/jwtConfig');
+
+// Issue Access Token & set httpOnly Refresh Token cookie
+const issueAuthResponse = (res, payload, rememberMe = false) => {
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+    const refreshToken = jwt.sign(payload, REFRESH_TOKEN_SECRET, { expiresIn: rememberMe ? '30d' : '7d' });
+    sendRefreshTokenCookie(res, refreshToken, rememberMe ? 30 * 86400000 : 7 * 86400000);
+    return { token, refreshToken };
+};
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -115,21 +123,15 @@ exports.signupController = async (req, res) => {
         });
         await authUser.save();
 
-        // 7. GENERATE JWT AND RESPOND
-        const token = jwt.sign(
-            { userId: authUser._id, role: authUser.role, roleId: authUser.roleId },
-            JWT_SECRET,
-            { expiresIn: '1d' }
-        );
-
-        const registeredName = profile.name || 'New Member';
+        const { token, refreshToken } = issueAuthResponse(res, { userId: authUser._id, role: authUser.role, roleId: authUser.roleId });
 
         return res.status(201).json({
             message: 'Registration successful! Proceed to the next step.',
-            name: registeredName,
+            name: profile.name || 'New Member',
             token,
-            role: role,
-            roleId: profile._id // Include roleId for document upload
+            refreshToken,
+            role,
+            roleId: profile._id
         });
 
     } catch (error) {
@@ -221,16 +223,13 @@ exports.userGoogleSignupController = async (req, res) => {
         });
         await authUser.save();
 
-        const token = jwt.sign(
-            { userId: authUser._id, role: authUser.role, roleId: authUser.roleId },
-            JWT_SECRET,
-            { expiresIn: '1d' }
-        );
+        const { token, refreshToken } = issueAuthResponse(res, { userId: authUser._id, role: authUser.role, roleId: authUser.roleId });
 
         return res.status(201).json({
             message: 'Registration successful! Proceed to the next step.',
             name: profile.name,
             token,
+            refreshToken,
             role: 'user',
             roleId: profile._id,
             email: googleEmail,
@@ -399,15 +398,12 @@ exports.userGoogleSigninController = async (req, res) => {
             return res.status(404).json({ message: 'User profile not found.' });
         }
 
-        const token = jwt.sign(
-            { userId: authUser._id, role: authUser.role, roleId: authUser.roleId },
-            JWT_SECRET,
-            { expiresIn: '1d' }
-        );
+        const { token, refreshToken } = issueAuthResponse(res, { userId: authUser._id, role: authUser.role, roleId: authUser.roleId });
 
         return res.status(200).json({
             message: 'Google sign-in successful!',
             token,
+            refreshToken,
             role: 'user',
             roleId: authUser.roleId,
             name: profile?.name || payload?.name || '',
@@ -618,54 +614,42 @@ exports.verifyLoginOTPController = async (req, res) => {
         // 2. Handle Employee login OTP verification
         if (role === 'organization' && orgType === 'employee') {
             const employee = await Employee.findOne({ email, isDeleted: false });
-            if (!employee) {
-                return res.status(404).json({ message: 'Employee not found.' });
-            }
+            if (!employee) return res.status(404).json({ message: 'Employee not found.' });
 
-            const expiresIn = rememberMe ? '7d' : '1d';
-            const token = jwt.sign(
-                { employeeId: employee._id, organizationId: employee.organizationId, role: 'organization', orgType: 'employee' },
-                JWT_SECRET,
-                { expiresIn }
-            );
+            const payload = { employeeId: employee._id, organizationId: employee.organizationId, role: 'organization', orgType: 'employee' };
+            const { token, refreshToken } = issueAuthResponse(res, payload, rememberMe);
 
             return res.status(200).json({
                 message: 'Login successful!',
                 token,
+                refreshToken,
                 role: 'organization',
                 orgType: 'employee',
                 roleId: employee._id,
                 name: employee.name,
                 email: employee.email,
-                expiresIn
+                expiresIn: rememberMe ? '30d' : '1d'
             });
         }
 
         // 3. Handle regular user/admin/dietitian/organization login OTP verification
         const authUser = await UserAuth.findOne({ email, role });
-        if (!authUser) {
-            return res.status(404).json({ message: 'User not found.' });
-        }
+        if (!authUser) return res.status(404).json({ message: 'User not found.' });
 
-        // Fetch profile to get name for response
         const ProfileModel = PROFILE_MODELS[role];
         const profile = ProfileModel ? await ProfileModel.findById(authUser.roleId) : null;
 
-        const expiresIn = rememberMe ? '7d' : '1d';
-        const token = jwt.sign(
-            { userId: authUser._id, role: authUser.role, roleId: authUser.roleId },
-            JWT_SECRET,
-            { expiresIn }
-        );
+        const { token, refreshToken } = issueAuthResponse(res, { userId: authUser._id, role: authUser.role, roleId: authUser.roleId }, rememberMe);
 
         return res.status(200).json({
             message: 'Login successful!',
             token,
+            refreshToken,
             role: authUser.role,
             roleId: authUser.roleId,
             name: profile?.name || '',
             email: authUser.email,
-            expiresIn
+            expiresIn: rememberMe ? '30d' : '1d'
         });
 
     } catch (error) {
@@ -702,26 +686,47 @@ exports.resendLoginOTPController = async (req, res) => {
 };
 
 // REFRESH TOKEN CONTROLLER
-// Issues a new JWT when the current one is still valid but close to expiry
+// Issues a fresh Access Token using the httpOnly Refresh Token cookie or fallback body token
 exports.refreshTokenController = async (req, res) => {
-    try {
-        // req.user is set by authenticateJWT middleware
-        const { userId, role, roleId, employeeId, organizationId, orgType } = req.user;
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    if (!refreshToken) {
+        return res.status(401).json({ success: false, message: 'No refresh token provided.' });
+    }
 
-        // Issue a new token with same claims
-        const payload = employeeId
-            ? { employeeId, organizationId, role, orgType }
-            : { userId, role, roleId };
+    try {
+        const decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET);
+        const { employeeId, organizationId, userId, role, roleId } = decoded;
+
+        let payload = null;
+        if (employeeId) {
+            const employee = await Employee.findOne({ _id: employeeId, isDeleted: false, status: 'active' });
+            if (!employee) throw new Error('Employee not found or inactive');
+            payload = { employeeId, organizationId, role: 'organization', orgType: 'employee' };
+        } else {
+            const authUser = await UserAuth.findById(userId);
+            if (!authUser) throw new Error('User not found');
+            payload = { userId: authUser._id, role: authUser.role, roleId: authUser.roleId };
+        }
 
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+        return res.status(200).json({ success: true, token, ...payload, message: 'Token refreshed successfully.' });
+    } catch {
+        clearRefreshTokenCookie(res);
+        return res.status(401).json({ success: false, message: 'Invalid or expired refresh token.' });
+    }
+};
 
+// LOGOUT CONTROLLER
+// Clears httpOnly refresh token cookie
+exports.logoutController = async (req, res) => {
+    try {
+        clearRefreshTokenCookie(res);
         return res.status(200).json({
             success: true,
-            token,
-            message: 'Token refreshed successfully.'
+            message: 'Logged out successfully.'
         });
     } catch (error) {
-        console.error('Error refreshing token:', error);
-        res.status(500).json({ message: 'Internal server error during token refresh.' });
+        console.error('Error during logout:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error during logout.' });
     }
 };

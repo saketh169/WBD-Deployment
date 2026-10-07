@@ -27,5 +27,27 @@ if (!ADMIN_SIGNIN_KEY) {
 
 module.exports = {
   JWT_SECRET: JWT_SECRET || 'dev-only-fallback-change-me',
+  REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET || JWT_SECRET || 'dev-only-fallback-change-me',
   ADMIN_SIGNIN_KEY: ADMIN_SIGNIN_KEY || 'dev-only-admin-key-change-me',
+
+  sendRefreshTokenCookie: (res, token, maxAgeMs = 7 * 24 * 60 * 60 * 1000) => {
+    const isProd = process.env.NODE_ENV === 'production';
+    res.cookie('refreshToken', token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+      maxAge: maxAgeMs,
+      path: '/'
+    });
+  },
+
+  clearRefreshTokenCookie: (res) => {
+    const isProd = process.env.NODE_ENV === 'production';
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+      path: '/'
+    });
+  }
 };

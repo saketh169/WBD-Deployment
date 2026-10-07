@@ -32,15 +32,10 @@ export function getActiveRoleFromPath() {
 export function getActiveToken() {
   if (typeof window === 'undefined' || !window.localStorage) return null;
 
-  const getValidToken = (key) => {
+  const getStoredToken = (key) => {
     try {
       const t = localStorage.getItem(key);
-      if (!t) return null;
-      if (isTokenExpired(t)) {
-        localStorage.removeItem(key);
-        return null;
-      }
-      return t;
+      return t || null;
     } catch {
       return null;
     }
@@ -49,25 +44,25 @@ export function getActiveToken() {
   // 1. Try URL pathname role first (prevents multi-tab token overlap)
   const pathRole = getActiveRoleFromPath();
   if (pathRole) {
-    const pathToken = getValidToken(`authToken_${pathRole}`);
+    const pathToken = getStoredToken(`authToken_${pathRole}`);
     if (pathToken) return pathToken;
   }
 
   // 2. Fallback to stored role key
   const role = localStorage.getItem('role') || localStorage.getItem('userRole');
   if (role) {
-    const roleToken = getValidToken(`authToken_${role.toLowerCase()}`);
+    const roleToken = getStoredToken(`authToken_${role.toLowerCase()}`);
     if (roleToken) return roleToken;
   }
 
-  // 3. Fallbacks to any valid active token
+  // 3. Fallbacks to any active token
   return (
-    getValidToken('authToken_user') ||
-    getValidToken('authToken_dietitian') ||
-    getValidToken('authToken_employee') ||
-    getValidToken('authToken_organization') ||
-    getValidToken('authToken_admin') ||
-    getValidToken('token') ||
+    getStoredToken('authToken_user') ||
+    getStoredToken('authToken_dietitian') ||
+    getStoredToken('authToken_employee') ||
+    getStoredToken('authToken_organization') ||
+    getStoredToken('authToken_admin') ||
+    getStoredToken('token') ||
     null
   );
 }
@@ -75,6 +70,7 @@ export function getActiveToken() {
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '',
   timeout: 30000,
+  withCredentials: true,
 });
 
 // Interceptor to add dynamic, role-scoped JWT token to all outgoing requests
@@ -89,25 +85,38 @@ axiosInstance.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Handle expired/invalid JWT tokens (401 or 403 Token expired)
+// Automatically refresh expired access token via httpOnly cookie on 401
 axiosInstance.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response) {
-      const status = error.response.status;
-      const msg = (error.response.data?.message || '').toLowerCase();
-      const isAuthError =
-        status === 401 ||
-        (status === 403 && (msg.includes('token') || msg.includes('expired') || msg.includes('invalid')));
-
-      if (isAuthError) {
-        const pathRole = getActiveRoleFromPath();
-        if (pathRole) {
-          localStorage.removeItem(`authToken_${pathRole}`);
-          localStorage.removeItem(`authUser_${pathRole}`);
-          localStorage.removeItem(`email_${pathRole}`);
-          localStorage.removeItem(`username_${pathRole}`);
+  async (error) => {
+    const originalRequest = error.config;
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/api/refresh-token')
+    ) {
+      originalRequest._retry = true;
+      try {
+        const { data } = await axios.post(
+          `${axiosInstance.defaults.baseURL}/api/refresh-token`,
+          {},
+          { withCredentials: true }
+        );
+        const newToken = data?.token || data?.data?.token;
+        if (newToken) {
+          const role = getActiveRoleFromPath() || localStorage.getItem('role') || 'user';
+          localStorage.setItem(`authToken_${role}`, newToken);
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return axiosInstance(originalRequest);
         }
+      } catch (refreshErr) {
+        const role = getActiveRoleFromPath() || localStorage.getItem('role');
+        if (role) {
+          localStorage.removeItem(`authToken_${role}`);
+          localStorage.removeItem(`authUser_${role}`);
+        }
+        return Promise.reject(refreshErr);
       }
     }
     return Promise.reject(error);

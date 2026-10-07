@@ -1,5 +1,4 @@
-import { Outlet } from 'react-router-dom';
-import { Routes, Route } from 'react-router-dom';
+import { Outlet, Routes, Route, useLocation } from 'react-router-dom';
 import { ProtectedProvider } from './contexts/ProtectedContext';
 import { ProfileProvider } from './contexts/ProfileContext';
 import UserLayout from './Routes/UserRoutes.jsx';
@@ -10,10 +9,13 @@ import EmployeeLayout from './Routes/EmployeeRoutes.jsx';
 import NotFoundPage from './pages/Error/NotFoundPage.jsx';
 
 export default function Layout() {
+  const location = useLocation();
+  const isAgent = location.pathname.includes('nutriagent') || location.pathname.includes('chatbot');
+
   return (
     <ProfileProvider>
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <main className="flex-1">
+      <div className={isAgent ? "h-[calc(100dvh-72px)] flex flex-col bg-gray-50 overflow-hidden" : "min-h-screen flex flex-col bg-gray-50"}>
+        <main className={`flex-1 ${isAgent ? "overflow-hidden h-full" : ""}`}>
           <Routes>
             <Route path="/user/*" element={
               <ProtectedProvider requiredRole="user">
