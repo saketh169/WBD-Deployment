@@ -38,6 +38,33 @@ function createNutriConnectMCPServer(userId = null) {
     { capabilities: { tools: {}, resources: {} } }
   );
 
+  // Helper to convert uppercase Gemini types to standard JSON Schema types
+  function toStandardJsonSchema(schema) {
+    if (!schema || typeof schema !== "object") return schema;
+    const copy = Array.isArray(schema) ? [...schema] : { ...schema };
+    if (typeof copy.type === "string") {
+      const t = copy.type.toUpperCase();
+      if (t === "STRING") copy.type = "string";
+      else if (t === "NUMBER") copy.type = "number";
+      else if (t === "INTEGER") copy.type = "integer";
+      else if (t === "BOOLEAN") copy.type = "boolean";
+      else if (t === "ARRAY") copy.type = "array";
+      else if (t === "OBJECT") copy.type = "object";
+      else copy.type = copy.type.toLowerCase();
+    }
+    if (copy.properties && typeof copy.properties === "object") {
+      const convertedProps = {};
+      for (const [k, v] of Object.entries(copy.properties)) {
+        convertedProps[k] = toStandardJsonSchema(v);
+      }
+      copy.properties = convertedProps;
+    }
+    if (copy.items && typeof copy.items === "object") {
+      copy.items = toStandardJsonSchema(copy.items);
+    }
+    return copy;
+  }
+
   // 1. MCP Tools Listing - mapped dynamically from LangGraph tool declarations
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const tools = GEMINI_TOOL_DECLARATIONS.map((d) => ({
@@ -45,7 +72,7 @@ function createNutriConnectMCPServer(userId = null) {
       description: d.description,
       inputSchema: {
         type: "object",
-        properties: d.parameters?.properties || {},
+        properties: toStandardJsonSchema(d.parameters?.properties || {}),
         required: d.parameters?.required || [],
       },
     }));
