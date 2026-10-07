@@ -4,21 +4,23 @@ Comprehensive copy-paste prompts, tested execution results, and configuration re
 
 ---
 
-## 1. Copilot Server & Tool Mention Syntax
+## 1. Quick Troubleshooting: If the Model Searches the Web Instead of Calling MCP
 
-In GitHub Copilot Chat (VS Code / Cursor), you can trigger tools in two ways:
+When you ask a question and the model opens a browser search (`web_fetch`), do any of the following:
 
-### Server-Level Mention (Recommended):
-Use `#nutriconnect-local` in front of any prompt:
-```text
-#nutriconnect-local Find dietitians specializing in heart health
-```
-
-### Tool-Level Mention:
-Use the specific tool tag:
-```text
-#search_dietitians Find dietitians specializing in PCOS under 600 INR
-```
+- **Quick Fix A (Server Mention `#`)**: Prefix your prompt with `#nutriconnect-local`:
+  ```text
+  #nutriconnect-local Find dietitians specializing in diabetes
+  ```
+- **Quick Fix B (Tool Mention `#`)**: Prefix your prompt with `#search_dietitians`:
+  ```text
+  #search_dietitians Find dietitians specializing in diabetes
+  ```
+- **Quick Fix C (Tools Icon in Chat)**: Click the **Tools / Plug icon** in the chat bar and verify **`nutriconnect-local`** is checked.
+- **Quick Fix D (Prompt Instruction)**: Explicitly tell the model:
+  ```text
+  Use the MCP tool search_dietitians from nutriconnect-local to find verified specialists.
+  ```
 
 ---
 
@@ -41,7 +43,7 @@ We executed all 6 tools live against `http://localhost:5000/api/agent/mcp/sse`:
 
 ### Group A: Public Clinical Tools (Works Instantly - Zero Token Needed)
 
-#### 1. `search_dietitians`
+#### 1. `search_dietitians` (Specialist Discovery)
 ```text
 #nutriconnect-local Find dietitians specializing in cardiac and heart health
 ```
@@ -51,8 +53,11 @@ We executed all 6 tools live against `http://localhost:5000/api/agent/mcp/sse`:
 ```text
 #nutriconnect-local Search for Dr. Arjun Reddy and show his experience, fee, and specialties
 ```
+```text
+#nutriconnect-local Find clinical nutritionists specializing in diabetes and weight management
+```
 
-#### 2. `check_dietitian_availability`
+#### 2. `check_dietitian_availability` (Calendar & Slots)
 ```text
 #nutriconnect-local Check available consultation slots for Dr. Arjun Reddy tomorrow
 ```
@@ -60,27 +65,33 @@ We executed all 6 tools live against `http://localhost:5000/api/agent/mcp/sse`:
 #nutriconnect-local Show open appointment slots for Dr. Zara Ahmed on 2026-10-15
 ```
 
-#### 3. `lookup_nutrition`
+#### 3. `lookup_nutrition` (Macronutrients & Calories)
 ```text
 #nutriconnect-local What are the calories, protein, carbs, and fats for 100g of paneer?
 ```
 ```text
 #nutriconnect-local Analyze the nutrition facts of 2 boiled eggs and 1 bowl of cooked oats
 ```
+```text
+#nutriconnect-local What is the nutritional breakdown of 150g chicken breast vs 150g tofu?
+```
 
-#### 4. `generate_meal_plan`
+#### 4. `generate_meal_plan` (Structured Clinical Meal Plans)
 ```text
 #nutriconnect-local Create a 3-day vegetarian meal plan for metabolic and blood sugar management with 1800 daily calories
 ```
 ```text
 #nutriconnect-local Generate a 5-day high-protein meal plan excluding dairy products
 ```
+```text
+#nutriconnect-local Create a 3-day cardiac diet meal plan with under 1500mg sodium and 1600 daily calories
+```
 
 ---
 
 ### Group B: Authenticated Patient Tools (Requires JWT Token)
 
-These tools access personal medical records and booking appointments. 
+These tools access personal patient records and booking tables.
 
 - **Without Token**: Returns a clean explanation asking you to sign in.
 - **With Token**: Returns your personal consultation schedule and confirms appointments.
@@ -101,7 +112,7 @@ These tools access personal medical records and booking appointments.
 
 ## 4. How to Add a JWT Token to Unlock Patient Tools
 
-To unlock `get_user_schedule` and `book_dietitian_appointment` in VS Code:
+To unlock `get_user_schedule` and `book_dietitian_appointment`:
 
 Add `?token=YOUR_JWT_TOKEN` to your URL in `mcp.json`:
 
@@ -110,7 +121,7 @@ Add `?token=YOUR_JWT_TOKEN` to your URL in `mcp.json`:
   "servers": {
     "nutriconnect-local": {
       "type": "sse",
-      "url": "http://localhost:5000/api/agent/mcp/sse?token=eyJhbGciOi..."
+      "url": "http://localhost:5000/api/agent/mcp/sse?token=YOUR_JWT_TOKEN"
     }
   }
 }
@@ -118,7 +129,37 @@ Add `?token=YOUR_JWT_TOKEN` to your URL in `mcp.json`:
 
 ---
 
-## 5. The 2 Configuration File Locations
+## 5. How to Create or Open the MCP Configuration File in VS Code
+
+You can open or create your MCP configuration directly from VS Code using the **Command Palette**:
+
+### Command to Open Global User Config:
+1. Press `Ctrl + Shift + P` (or `Cmd + Shift + P` on macOS).
+2. Type:
+   ```text
+   MCP: Open User Configuration
+   ```
+3. Press **Enter**. This opens `C:\Users\saket\AppData\Roaming\Code\User\mcp.json`.
+
+### Command to Open Project Workspace Config:
+1. Press `Ctrl + Shift + P`.
+2. Type:
+   ```text
+   MCP: Open Workspace Folder MCP Configuration
+   ```
+3. Press **Enter**. This creates and opens `.vscode/mcp.json` inside your project folder.
+
+### Command to Add Server Interactively:
+1. Press `Ctrl + Shift + P`.
+2. Type:
+   ```text
+   MCP: Add Server
+   ```
+3. Select `SSE` $\to$ Enter name `nutriconnect-local` $\to$ Enter URL `http://localhost:5000/api/agent/mcp/sse`.
+
+---
+
+## 6. The 2 Configuration File Locations
 
 Configuration files are maintained strictly in these **2 places**:
 
@@ -155,3 +196,51 @@ Configuration files are maintained strictly in these **2 places**:
     }
   }
   ```
+
+---
+
+## 7. How to View and Manage Connected MCP Servers
+
+### In Visual Studio Code:
+1. **Server List**: Press `Ctrl + Shift + P` $\to$ `MCP: List Servers` $\to$ verify `nutriconnect-local` is **Running**.
+2. **Extensions Sidebar**: Press `Ctrl + Shift + X` $\to$ scroll down to **MCP Servers**.
+3. **Live Logs**: `View > Output` (`Ctrl + ~`) $\to$ select **MCP** from the top-right dropdown to inspect tool discovery logs:
+   ```text
+   [info] Starting server nutriconnect-local
+   [info] Connection state: Running
+   [info] Discovered 6 tools
+   ```
+
+### In Antigravity:
+1. Navigate to **Additional Options (`...`) > MCP Servers** (or **Skills & Customizations > MCP Servers**).
+2. Verify `nutriconnect-local` is connected and the 6 clinical tools are toggled on.
+
+---
+
+## 8. How the Agent Calls MCP: Native Toolbelt vs JSON-RPC Protocol Handshake
+
+### Path A: Native Client Toolbelt (No Commands Required)
+- When a new chat conversation starts after saving the configuration, the IDE client contacts `http://localhost:5000/api/agent/mcp/sse` automatically on startup.
+- All 6 tools are loaded into the AI model's function-calling toolset.
+- Prompts like *"Find dietitians for PCOS"* trigger `search_dietitians` seamlessly in the background.
+- **To activate**: Start a **New Conversation** or reload the window (`Ctrl + R`).
+
+### Path B: Programmatic Protocol Handshake (Direct SSE Call)
+If an existing chat session has not refreshed its toolbelt, an external client or agent connects directly via the official JSON-RPC 2.0 handshake:
+1. **Connect**: `GET http://localhost:5000/api/agent/mcp/sse`
+2. **Receive Session**: `/api/agent/mcp/messages?sessionId=<ID>`
+3. **Execute Tool**:
+   ```http
+   POST http://localhost:5000/api/agent/mcp/messages?sessionId=<ID>
+   Content-Type: application/json
+
+   {
+     "jsonrpc": "2.0",
+     "method": "tools/call",
+     "params": {
+       "name": "search_dietitians",
+       "arguments": { "specialtyOrCondition": "PCOS" }
+     }
+   }
+   ```
+4. **Result**: The backend queries MongoDB and streams live clinical findings back over SSE.
