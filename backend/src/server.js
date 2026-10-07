@@ -282,11 +282,3 @@ const server = app.listen(PORT, () => {
 
 // Initialize Socket.io
 require('./utils/socket').init(server, ALLOWED_ORIGINS);
-
-// Initialize Standalone Fastify NutriAgent Server (Swagger UI & MCP protocol)
-const { start: startFastifyAgent } = require('./agent/fastifyAgentServer');
-if (process.env.AUTO_START_AGENT !== 'false') {
-  startFastifyAgent().catch((err) => {
-    console.warn('[Fastify Agent Auto-Start Notice]:', err.message);
-  });
-}
