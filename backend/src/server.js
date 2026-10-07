@@ -29,7 +29,6 @@ const teamBoardRoutes = require('./routes/teamBoardRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const agentRoutes = require('./agent');
-const { createAgentDocsHandler } = require('./agent/agentDocsFastify');
 
 // Middleware imports
 const { helmetMiddleware, rateLimiter, sanitizeInput } = require('./middlewares/securityMiddleware');
@@ -122,6 +121,7 @@ const swaggerOptions = {
       { name: 'Profile', description: 'User profile management' },
       { name: 'Bookings', description: 'Consultation bookings' },
       { name: 'Payments', description: 'Payment processing' },
+      { name: 'NutriAgent', description: 'NutriAgent AI clinical assistant and MCP server' },
       { name: 'Chatbot', description: 'Chatbot interaction' },
       { name: 'Blog', description: 'Blog management' },
       { name: 'Meal Plans', description: 'Meal plan operations' },
@@ -147,6 +147,7 @@ const swaggerOptions = {
     './src/routes/profileRoutes.js',
     './src/routes/bookingRoutes.js',
     './src/routes/paymentRoutes.js',
+    './src/agent/index.js',
     './src/routes/blogRoutes.js',
     './src/routes/mealPlanRoutes.js',
     './src/routes/healthReportRoutes.js',
@@ -182,29 +183,6 @@ app.use('/api', profileRoutes);
 
 // Progress routes mounted at '/api'
 app.use('/api', progressRoutes);
-
-// NutriAgent Dedicated Fastify Documentation Bridge (single server process)
-let agentDocsFastify = null;
-createAgentDocsHandler()
-  .then((instance) => {
-    agentDocsFastify = instance;
-  })
-  .catch((err) => {
-    console.error('Failed to initialize Fastify NutriAgent documentation handler:', err);
-  });
-
-app.use((req, res, next) => {
-  if (req.originalUrl === '/api/agent/docs') {
-    return res.redirect(301, '/api/agent/docs/');
-  }
-  if (req.originalUrl && req.originalUrl.startsWith('/api/agent/docs')) {
-    if (agentDocsFastify) {
-      return agentDocsFastify.routing(req, res);
-    }
-    return res.status(503).json({ error: 'Documentation service initializing, please retry momentarily.' });
-  }
-  next();
-});
 
 // NutriAgent AI routes mounted at '/api/agent'
 app.use('/api/agent', agentRoutes);
@@ -295,8 +273,7 @@ require('./utils/cronJobs').startCronJobs();
 // Start Server
 const server = app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
-  console.log(`Platform Swagger docs at http://localhost:${PORT}/api-docs`);
-  console.log(`NutriAgent Fastify Swagger docs at http://localhost:${PORT}/api/agent/docs`);
+  console.log(`Swagger docs at http://localhost:${PORT}/api-docs`);
 });
 
 
