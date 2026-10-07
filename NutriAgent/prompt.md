@@ -244,3 +244,19 @@ If an existing chat session has not refreshed its toolbelt, an external client o
    }
    ```
 4. **Result**: The backend queries MongoDB and streams live clinical findings back over SSE.
+
+---
+
+## 9. Cloud Deployment Note: Vercel vs Render / Railway
+
+### Why `nutriconnect-cloud` and Nodemailer Fail on Vercel
+- **Stateless Serverless Execution**: Vercel operates using ephemeral, stateless serverless lambda instances.
+- **Incompatible Multi-Step SSE**: The MCP SSE transport requires persistent in-memory session tracking between the initial `GET /sse` connection and subsequent `POST /messages?sessionId=...` tool calls. Because separate HTTP requests route to different, isolated lambdas, the session mapping is lost.
+- **Premature Socket Termination**: Vercel limits serverless function lifespans (10-15 seconds), severing persistent SSE streams.
+- **Nodemailer / Background Job Failures**: As soon as an HTTP response completes, Vercel freezes the CPU environment. Asynchronous background jobs like Nodemailer email transmissions (appointment notifications, verification emails) and queue workers get aborted mid-flight.
+
+### Why Deploy to Render or Railway
+To enable `nutriconnect-cloud` and reliable Nodemailer email delivery:
+- Deploy the backend to a persistent server provider like **Render** or **Railway**.
+- A dedicated Node.js process (`npm start`) stays alive continuously, preserving in-memory active transports for SSE streams and ensuring background email tasks finish completely.
+

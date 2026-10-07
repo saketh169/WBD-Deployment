@@ -530,3 +530,35 @@ The backend route uses `optionalAuthenticateJWT`:
 
 4. **Zero Emojis Enforced**:
    - The clinical agent strictly enforces zero emojis across all code, tools, logs, and responses.
+
+---
+
+## 12. Cloud Deployment Limitations: Vercel vs Render / Railway
+
+### The Root Cause: Vercel Serverless Architecture
+
+When deploying the NutriConnect backend to **Vercel**, `nutriconnect-cloud` encounters fundamental architectural incompatibilities due to the stateless, ephemeral nature of serverless Lambda functions:
+
+1. **Broken Multi-Request SSE Sessions**:
+   - The MCP SSE transport operates across two endpoints:
+     - `GET /api/agent/mcp/sse`: Establishes the real-time event stream and allocates a session ID stored in memory (`activeTransports.set(sessionId, transport)`).
+     - `POST /api/agent/mcp/messages?sessionId=<id>`: Receives tool invocation requests (`tools/call`) from the client.
+   - On Vercel, each HTTP request spins up an isolated serverless container or hits a different worker instance. The in-memory `activeTransports` map is not shared across lambda instances. When `POST /messages` arrives, `activeTransports.get(sessionId)` returns `undefined`, triggering session-not-found errors or request timeouts.
+
+2. **Serverless Execution Timeouts & Socket Termination**:
+   - Vercel functions enforce strict execution limits (10 to 15 seconds on standard hobby tiers).
+   - Long-lived SSE streaming sockets are prematurely severed, breaking continuous agent communication and tool result listeners.
+
+3. **Background Tasks & Nodemailer Drops**:
+   - Serverless platforms freeze the Node.js event loop and pause CPU execution immediately after sending an HTTP response.
+   - Background operations such as **Nodemailer email dispatch** (e.g., consultation confirmations, password resets, verification emails) and scheduled cron jobs rely on persistent event loops and background promises. On Vercel, asynchronous email deliveries frequently get terminated mid-transmission during SMTP handshakes.
+
+### The Solution: Deploy to Persistent Platforms (Render or Railway)
+
+To enable `nutriconnect-cloud` and reliable background email delivery, the backend must be deployed to a persistent container or VM environment such as **Render**, **Railway**, or a standard VPS:
+
+- **Persistent Node.js Process**: Runs `node server.js` 24/7 without arbitrary freeze or spin-down cycles.
+- **Shared In-Memory State**: `activeTransports` persists across all requests, allowing `POST /messages` to look up and resolve the active SSE session seamlessly.
+- **Continuous HTTP Streaming**: SSE connections remain open indefinitely without 10-second serverless execution limits.
+- **Reliable Nodemailer Operations**: Asynchronous SMTP handshakes and email worker queues execute completely without process termination.
+
