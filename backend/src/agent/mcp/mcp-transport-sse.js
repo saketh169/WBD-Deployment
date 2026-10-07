@@ -49,7 +49,7 @@ async function handleMCPMessages(req, res) {
     }
 
     const { transport } = activeTransports.get(sessionId);
-    await transport.handlePostMessage(req, res);
+    await transport.handlePostMessage(req, res, req.body);
   } catch (err) {
     console.error("[MCP Message Error]:", err);
     if (!res.headersSent) {

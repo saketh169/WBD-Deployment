@@ -289,12 +289,91 @@ Switch to the **Resources** tab in the Inspector and click **List Resources**.
 
 ---
 
-## 8. Integrating with External AI Hosts
+## 8. Integrating with External AI Hosts & Coding Agents
 
-### Claude Desktop Configuration
-Add the NutriConnect server to your Claude Desktop config file:
-- **Windows Path**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Mac Path**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+When an external coding agent or LLM tool (like **Cursor**, **Claude Desktop**, **Windsurf**, or **Continue.dev**) needs to access your MCP server, here is exactly what happens step-by-step:
+
+---
+
+### Step 1: You Give the Agent the URL in Its Settings
+
+The external agent doesn't browse websites like a human. Instead, you add your URL to its MCP settings file (e.g., in Cursor under `Settings > Features > MCP`, or in Claude Desktop's `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "nutriconnect": {
+      "url": "https://nutri-connect-wbd-backend.vercel.app/api/agent/mcp/sse"
+    }
+  }
+}
+```
+
+> **Note on Authentication**: 
+> - The NutriConnect MCP endpoint uses `optionalAuthenticateJWT`. External agents can discover tools, query clinical guidelines, search dietitians, check availability, and look up nutrition completely unauthenticated.
+> - If personalized patient actions (`get_user_schedule`, `book_dietitian_appointment`, `generate_meal_plan`) are needed, pass the user's token via headers:
+>   ```json
+>   "headers": {
+>     "Authorization": "Bearer YOUR_JWT_TOKEN"
+>   }
+>   ```
+>   or append `?token=YOUR_JWT_TOKEN` to the URL.
+
+---
+
+### Step 2: The Agent Automatically Connects in the Background
+
+As soon as the agent boots up:
+1. **Connects to SSE**: The agent opens `GET /api/agent/mcp/sse`.
+2. **Receives Session ID**: Your server responds with an active session ID:
+   ```text
+   event: endpoint
+   data: /api/agent/mcp/messages?sessionId=c4fe7b3c...
+   ```
+3. **Discovers Tools (`tools/list`)**: The agent sends a background JSON-RPC call asking: *"What tools do you have?"*
+   Your server responds with your 6 registered clinical tools:
+   - `search_dietitians`
+   - `check_dietitian_availability`
+   - `book_dietitian_appointment`
+   - `get_user_schedule`
+   - `lookup_nutrition`
+   - `generate_meal_plan`
+
+---
+
+### Step 3: How the Agent Uses It During a Chat
+
+Now, when a user asks the external agent a question:
+
+1. **User asks**: *"Find me a sports nutritionist on NutriConnect who charges under 500 INR."*
+2. **The external agent notices**: *"I have an MCP tool called `search_dietitians` from NutriConnect that can answer this."*
+3. **The agent executes the tool**: In the background, it sends a POST request:
+   ```json
+   {
+     "jsonrpc": "2.0",
+     "method": "tools/call",
+     "params": {
+       "name": "search_dietitians",
+       "arguments": { "specialtyOrCondition": "sports", "maxFee": 500 }
+     }
+   }
+   ```
+4. **Your backend runs your MongoDB query and returns the live data**.
+5. **The external agent reads the result** and answers the user with the real dietitian names, credentials, and booking links.
+
+---
+
+### Summary
+The external coding agent uses the **URL as an API bridge**. It queries the tools list automatically, decides when to call them based on what the user asks, and feeds your platform's live data right into its answer.
+
+---
+
+### Local Stdio Configuration (Alternative)
+
+If running locally on your machine without HTTP, desktop clients can also run via Node process stdio:
+
+#### Claude Desktop (Stdio)
+Add to `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac):
 
 ```json
 {
@@ -309,8 +388,8 @@ Add the NutriConnect server to your Claude Desktop config file:
 }
 ```
 
-### Cursor IDE Configuration
-In Cursor Settings -> Features -> MCP Servers, add:
+#### Cursor IDE (Stdio)
+In Cursor Settings -> Features -> MCP Servers:
 - **Name**: `nutriconnect-clinical`
 - **Type**: `command`
 - **Command**: `node "C:/Users/saket/Web Projects/WBD-Deployment/backend/src/agent/mcp/mcp-server.js"`
@@ -326,7 +405,7 @@ The NutriConnect MCP server is accessible via HTTP Server-Sent Events (SSE) acro
 
 ### A. Testing Remote MCP via Inspector
 
-You can connect the MCP Inspector directly to the production deployment URL via SSE:
+You can connect the MCP Inspector directly to the production deployment URL via SSE (no token required for tool discovery):
 
 ```powershell
 npx @modelcontextprotocol/inspector@latest --transport sse --server-url https://nutri-connect-wbd-backend.vercel.app/api/agent/mcp/sse
@@ -344,9 +423,8 @@ npx @modelcontextprotocol/inspector@latest --transport sse --server-url http://l
 #### 1. Establish SSE Connection
 ```http
 GET https://nutri-connect-wbd-backend.vercel.app/api/agent/mcp/sse
-Authorization: Bearer <JWT_TOKEN>
 ```
-*(Query parameter fallback is also supported: `?token=<JWT_TOKEN>`)*
+*(Optional JWT header: `Authorization: Bearer <JWT_TOKEN>` or query parameter: `?token=<JWT_TOKEN>`)*
 
 The server opens an event stream and assigns a unique `sessionId`:
 ```text
@@ -360,7 +438,6 @@ Post your tool call to the returned messages endpoint with the session ID:
 ```http
 POST https://nutri-connect-wbd-backend.vercel.app/api/agent/mcp/messages?sessionId=01938b82-628a-7965-b74a-67520e71b281
 Content-Type: application/json
-Authorization: Bearer <JWT_TOKEN>
 
 {
   "jsonrpc": "2.0",
@@ -378,7 +455,68 @@ Authorization: Bearer <JWT_TOKEN>
 
 ---
 
-## 10. Troubleshooting & Common Pitfalls
+## 10. Authenticated vs Anonymous Access (Token vs No Token)
+
+External AI agents (such as Cursor, Claude Desktop, Windsurf, or VS Code Copilot) can connect in two distinct modes depending on whether authentication credentials are provided.
+
+### Configuration Comparison
+
+#### Mode A: Anonymous / Public Mode (No Token)
+```json
+{
+  "mcpServers": {
+    "nutriconnect": {
+      "url": "https://nutri-connect-wbd-backend.vercel.app/api/agent/mcp/sse"
+    }
+  }
+}
+```
+
+#### Mode B: Authenticated Patient Mode (With Token)
+Via Query Parameter:
+```json
+{
+  "mcpServers": {
+    "nutriconnect": {
+      "url": "https://nutri-connect-wbd-backend.vercel.app/api/agent/mcp/sse?token=YOUR_JWT_TOKEN"
+    }
+  }
+}
+```
+Or via HTTP Headers (where supported):
+```json
+{
+  "mcpServers": {
+    "nutriconnect": {
+      "url": "https://nutri-connect-wbd-backend.vercel.app/api/agent/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer YOUR_JWT_TOKEN"
+      }
+    }
+  }
+}
+```
+
+### Server Resolution (`optionalAuthenticateJWT`)
+The backend route uses `optionalAuthenticateJWT`:
+1. When a connection arrives, it inspects the `Authorization` header and the `token` query param.
+2. If verified, `req.user.id` is extracted and bound to `context.userId` for all tool executions in that session.
+3. If absent or invalid, the session runs in public guest mode with `context.userId = null`.
+
+### Tool Behavior Matrix
+
+| Tool | Without Token (`userId = null`) | With Token (`userId = <patient_id>`) |
+| :--- | :--- | :--- |
+| `search_dietitians` | Full access. Queries MongoDB directory of verified dietitians. | Full access. Identical directory search. |
+| `lookup_nutrition` | Full access. Queries USDA / nutritional database. | Full access. Queries nutritional database. |
+| `check_dietitian_availability` | Full access. Returns live available slots. | Full access. Returns live available slots. |
+| `get_user_schedule` | Blocked. Returns `{ success: false, message: "Please sign in to view your consultations schedule." }`. | Full access. Retrieves patient's confirmed consultations from MongoDB. |
+| `book_dietitian_appointment` | Requires full client identity parameters or fails if account context is missing. | Authenticated. Automatically binds appointment to patient profile. |
+| `generate_meal_plan` | Generic baseline guidelines without clinical lab report grounding. | Clinical RAG. Retrieves patient's HbA1c, fasting glucose, and targets to tailor nutrition recommendations. |
+
+---
+
+## 11. Troubleshooting & Common Pitfalls
 
 1. **`Cannot find module ... mcp-server.js`**:
    - Cause: Running `node "src/agent/mcp/mcp-server.js"` from outside the `backend/` directory.

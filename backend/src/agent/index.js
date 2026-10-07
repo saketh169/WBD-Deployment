@@ -519,7 +519,9 @@ router.delete("/sessions/clear", authenticateJWT, async (req, res) => {
 });
 
 // --- Model Context Protocol (MCP) Endpoints ---
-router.get("/mcp/sse", authenticateJWT, handleMCPSSE);
-router.post("/mcp/messages", authenticateJWT, handleMCPMessages);
+// Uses optionalAuthenticateJWT so external hosts (Claude Desktop, Cursor, MCP Inspector)
+// can discover and run tools seamlessly, while binding userId when token is provided.
+router.get("/mcp/sse", optionalAuthenticateJWT, handleMCPSSE);
+router.post("/mcp/messages", optionalAuthenticateJWT, handleMCPMessages);
 
 module.exports = router;

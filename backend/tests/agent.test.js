@@ -44,17 +44,25 @@ describe("NutriAgent Pipeline Security and Validation Tests", () => {
       expect(res.body.success).toBe(false);
     });
 
-    test("GET /api/agent/mcp/sse should reject unauthenticated requests with 401", async () => {
-      const res = await request(app).get("/api/agent/mcp/sse");
-      expect(res.status).toBe(401);
-      expect(res.body.success).toBe(false);
+    test("GET /api/agent/mcp/sse should establish SSE stream for unauthenticated external hosts", (done) => {
+      const http = require("http");
+      const server = app.listen(0, () => {
+        const port = server.address().port;
+        const req = http.get(`http://localhost:${port}/api/agent/mcp/sse`, (res) => {
+          expect(res.statusCode).toBe(200);
+          expect(res.headers["content-type"]).toMatch(/text\/event-stream/);
+          req.destroy();
+          server.close(() => done());
+        });
+        req.on("error", () => {});
+      });
     });
 
-    test("POST /api/agent/mcp/messages should reject unauthenticated requests with 401", async () => {
+    test("POST /api/agent/mcp/messages should reject missing or inactive session", async () => {
       const res = await request(app)
         .post("/api/agent/mcp/messages")
         .send({ method: "tools/list" });
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
     });
   });

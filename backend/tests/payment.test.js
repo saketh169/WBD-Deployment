@@ -21,6 +21,10 @@ const createValidPayment = (overrides = {}) => ({
 });
 
 describe('Payment Model - Creation', () => {
+  beforeAll(async () => {
+    await Payment.init();
+  });
+
   test('should create a valid payment record', async () => {
     const payment = await Payment.create(createValidPayment());
 
