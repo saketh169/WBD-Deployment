@@ -533,32 +533,27 @@ The backend route uses `optionalAuthenticateJWT`:
 
 ---
 
-## 12. Cloud Deployment Limitations: Vercel vs Render / Railway
+## 12. Cloud Deployment Comparison: Vercel vs Render vs Railway
 
-### The Root Cause: Vercel Serverless Architecture
+### Quick Platform Matrix
 
-When deploying the NutriConnect backend to **Vercel**, `nutriconnect-cloud` encounters fundamental architectural incompatibilities due to the stateless, ephemeral nature of serverless Lambda functions:
+| Platform | MCP SSE Connections | Nodemailer SMTP | Behavior & Limitations |
+| :--- | :--- | :--- | :--- |
+| **Vercel** | **Fails** | **Unreliable** | Stateless serverless architecture. Multi-step SSE sessions drop across isolated lambdas; 10-15s timeouts cut streams. Fine for stateless REST/OAuth. |
+| **Render (Free)** | **Works (while awake)** | **Fails direct SMTP** | Stateful Node process supports SSE, but spins down after 15m inactivity (50s cold start). Outbound SMTP ports (25/465/587) are blocked on free tier. |
+| **Railway / VPS** | **Works 24/7** | **Works** | Persistent 24/7 container. Unblocked networking, persistent in-memory SSE sessions, and reliable background email dispatch. |
 
-1. **Broken Multi-Request SSE Sessions**:
-   - The MCP SSE transport operates across two endpoints:
-     - `GET /api/agent/mcp/sse`: Establishes the real-time event stream and allocates a session ID stored in memory (`activeTransports.set(sessionId, transport)`).
-     - `POST /api/agent/mcp/messages?sessionId=<id>`: Receives tool invocation requests (`tools/call`) from the client.
-   - On Vercel, each HTTP request spins up an isolated serverless container or hits a different worker instance. The in-memory `activeTransports` map is not shared across lambda instances. When `POST /messages` arrives, `activeTransports.get(sessionId)` returns `undefined`, triggering session-not-found errors or request timeouts.
+### Architectural Breakdown
 
-2. **Serverless Execution Timeouts & Socket Termination**:
-   - Vercel functions enforce strict execution limits (10 to 15 seconds on standard hobby tiers).
-   - Long-lived SSE streaming sockets are prematurely severed, breaking continuous agent communication and tool result listeners.
+1. **Why Vercel Fails MCP SSE**:
+   - `GET /sse` and `POST /messages` hit different stateless lambda instances, losing the in-memory `activeTransports` session map.
+   - Strict 10-15 second execution limits terminate persistent SSE socket connections.
 
-3. **Background Tasks & Nodemailer Drops**:
-   - Serverless platforms freeze the Node.js event loop and pause CPU execution immediately after sending an HTTP response.
-   - Background operations such as **Nodemailer email dispatch** (e.g., consultation confirmations, password resets, verification emails) and scheduled cron jobs rely on persistent event loops and background promises. On Vercel, asynchronous email deliveries frequently get terminated mid-transmission during SMTP handshakes.
+2. **Why Render Free Tier Fails Direct Nodemailer**:
+   - Outbound SMTP ports (25, 465, 587) are blocked on free plans to prevent spam, causing direct Nodemailer SMTP connections to hang or fail (requires HTTP APIs like Resend/SendGrid).
+   - Sleep mode triggers after 15 minutes of inactivity, causing high latency on reconnect.
 
-### The Solution: Deploy to Persistent Platforms (Render or Railway)
+3. **Recommended Deployment**:
+   - Deploy backend to **Railway** or a **VPS** (or paid Render instance) to keep `nutriconnect-cloud` SSE streams open and background mail delivery uninterrupted.
 
-To enable `nutriconnect-cloud` and reliable background email delivery, the backend must be deployed to a persistent container or VM environment such as **Render**, **Railway**, or a standard VPS:
-
-- **Persistent Node.js Process**: Runs `node server.js` 24/7 without arbitrary freeze or spin-down cycles.
-- **Shared In-Memory State**: `activeTransports` persists across all requests, allowing `POST /messages` to look up and resolve the active SSE session seamlessly.
-- **Continuous HTTP Streaming**: SSE connections remain open indefinitely without 10-second serverless execution limits.
-- **Reliable Nodemailer Operations**: Asynchronous SMTP handshakes and email worker queues execute completely without process termination.
 
