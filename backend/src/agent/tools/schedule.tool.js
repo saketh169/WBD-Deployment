@@ -99,9 +99,13 @@ async function executeCheckDietitianAvailability(
           email: doc.email || "",
           experience: doc.experience ? `${doc.experience} yrs` : null,
           fee: doc.onlineFee || doc.fees,
-          rating: doc.rating ? Number(doc.rating) : 4.8,
+          rating: doc.rating ? Number(doc.rating) : null,
           specialties: doc.specialties || doc.specialization || [],
-          workingHours: "09:00 - 20:00",
+          workingHours:
+            doc.availability?.workingHours?.start &&
+            doc.availability?.workingHours?.end
+              ? `${doc.availability.workingHours.start} - ${doc.availability.workingHours.end}`
+              : null,
         },
         selectedDate: chosenDate,
         freeDatesThisWeek: scheduleData.freeDates,

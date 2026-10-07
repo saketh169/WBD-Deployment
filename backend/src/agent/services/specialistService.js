@@ -75,7 +75,9 @@ async function getDietitianEmbeddings(genAI) {
 
     if (!vector?.length) {
       try {
-        const text = `Dietitian ${doc.name}. Gender: ${doc.gender || "unspecified"}. Specialties: ${specs.join(", ")}. Experience: ${doc.experience || 5} years. Location: ${doc.location || "India"}. About: ${doc.about || ""}`;
+        const expStr = doc.experience ? `${doc.experience} years` : "experienced specialist";
+        const locStr = doc.location ? ` Location: ${doc.location}.` : "";
+        const text = `Dietitian ${doc.name}. Gender: ${doc.gender || "unspecified"}. Specialties: ${specs.join(", ")}. Experience: ${expStr}.${locStr} About: ${doc.about || ""}`;
         const res = await embedModel.embedContent(text);
         vector = res.embedding.values;
         await Dietitian.updateOne(
@@ -247,8 +249,22 @@ async function getDietitianSlots(dietitianId, dietitianName, userId = null) {
     });
     const isToday = dateStr === todayStr;
 
-    const isWorkingDay = true;
-    const daySlots = standardSlots;
+    const workingDays = dietitianDoc?.availability?.workingDays;
+    const isWorkingDay =
+      Array.isArray(workingDays) && workingDays.length > 0
+        ? workingDays.some(
+            (d) =>
+              d.toLowerCase().startsWith(dayName.toLowerCase()) ||
+              d.toLowerCase() === fullDayName.toLowerCase()
+          )
+        : true;
+
+    let daySlots = standardSlots;
+    const startHour = dietitianDoc?.availability?.workingHours?.start;
+    const endHour = dietitianDoc?.availability?.workingHours?.end;
+    if (startHour && endHour) {
+      daySlots = standardSlots.filter((s) => s >= startHour && s <= endHour);
+    }
 
     const dayBookings = bookedByDate.get(dateStr) || [];
     const blockedSet = blockedByDate.get(dateStr) || new Set();

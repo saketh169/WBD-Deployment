@@ -225,218 +225,150 @@ async function executeGenerateMealPlan(args = {}, context = {}) {
       labReport = foundLab;
     }
 
-    // Determine target calories (prioritize dietitian's clinical target unless patient explicitly requested a calorie number)
-    const userPromptCalMatch = context.userQuery?.match(
-      /\b(\d{3,4})\s*(?:cal|kcal|calories)\b/i
-    );
-    const explicitCal = userPromptCalMatch
-      ? Number(userPromptCalMatch[1])
-      : null;
-    const dailyCalories =
-      explicitCal || assessment?.targetCalories || args.dailyCalories || 1850;
+    // 1. Resolve core parameters dynamically from tool arguments or clinical records
+    const planName =
+      args.planName ||
+      (assessment?.title ? `${assessment.title}` : "Personalized Nutrition Plan");
+    const qText = (context.userQuery || "").toLowerCase();
 
-    // Determine target macros
-    const macroTargets = assessment?.targetMacros?.proteinGrams
-      ? {
-          proteinGrams: assessment.targetMacros.proteinGrams,
-          carbsGrams: assessment.targetMacros.carbsGrams,
-          fatsGrams: assessment.targetMacros.fatsGrams,
-        }
-      : args.macroTargets || {
-          proteinGrams: 105,
-          carbsGrams: 210,
-          fatsGrams: 55,
-        };
+    let dietType = args.dietType;
+    if (!dietType) {
+      if (
+        qText.includes("non-veg") ||
+        qText.includes("non veg") ||
+        qText.includes("chicken") ||
+        qText.includes("meat")
+      ) {
+        dietType = "Non-Vegetarian";
+      } else if (qText.includes("vegan")) {
+        dietType = "Vegan";
+      } else if (qText.includes("vegetarian") || qText.includes("veg")) {
+        dietType = "Vegetarian";
+      } else {
+        dietType = "Balanced";
+      }
+    }
+
+    const daysCount =
+      Number(args.daysCount) ||
+      (Array.isArray(args.days) && args.days.length > 0 ? args.days.length : 1);
+
+    const baseCal = Number(assessment?.targetCalories) || 2000;
+    let dailyCalories = Number(args.dailyCalories);
+    if (!dailyCalories) {
+      if (qText.includes("weight gain") || qText.includes("gain weight")) {
+        dailyCalories = baseCal + 400;
+      } else if (qText.includes("weight loss") || qText.includes("lose weight")) {
+        dailyCalories = Math.max(1500, baseCal - 400);
+      } else {
+        dailyCalories = baseCal;
+      }
+    }
+
+    const macroTargets = args.macroTargets || assessment?.targetMacros || {
+      proteinGrams: Math.round((dailyCalories * 0.25) / 4),
+      carbsGrams: Math.round((dailyCalories * 0.50) / 4),
+      fatsGrams: Math.round((dailyCalories * 0.25) / 9),
+    };
 
     const hydrationTargetLiters =
-      assessment?.targetHydrationLiters || args.hydrationTargetLiters || 3.2;
-    const supervisingDietitian =
-      assessment?.dietitianName ||
-      args.supervisingDietitian ||
-      "Consulted Specialist";
-    const healthFocus =
-      assessment?.diagnosis ||
-      args.healthFocus ||
-      "Cardiometabolic & Glycemic Health";
+      Number(args.hydrationTargetLiters) ||
+      Number(assessment?.targetHydrationLiters) ||
+      2.5;
 
-    // Collect allergens to strictly exclude (case-insensitive deduplication)
+    let healthFocus = args.healthFocus;
+    if (!healthFocus) {
+      let queryGoal = null;
+      if (qText.includes("hair")) queryGoal = "Hair growth support";
+      else if (qText.includes("weight gain") || qText.includes("gain weight"))
+        queryGoal = "Healthy weight gain";
+      else if (qText.includes("weight loss") || qText.includes("lose weight"))
+        queryGoal = "Weight management";
+      else if (qText.includes("pcos")) queryGoal = "PCOS hormonal balance";
+      else if (qText.includes("diabetes") || qText.includes("sugar"))
+        queryGoal = "Glycemic control";
+
+      if (queryGoal && assessment?.diagnosis) {
+        healthFocus = `${queryGoal} combined with ${assessment.diagnosis}`;
+      } else if (queryGoal) {
+        healthFocus = queryGoal;
+      } else {
+        healthFocus = assessment?.diagnosis || "Personalized Health & Wellness";
+      }
+    }
+
+    // Deduplicate and combine allergy exclusions
     const rawAllergies = [
       ...(assessment?.allergies || []),
       ...(args.allergiesExcluded || []),
     ].filter(Boolean);
+    const allergiesExcluded = Array.from(
+      new Set(rawAllergies.map((a) => String(a).trim()))
+    ).filter(Boolean);
 
-    const allergyMap = new Map();
-    for (const a of rawAllergies) {
-      const clean = String(a).trim();
-      const key = clean.toLowerCase();
-      if (!allergyMap.has(key)) {
-        // Capitalize first letter cleanly
-        allergyMap.set(
-          key,
-          clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase()
-        );
-      }
-    }
-    const allergiesExcluded = Array.from(allergyMap.values());
+    const supervisingDietitian =
+      args.supervisingDietitian ||
+      assessment?.dietitianName ||
+      "Clinical Nutrition Specialist";
+    const clinicalNotes =
+      args.clinicalNotes || assessment?.dietaryRecommendations || "";
 
-    // Detect diet type (inspect dietaryRecommendations and lab fitness metrics)
-    const recText =
-      `${assessment?.dietaryRecommendations || ""} ${labReport?.fitnessMetrics?.additionalInfo || ""}`.toLowerCase();
-    const isVegetarian =
-      recText.includes("vegetarian") ||
-      (args.dietType || "").toLowerCase().includes("vegetarian");
-    const isVegan =
-      recText.includes("vegan") ||
-      (args.dietType || "").toLowerCase().includes("vegan");
-    const dietType = isVegan
-      ? "Vegan"
-      : isVegetarian
-        ? "High-Protein Vegetarian"
-        : args.dietType || "Balanced";
+    let days =
+      Array.isArray(args.days) && args.days.length > 0 ? args.days : [];
 
-    const planName =
-      assessment?.title ||
-      args.planName ||
-      `${supervisingDietitian}'s Clinical Nutrition Plan`;
-    const daysCount =
-      Number(args.daysCount) ||
-      (Array.isArray(args.days) && args.days.length > 0 ? args.days.length : 1);
-    let days = Array.isArray(args.days) ? args.days : [];
-
-    // Safety checks against discrepancies
-    const hasForbiddenAllergens = (dayList, allergies) => {
-      const allText = JSON.stringify(dayList).toLowerCase();
-      return (allergies || []).some((a) => allText.includes(a.toLowerCase()));
-    };
-
-    const hasNonVegConflict = (dayList, isVeg) => {
-      if (!isVeg) return false;
-      const allText = JSON.stringify(dayList).toLowerCase();
-      const nonVegWords = [
-        "chicken",
-        "salmon",
-        "tuna",
-        "prawn",
-        "shrimp",
-        "crab",
-        "fish",
-        "meat",
-        "beef",
-        "pork",
-        "turkey",
-        "lamb",
-        "bacon",
-      ];
-      return nonVegWords.some((w) => allText.includes(w));
-    };
-
-    const hasCalorieDiscrepancy = (dayList, targetCal) => {
-      if (!targetCal || dayList.length === 0) return false;
-      for (const d of dayList) {
-        const sum = (d.meals || []).reduce(
-          (s, m) => s + (Number(m.calories) || 0),
-          0
-        );
-        if (Math.abs(sum - targetCal) > 80) return true;
-      }
-      return false;
-    };
-
-    const needsRegeneration =
-      days.length === 0 ||
-      hasForbiddenAllergens(days, allergiesExcluded) ||
-      hasNonVegConflict(days, isVegetarian) ||
-      hasCalorieDiscrepancy(days, dailyCalories);
-
-    if (needsRegeneration) {
+    // 2. If Gemini did not supply complete day objects in tool call, synthesize dynamically
+    if (days.length === 0) {
       try {
-        const targetP = macroTargets.proteinGrams;
-        const targetC = macroTargets.carbsGrams;
-        const targetF = macroTargets.fatsGrams;
+        const synthModel = genAI.getGenerativeModel(
+          {
+            model: GEMINI_MODEL,
+            generationConfig: {
+              responseMimeType: "application/json",
+              temperature: 0.3,
+            },
+          },
+          { timeout: 15000 }
+        );
 
-        const bKcal = Math.round(dailyCalories * 0.23);
-        const lKcal = Math.round(dailyCalories * 0.31);
-        const sKcal = Math.round(dailyCalories * 0.15);
-        const dKcal = dailyCalories - (bKcal + lKcal + sKcal);
+        const jsonPrompt = `Generate a realistic ${daysCount}-day ${dietType} meal plan matching these exact nutritional targets:
+- Plan Name: ${planName}
+- Health Focus: ${healthFocus}
+- Target Daily Calories: ${dailyCalories} kcal
+- Target Macros: Protein: ${macroTargets.proteinGrams}g, Carbs: ${macroTargets.carbsGrams}g, Fats: ${macroTargets.fatsGrams}g
+- Allergies to Exclude: ${allergiesExcluded.join(", ") || "None"}
+- Clinical Guidance: ${clinicalNotes || "Balanced, nutrient-dense whole foods"}
 
-        const bP = Math.round(targetP * 0.21);
-        const lP = Math.round(targetP * 0.35);
-        const sP = Math.round(targetP * 0.13);
-        const dP = targetP - (bP + lP + sP);
+Each day must have 4 meals: Breakfast, Lunch, Snacks, Dinner.
+The sum of meal calories per day must equal approximately ${dailyCalories} kcal.
 
-        const bC = Math.round(targetC * 0.26);
-        const lC = Math.round(targetC * 0.31);
-        const sC = Math.round(targetC * 0.17);
-        const dC = targetC - (bC + lC + sC);
-
-        const bF = Math.round(targetF * 0.25);
-        const lF = Math.round(targetF * 0.3);
-        const sF = Math.round(targetF * 0.15);
-        const dF = targetF - (bF + lF + sF);
-
-        const jsonPrompt = `Generate a precision ${daysCount}-day ${dietType} meal plan strictly grounded in this clinical assessment without discrepancies:
-Supervising Dietitian: ${supervisingDietitian}
-Clinical Focus: ${healthFocus}
-Dietary Recommendations:
-${assessment?.dietaryRecommendations || "Low-glycemic high-protein balanced nutrition"}
-
-Mandatory Targets Per Day:
-- Exact Calories: ${dailyCalories} kcal per day (+/- 25 kcal).
-- Target Macros: Protein: ${targetP}g, Carbs: ${targetC}g, Fats: ${targetF}g.
-- Diet Type: ${dietType} (${isVegetarian ? "STRICTLY VEGETARIAN: ZERO chicken, fish, seafood, meat, poultry" : "Balanced"}).
-- Allergens to Strictly Exclude: ${allergiesExcluded.join(", ") || "None"}.
-- Recommended Complex Staples to feature: steel-cut oats, foxtail millets, brown basmati, sprouted legumes (moong/chana), quinoa, soaked chia seeds, flaxseed powder, walnuts, leafy greens.
-- Strictly Avoid: refined sugars, trans fats, deep-fried snacks.
-
-Every single day must include exactly 4 meals:
-1. Breakfast (~${bKcal} kcal, ~${bP}g P, ~${bC}g C, ~${bF}g F)
-2. Lunch (~${lKcal} kcal, ~${lP}g P, ~${lC}g C, ~${lF}g F)
-3. Snacks (~${sKcal} kcal, ~${sP}g P, ~${sC}g C, ~${sF}g F)
-4. Dinner (~${dKcal} kcal, ~${dP}g P, ~${dC}g C, ~${dF}g F)
-The sum of meal calories for each day MUST equal ${dailyCalories} kcal.
-
-Return ONLY a JSON object:
+Return ONLY a valid JSON object with schema:
 {
   "days": [
     {
       "dayIndex": 1,
       "dayLabel": "Day 1",
       "dayCalories": ${dailyCalories},
-      "proteinGrams": ${targetP},
-      "carbsGrams": ${targetC},
-      "fatsGrams": ${targetF},
+      "proteinGrams": ${macroTargets.proteinGrams},
+      "carbsGrams": ${macroTargets.carbsGrams},
+      "fatsGrams": ${macroTargets.fatsGrams},
       "meals": [
         {
           "mealType": "Breakfast",
-          "name": "Dish name",
-          "calories": ${bKcal},
-          "proteinGrams": ${bP},
-          "carbsGrams": ${bC},
-          "fatsGrams": ${bF},
-          "ingredients": ["ing 1 with quantity", "ing 2 with quantity"],
-          "prepSteps": ["step 1", "step 2"],
-          "clinicalRationale": "Reason for metabolic optimization"
+          "name": "Authentic dish name",
+          "calories": number,
+          "proteinGrams": number,
+          "carbsGrams": number,
+          "fatsGrams": number,
+          "ingredients": ["ingredient with portion"],
+          "prepSteps": ["step 1", "step 2"]
         }
       ]
     }
   ]
-}
-Include all ${daysCount} days from 1 to ${daysCount}.`;
-
-        const synthModel = genAI.getGenerativeModel(
-          {
-            model: GEMINI_MODEL,
-            generationConfig: {
-              responseMimeType: "application/json",
-              temperature: 0.2,
-            },
-          },
-          { timeout: 15000 }
-        );
+}`;
 
         const res = await synthModel.generateContent(jsonPrompt);
         const parsed = JSON.parse(res.response.text());
-
         if (Array.isArray(parsed?.days) && parsed.days.length > 0) {
           days = parsed.days;
         } else if (Array.isArray(parsed) && parsed.length > 0) {
@@ -450,7 +382,7 @@ Include all ${daysCount} days from 1 to ${daysCount}.`;
       }
     }
 
-    // Resolve culinary photos for all meals in parallel
+    // 3. Resolve dynamic food images via TheMealDB & Wikipedia
     const enrichedDays = await Promise.all(
       days.map(async (day, dIdx) => {
         const mealsWithImages = await Promise.all(
@@ -473,11 +405,6 @@ Include all ${daysCount} days from 1 to ${daysCount}.`;
       })
     );
 
-    let clinicalNotes = args.clinicalNotes || "";
-    if (assessment?.dietaryRecommendations) {
-      clinicalNotes = `Supervised by ${supervisingDietitian}: Strict ${dietType} protocol. Prioritize complex carbs (steel-cut oats, foxtail millets, brown basmati, sprouted legumes, quinoa) with 35g+ daily fiber. Add omega-3s from soaked chia seeds, flaxseed, and walnuts. Strictly avoid refined sugars, trans fats, peanuts, and shellfish.`;
-    }
-
     const stripEmojis = (val) => {
       if (typeof val === "string") {
         return val
@@ -487,9 +414,7 @@ Include all ${daysCount} days from 1 to ${daysCount}.`;
           )
           .trim();
       }
-      if (Array.isArray(val)) {
-        return val.map(stripEmojis);
-      }
+      if (Array.isArray(val)) return val.map(stripEmojis);
       if (val && typeof val === "object") {
         const clean = {};
         for (const [k, v] of Object.entries(val)) {
@@ -519,7 +444,7 @@ Include all ${daysCount} days from 1 to ${daysCount}.`;
 
     return {
       success: true,
-      message: `I have generated your personalized ${finalPlan.daysCount}-Day ${finalPlan.dietType || ""} Clinical Meal Plan (${finalPlan.planName}), strictly grounded in ${supervisingDietitian}'s assessment (${finalPlan.dailyCalories} kcal, P: ${finalPlan.macroTargets.proteinGrams}g, C: ${finalPlan.macroTargets.carbsGrams}g, F: ${finalPlan.macroTargets.fatsGrams}g). You can review your daily meals, macros, and recipes in the interactive card below.`,
+      message: `Generated ${finalPlan.daysCount}-Day ${finalPlan.dietType} Plan for ${finalPlan.healthFocus} (${finalPlan.dailyCalories} kcal: ${finalPlan.macroTargets.proteinGrams}g Protein, ${finalPlan.macroTargets.carbsGrams}g Carbs, ${finalPlan.macroTargets.fatsGrams}g Fats).`,
       plan: finalPlan,
     };
   } catch (err) {

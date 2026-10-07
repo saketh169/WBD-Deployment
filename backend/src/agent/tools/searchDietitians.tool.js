@@ -248,7 +248,7 @@ async function executeSearchDietitians(
           queryVector && doc.vector
             ? cosineSimilarity(queryVector, doc.vector)
             : 0;
-        const ratingScore = Number(doc.rating || 4.5) * 0.1;
+        const ratingScore = doc.rating ? Number(doc.rating) * 0.1 : 0;
         const totalScore = specScore * 3.0 + semScore * 2.0 + ratingScore;
         return {
           ...doc,
@@ -263,7 +263,8 @@ async function executeSearchDietitians(
       if (directMatches.length > 0) {
         matched = directMatches;
       } else {
-        matched = scored.filter((d) => d.semScore >= 0.495);
+        // True semantic alignment threshold (filters out baseline embedding noise < 0.55)
+        matched = scored.filter((d) => d.semScore >= 0.55);
       }
 
       if (matched.length === 0) {
@@ -333,8 +334,8 @@ async function executeSearchDietitians(
             ? Number(live.rating)
             : d.rating
               ? Number(d.rating)
-              : 4.8,
-          location: live?.location || d.location || "India",
+              : null,
+          location: live?.location || d.location || null,
           about: d.about || "",
         };
       });
