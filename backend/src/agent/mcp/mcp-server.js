@@ -67,15 +67,20 @@ function createNutriConnectMCPServer(userId = null) {
 
   // 1. MCP Tools Listing - mapped dynamically from LangGraph tool declarations
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const tools = GEMINI_TOOL_DECLARATIONS.map((d) => ({
-      name: d.name,
-      description: d.description,
-      inputSchema: {
-        type: "object",
-        properties: toStandardJsonSchema(d.parameters?.properties || {}),
-        required: d.parameters?.required || [],
-      },
-    }));
+    const tools = GEMINI_TOOL_DECLARATIONS.map((d) => {
+      const fullSchema = toStandardJsonSchema(
+        d.parameters || { type: "OBJECT", properties: {} }
+      );
+      return {
+        name: d.name,
+        description: d.description,
+        inputSchema: {
+          type: "object",
+          properties: fullSchema.properties || {},
+          required: fullSchema.required || [],
+        },
+      };
+    });
     return { tools };
   });
 
