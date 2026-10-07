@@ -31,8 +31,8 @@ const formatResponseMiddleware = (req, res, next) => {
   const originalJson = res.json.bind(res);
 
   res.json = (body) => {
-    // Preserve swagger / api-docs responses
-    if (req.originalUrl && (req.originalUrl.startsWith('/api-docs') || req.originalUrl.startsWith('/swagger'))) {
+    // Preserve swagger / api-docs and fastify agent docs responses
+    if (req.originalUrl && (req.originalUrl.startsWith('/api-docs') || req.originalUrl.startsWith('/swagger') || req.originalUrl.startsWith('/api/agent/docs'))) {
       return originalJson(body);
     }
 

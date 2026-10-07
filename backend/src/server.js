@@ -29,6 +29,7 @@ const teamBoardRoutes = require('./routes/teamBoardRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const agentRoutes = require('./agent');
+const { createAgentDocsHandler } = require('./agent/agentDocsFastify');
 
 // Middleware imports
 const { helmetMiddleware, rateLimiter, sanitizeInput } = require('./middlewares/securityMiddleware');
@@ -182,12 +183,30 @@ app.use('/api', profileRoutes);
 // Progress routes mounted at '/api'
 app.use('/api', progressRoutes);
 
-// NutriAgent AI routes mounted at '/api/agent'
-// Standalone Swagger documentation is served by Fastify at http://localhost:5001/docs
-app.get('/api/agent/docs', (req, res) => {
-  const agentPort = process.env.AGENT_PORT || 5001;
-  res.redirect(`http://localhost:${agentPort}/docs`);
+// NutriAgent Dedicated Fastify Documentation Bridge (single server process)
+let agentDocsFastify = null;
+createAgentDocsHandler()
+  .then((instance) => {
+    agentDocsFastify = instance;
+  })
+  .catch((err) => {
+    console.error('Failed to initialize Fastify NutriAgent documentation handler:', err);
+  });
+
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/agent/docs') {
+    return res.redirect(301, '/api/agent/docs/');
+  }
+  if (req.originalUrl && req.originalUrl.startsWith('/api/agent/docs')) {
+    if (agentDocsFastify) {
+      return agentDocsFastify.routing(req, res);
+    }
+    return res.status(503).json({ error: 'Documentation service initializing, please retry momentarily.' });
+  }
+  next();
 });
+
+// NutriAgent AI routes mounted at '/api/agent'
 app.use('/api/agent', agentRoutes);
 
 // Verify routes mounted at '/api/verify'
@@ -276,7 +295,8 @@ require('./utils/cronJobs').startCronJobs();
 // Start Server
 const server = app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
-  console.log(`Swagger docs at http://localhost:${PORT}/api-docs`);
+  console.log(`Platform Swagger docs at http://localhost:${PORT}/api-docs`);
+  console.log(`NutriAgent Fastify Swagger docs at http://localhost:${PORT}/api/agent/docs`);
 });
 
 

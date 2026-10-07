@@ -9,7 +9,6 @@
     "test:report": "jest --verbose --forceExit --detectOpenHandles --json --outputFile=test-report.json",
     "start": "nodemon src/server.js",
     "start:prod": "node src/server.js",
-    "start:agent": "node src/agent/fastifyAgentServer.js",
     "seed:dietitians": "node src/scripts/seedDietitians.js",
     "seed:settings": "node src/scripts/seedSettings.js",
     "seed:images": "node scripts/seedImages.js",
@@ -34,7 +33,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@fastify/cors": "^11.3.0",
     "@fastify/swagger": "^9.9.1",
     "@fastify/swagger-ui": "^6.1.1",
     "@google/generative-ai": "^0.24.1",
