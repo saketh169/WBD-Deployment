@@ -101,7 +101,7 @@ function analyzeQueryAttention(query, history = []) {
 
   // 6. SPECIALIST SEARCH INTENT
   const hasSpecialistKeywords =
-    /\b(d[a-z]{2,6}t[a-z]{2,6}s?|nutrition\w*|speciali\w*|doctor\w*|dr\.?|physician\w*|consultant\w*|expert\w*)\b/i.test(
+    /\b(dietitians?|dieticians?|dieitians?|dietitions?|nutritionists?|specialists?|doctors?|dr\.?|physicians?|consultants?|practitioners?|experts?)\b/i.test(
       qLower
     ) ||
     /\b(who\s+(?:can\s+help|specializes?|handles?|treats?|deals?)|consult(?:ant)?|recommend\s+someone|need\s+someone|find\s+someone)\b/i.test(
@@ -141,7 +141,7 @@ function analyzeQueryAttention(query, history = []) {
       )
       .replace(/\b(?:verified|practitioners?|dr\.?)\b/gi, " ")
       .replace(
-        /\b(d[a-z]{2,6}t[a-z]{2,6}s?|nutrition\w*|speciali\w*|doctor\w*|physician\w*|consultant\w*|expert\w*)\b/gi,
+        /\b(dietitians?|dieticians?|dieitians?|dietitions?|nutritionists?|specialists?|doctors?|physicians?|consultants?|practitioners?|experts?)\b/gi,
         " "
       )
       .replace(

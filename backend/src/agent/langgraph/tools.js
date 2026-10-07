@@ -271,6 +271,7 @@ async function executeLangGraphTool(toolName, args, context = {}) {
       success: res.success,
       message: res.message,
       nutrients: res.nutrients,
+      data: res.nutrients,
       cards,
     };
   }
