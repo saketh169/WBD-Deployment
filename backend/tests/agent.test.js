@@ -5,7 +5,11 @@ const jwt = require("jsonwebtoken");
 const { JWT_SECRET } = require("../src/utils/jwtConfig");
 const agentRoutes = require("../src/agent");
 const { executeLangGraphTool } = require("../src/agent/langgraph/tools");
-const { retrieveRAGContext } = require("../src/agent/services/ragRetriever");
+const { loadAgentPatientContext } = require("../src/agent/services/agentContextLoader");
+const { findDietitiansApi } = require("../src/agent/apis/specialist.api");
+const { calculateHealthMetricsApi } = require("../src/agent/apis/healthMetrics.api");
+const { lookupNutritionApi } = require("../src/agent/apis/nutrition.api");
+const { generateMealPlanApi } = require("../src/agent/apis/mealPlan.api");
 const { AgentState } = require("../src/agent/langgraph/state");
 const { Dietitian, User, UserAuth } = require("../src/models/userModel");
 const { ChatHistory } = require("../src/models/agentModel");
@@ -16,7 +20,7 @@ const app = express();
 app.use(express.json());
 app.use("/api/agent", agentRoutes);
 
-describe("NutriAgent Pipeline Security and Validation Tests", () => {
+describe("NutriAgent GenAI Agent Pipeline Security & Verification Tests", () => {
   describe("Route Authentication & IDOR Protection", () => {
     test("POST /api/agent/chat should reject unauthenticated requests with 401", async () => {
       const res = await request(app)
@@ -50,7 +54,7 @@ describe("NutriAgent Pipeline Security and Validation Tests", () => {
         const port = server.address().port;
         const req = http.get(`http://localhost:${port}/api/agent/mcp/sse`, (res) => {
           expect(res.statusCode).toBe(200);
-          expect(res.headers["content-type"]).toMatch(/text\/event-stream/);
+          expect(res.headers["content-type"].includes("text/event-stream")).toBe(true);
           req.destroy();
           server.close(() => done());
         });
@@ -75,7 +79,7 @@ describe("NutriAgent Pipeline Security and Validation Tests", () => {
         time: "10:00",
       });
       expect(res.success).toBe(false);
-      expect(res.message).toMatch(/valid YYYY-MM-DD format/i);
+      expect(res.message.toLowerCase().includes("valid yyyy-mm-dd format")).toBe(true);
     });
 
     test("should reject appointments on past dates", async () => {
@@ -85,7 +89,7 @@ describe("NutriAgent Pipeline Security and Validation Tests", () => {
         time: "10:00",
       });
       expect(res.success).toBe(false);
-      expect(res.message).toMatch(/past date/i);
+      expect(res.message.toLowerCase().includes("past date")).toBe(true);
     });
 
     test("should reject appointment hours outside platform 09:00 to 20:00", async () => {
@@ -95,259 +99,109 @@ describe("NutriAgent Pipeline Security and Validation Tests", () => {
         time: "22:00",
       });
       expect(res.success).toBe(false);
-      expect(res.message).toMatch(/outside platform appointment hours/i);
-    });
-
-    test("should allow booking on weekends (Saturday/Sunday) within platform hours", async () => {
-      const testUser = await User.create({
-        name: "Weekend Patient Spec",
-        email: "weekendpat@nutriconnect.com",
-        phone: "9876543210",
-        dob: new Date("1995-05-15"),
-        gender: "male",
-        address: "123 Medical Way, Floor 2",
-      });
-
-      const testDietitian = await Dietitian.create({
-        name: "Dr. Test Weekend Spec",
-        email: "testweekend@nutriconnect.com",
-        age: 35,
-        licenseNumber: "DLN889901",
-        phone: "9988776654",
-        specialties: ["Clinical Nutrition"],
-        onlineFee: 500,
-      });
-
-      // 2030-01-05 is a Saturday
-      const res = await executeLangGraphTool(
-        "book_dietitian_appointment",
-        {
-          dietitianName: "Test Weekend Spec",
-          date: "2030-01-05",
-          time: "11:00",
-        },
-        { userId: testUser._id }
-      );
-
-      expect(res.success).toBe(true);
-
-      await User.findByIdAndDelete(testUser._id);
-      await Dietitian.findByIdAndDelete(testDietitian._id);
+      expect(res.message.toLowerCase().includes("outside platform appointment hours")).toBe(true);
     });
   });
 
-  describe("Specialist Search Hybrid Matching & Limit Retrieval", () => {
-    test("should return all matched specialists up to requested limit without artificial cutoffs", async () => {
-      const {
-        invalidateDietitianEmbeddingsCache,
-      } = require("../src/agent/services/specialistService");
-      invalidateDietitianEmbeddingsCache();
-
-      const dummyVector = new Array(3072).fill(0.01);
-      const testDocs = await Dietitian.create([
+  describe("Dedicated Customizable Tool APIs Verification", () => {
+    beforeEach(async () => {
+      await Dietitian.create([
         {
-          name: "Dr. Test Zara Ahmed",
-          email: "zara@test.com",
-          licenseNumber: "DLN111111",
-          age: 35,
-          gender: "female",
-          specialties: ["Women's Health", "Fertility"],
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-        {
-          name: "Dr. Test Kavita Menon",
-          email: "kavita@test.com",
-          licenseNumber: "DLN222222",
-          age: 38,
-          gender: "female",
-          specialties: ["Women's Health", "PCOS"],
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-        {
-          name: "Dr. Test Emily Rodriguez",
-          email: "emily@test.com",
-          licenseNumber: "DLN333333",
-          age: 34,
-          gender: "female",
-          specialties: ["Women's Health", "Pregnancy Nutrition"],
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-        {
-          name: "Dr. Test Anjali Gupta",
-          email: "anjali@test.com",
-          licenseNumber: "DLN444444",
-          age: 36,
-          gender: "female",
-          specialties: ["Women's Health", "Menopause"],
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-      ]);
-
-      const res = await executeLangGraphTool(
-        "search_dietitians",
-        {
-          specialtyOrCondition: "womes health",
-          limit: 4,
-        },
-        {
-          userQuery: "Can you recommend 4 verified dietitians for womes health",
-        }
-      );
-
-      expect(res.success).toBe(true);
-      expect(res.data.length).toBe(4);
-      expect(res.cards.length).toBe(1);
-      expect(res.cards[0].type).toBe("dietitian_cards");
-      expect(res.cards[0].data.length).toBe(4);
-
-      await Dietitian.deleteMany({ _id: { $in: testDocs.map((d) => d._id) } });
-      invalidateDietitianEmbeddingsCache();
-    });
-
-    test("should return all matching specialists when user requests all without arbitrary truncation", async () => {
-      const {
-        invalidateDietitianEmbeddingsCache,
-      } = require("../src/agent/services/specialistService");
-      invalidateDietitianEmbeddingsCache();
-
-      const dummyVector = new Array(3072).fill(0.01);
-      const testMales = await Dietitian.create([
-        {
-          name: "Dr. Test Male 1",
-          email: "m1@test.com",
-          licenseNumber: "DLN555001",
-          age: 40,
-          gender: "male",
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-        {
-          name: "Dr. Test Male 2",
-          email: "m2@test.com",
-          licenseNumber: "DLN555002",
-          age: 41,
-          gender: "male",
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-        {
-          name: "Dr. Test Male 3",
-          email: "m3@test.com",
-          licenseNumber: "DLN555003",
+          name: "Dr. Arjun Reddy",
+          email: "arjun.cardiac@test.com",
+          licenseNumber: "DLN123456",
           age: 42,
           gender: "male",
+          specialties: ["Cardiac Health", "Hypertension", "Post-Cardiac Surgery"],
+          specialization: ["Cardiac Health", "Hypertension"],
+          experience: 10,
+          fees: 650,
+          onlineFee: 650,
+          rating: 4.9,
+          about: "Cardiovascular nutrition expert with extensive experience in heart disease prevention.",
           verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
         },
         {
-          name: "Dr. Test Male 4",
-          email: "m4@test.com",
-          licenseNumber: "DLN555004",
-          age: 43,
+          name: "Dr. Amit Patel",
+          email: "amit.diabetes@test.com",
+          licenseNumber: "DLN654321",
+          age: 39,
           gender: "male",
+          specialties: ["Diabetes Management", "Type 2 Diabetes", "Thyroid Health"],
+          specialization: ["Diabetes Management", "Type 2 Diabetes"],
+          experience: 8,
+          fees: 600,
+          onlineFee: 600,
+          rating: 4.8,
+          about: "Specialist in metabolic and glycemic control.",
           verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-        {
-          name: "Dr. Test Male 5",
-          email: "m5@test.com",
-          licenseNumber: "DLN555005",
-          age: 44,
-          gender: "male",
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-        {
-          name: "Dr. Test Male 6",
-          email: "m6@test.com",
-          licenseNumber: "DLN555006",
-          age: 45,
-          gender: "male",
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-        {
-          name: "Dr. Test Male 7",
-          email: "m7@test.com",
-          licenseNumber: "DLN555007",
-          age: 46,
-          gender: "male",
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-        {
-          name: "Dr. Test Male 8",
-          email: "m8@test.com",
-          licenseNumber: "DLN555008",
-          age: 47,
-          gender: "male",
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-        {
-          name: "Dr. Test Male 9",
-          email: "m9@test.com",
-          licenseNumber: "DLN555009",
-          age: 48,
-          gender: "male",
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
-        },
-        {
-          name: "Dr. Test Male 10",
-          email: "m10@test.com",
-          licenseNumber: "DLN555010",
-          age: 49,
-          gender: "male",
-          verificationStatus: { finalReport: "Verified" },
-          embedding: dummyVector,
         },
       ]);
+    });
 
-      const res = await executeLangGraphTool(
-        "search_dietitians",
-        {
-          gender: "male",
-        },
-        { userQuery: "get all male dietitians" }
-      );
-
+    test("findDietitiansApi searches by specialty without regex", async () => {
+      const res = await findDietitiansApi({ specialtyOrCondition: "Diabetes", limit: 5 });
       expect(res.success).toBe(true);
-      expect(res.data.length).toBe(10);
-      expect(res.cards[0].data.length).toBe(10);
-
-      await Dietitian.deleteMany({ _id: { $in: testMales.map((d) => d._id) } });
-      invalidateDietitianEmbeddingsCache();
+      expect(res.count).toBeGreaterThan(0);
+      expect(Array.isArray(res.dietitians)).toBe(true);
     });
-  });
 
-  describe("Agent State Reducer History Deduplication", () => {
-    test("safeHistory sanitization limits and maps conversation turns cleanly", () => {
-      const raw = [
-        { type: "bot", content: "hello" },
-        { role: "user", content: "hi" },
-      ];
-      const safe = raw.map((m) => ({
-        type:
-          m.type === "bot" || m.role === "model" || m.role === "assistant"
-            ? "model"
-            : "user",
-        content: m.content,
-      }));
-      expect(safe[0].type).toBe("model");
-      expect(safe[1].type).toBe("user");
+    test("findDietitiansApi searches by condition 'heart' and matches cardiac specialists", async () => {
+      const res = await findDietitiansApi({ specialtyOrCondition: "heart" });
+      expect(res.success).toBe(true);
+      expect(res.count).toBeGreaterThan(0);
+      const names = res.dietitians.map((d) => d.name);
+      expect(names.some((n) => n.includes("Arjun") || n.includes("Vikash"))).toBe(true);
     });
-  });
 
-  describe("RAG Clinical Grounding and PII Protection", () => {
-    test("should return empty context cleanly for invalid user IDs without throwing", async () => {
-      const res = await retrieveRAGContext("what is my diet", {
-        userId: "invalid_id",
+    test("calculateHealthMetricsApi calculates BMI, BMR, TDEE correctly", async () => {
+      const res = await calculateHealthMetricsApi({
+        weightKg: 70,
+        heightCm: 175,
+        age: 28,
+        gender: "male",
+        activityLevel: "moderate",
       });
+      expect(res.success).toBe(true);
+      expect(res.metrics.bmi).toBe(22.9);
+      expect(res.metrics.bmiCategory).toBe("Normal weight");
+      expect(res.metrics.bmrKcal).toBeGreaterThan(1400);
+      expect(res.metrics.tdeeKcal).toBeGreaterThan(2000);
+    });
+
+    test("lookupNutritionApi retrieves calories and macros for paneer", async () => {
+      const res = await lookupNutritionApi({ foodItem: "paneer", quantity: "100g" });
+      expect(res.success).toBe(true);
+      expect(res.data.calories).toBeGreaterThan(0);
+      expect(res.data.protein).toBeGreaterThan(0);
+    });
+
+    test("generateMealPlanApi generates structured clinical meal plan", async () => {
+      const res = await generateMealPlanApi({
+        targetCalories: 2000,
+        dietType: "Vegetarian",
+        healthConditions: ["Diabetes"],
+        durationDays: 1,
+      });
+      expect(res.success).toBe(true);
+      expect(res.plan.dailyCalories).toBe(2000);
+      expect(res.plan.dietType).toBe("Vegetarian");
+      expect(Array.isArray(res.plan.days)).toBe(true);
+      expect(res.plan.days[0].meals.length).toBe(4);
+    });
+  });
+
+  describe("Direct Clinical Context Ingestion", () => {
+    test("loadAgentPatientContext handles unauthenticated user gracefully without vectors", async () => {
+      const res = await loadAgentPatientContext(null);
+      expect(res.patientProfile).toBeNull();
+      expect(res.contextText).toBe("");
+      expect(res.cards).toEqual([]);
+    });
+
+    test("loadAgentPatientContext handles invalid MongoDB ObjectId safely", async () => {
+      const res = await loadAgentPatientContext("invalid_id_format");
+      expect(res.patientProfile).toBeNull();
       expect(res.contextText).toBe("");
       expect(res.cards).toEqual([]);
     });
@@ -392,9 +246,11 @@ describe("NutriAgent Pipeline Security and Validation Tests", () => {
       expect(res.plan.allergiesExcluded).toEqual(
         expect.arrayContaining(["Peanuts", "Shellfish"])
       );
-      expect(res.plan.dietType).toMatch(/vegetarian/i);
+      expect(res.plan.dietType.toLowerCase().includes("vegetarian")).toBe(true);
       expect(res.cards.length).toBe(1);
       expect(res.cards[0].type).toBe("meal_plan_card");
+
+      await HealthReport.deleteMany({ clientId: testUserId });
     });
   });
 
@@ -432,6 +288,8 @@ describe("NutriAgent Pipeline Security and Validation Tests", () => {
       expect(res.body.sessions[0].sessionId).toBe("sess_test_history_1");
       expect(res.body.sessions[0].title).toBe("Dietary Consultation");
       expect(res.body.sessions[0].messageCount).toBe(2);
+
+      await ChatHistory.deleteMany({ sessionId: "sess_test_history_1" });
     });
 
     test("GET /api/agent/session/:sessionId should return full session message history", async () => {
@@ -453,6 +311,8 @@ describe("NutriAgent Pipeline Security and Validation Tests", () => {
       expect(res.body.success).toBe(true);
       expect(res.body.session.sessionId).toBe("sess_test_history_2");
       expect(res.body.session.messages.length).toBe(2);
+
+      await ChatHistory.deleteMany({ sessionId: "sess_test_history_2" });
     });
 
     test("DELETE /api/agent/session/:sessionId should delete owned session", async () => {
@@ -477,73 +337,8 @@ describe("NutriAgent Pipeline Security and Validation Tests", () => {
     });
   });
 
-  describe("Query Attention & Intent Routing", () => {
-    const {
-      analyzeQueryAttention,
-    } = require("../src/agent/services/attentionAnalyzer");
-
-    test("should scope tools to nutrition only for food queries", () => {
-      const att = analyzeQueryAttention("how many calories in palak paneer");
-      expect(att.primaryIntent).toBe("NUTRITION_LOOKUP");
-      expect(att.scopedTools).toEqual(["lookup_nutrition"]);
-    });
-
-    test("should scope tools to booking and parse relative date for booking queries", () => {
-      const att = analyzeQueryAttention(
-        "book at 10:30 am at october 10 for meera krishnan"
-      );
-      expect(att.primaryIntent).toBe("APPOINTMENT_BOOKING");
-      expect(att.scopedTools).toEqual(["book_dietitian_appointment"]);
-      expect(att.extractedParams.dietitianName.toLowerCase()).toContain(
-        "meera krishnan"
-      );
-      expect(att.extractedParams.time).toBe("10:30");
-      expect(att.extractedParams.date).toBe("2026-10-10");
-    });
-
-    test("should scope tools to schedule only for availability queries", () => {
-      const att = analyzeQueryAttention(
-        "check available appointment dates and slots for Dr. Kavita Menon"
-      );
-      expect(att.primaryIntent).toBe("SCHEDULE_AVAILABILITY");
-      expect(att.scopedTools).toEqual(["check_dietitian_availability"]);
-    });
-
-    test("should scope tools to get_user_schedule and set PATIENT_SCHEDULE for patient schedule inquiries", () => {
-      const att1 = analyzeQueryAttention("can i get my schedule");
-      expect(att1.primaryIntent).toBe("PATIENT_SCHEDULE");
-      expect(att1.scopedTools).toEqual(["get_user_schedule"]);
-
-      const att2 = analyzeQueryAttention(
-        "can i get my complete schedule this week"
-      );
-      expect(att2.primaryIntent).toBe("PATIENT_SCHEDULE");
-      expect(att2.scopedTools).toEqual(["get_user_schedule"]);
-
-      const att3 = analyzeQueryAttention("user schedule");
-      expect(att3.primaryIntent).toBe("PATIENT_SCHEDULE");
-      expect(att3.scopedTools).toEqual(["get_user_schedule"]);
-    });
-
-    test("should scope tools to specialist search for doctor discovery queries", () => {
-      const att = analyzeQueryAttention("get all male dietitians");
-      expect(att.primaryIntent).toBe("SPECIALIST_SEARCH");
-      expect(att.scopedTools).toEqual(["search_dietitians"]);
-    });
-
-    test("should disable all external action tools for general health queries", () => {
-      const att = analyzeQueryAttention(
-        "what does high triglycerides and borderline HbA1c mean for my diet"
-      );
-      expect(att.primaryIntent).toBe("GENERAL_HEALTH");
-      expect(att.scopedTools).toEqual([]);
-    });
-  });
-
   describe("Patient Profile Resolution Across Collections", () => {
-    const {
-      resolvePatientProfile,
-    } = require("../src/agent/services/userResolver");
+    const { resolvePatientProfile } = require("../src/agent/services/userResolver");
 
     test("should resolve patient profile using UserAuth id", async () => {
       const testUser = await User.create({

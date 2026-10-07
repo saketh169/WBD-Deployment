@@ -14,26 +14,16 @@ import {
   Stethoscope,
 } from "lucide-react";
 
-const MealImageAvatar = ({ name, imageUrl }) => {
-  const [imgFailed, setImgFailed] = useState(false);
-  const initials =
-    (name || "Meal")
-      .replace(/[^a-zA-Z]/g, "")
-      .slice(0, 2)
-      .toUpperCase() || "ML";
-
-  if (imageUrl && !imgFailed) {
-    return (
-      <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-slate-200 bg-slate-100 shadow-2xs">
-        <img
-          src={imageUrl}
-          alt={name}
-          className="w-full h-full object-cover"
-          loading="lazy"
-          onError={() => setImgFailed(true)}
-        />
-      </div>
-    );
+const MealAvatar = ({ name }) => {
+  const clean = (name || "Meal").trim();
+  const words = clean.split(" ").filter(Boolean);
+  let initials = "ML";
+  if (words.length >= 2) {
+    initials = (words[0][0] + words[1][0]).toUpperCase();
+  } else if (clean.length >= 2) {
+    initials = clean.slice(0, 2).toUpperCase();
+  } else if (clean.length === 1) {
+    initials = clean.toUpperCase();
   }
 
   return (
@@ -284,7 +274,7 @@ export const MealPlanCard = ({ plan }) => {
                 className="p-3.5 flex items-start justify-between gap-3 cursor-pointer select-none"
               >
                 <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <MealImageAvatar name={meal.name} imageUrl={meal.imageUrl} />
+                  <MealAvatar name={meal.name} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md">
@@ -325,24 +315,6 @@ export const MealPlanCard = ({ plan }) => {
               {/* Expandable Recipe, Ingredients & Step-by-Step Instructions */}
               {isExpanded && (
                 <div className="px-4 pb-4 pt-1 border-t border-emerald-100 text-xs space-y-3">
-                  {/* AI Generated Food Image Banner */}
-                  {meal.imageUrl && (
-                    <div className="relative rounded-xl overflow-hidden border border-slate-200 h-44 w-full bg-slate-100 shadow-xs">
-                      <img
-                        src={meal.imageUrl}
-                        alt={meal.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          e.currentTarget.parentElement.style.display = "none";
-                        }}
-                      />
-                      <div className="absolute bottom-2 left-2 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-md font-medium flex items-center gap-1 border border-white/20">
-                        <Sparkles className="w-3 h-3 text-emerald-300" />
-                        Culinary Plating
-                      </div>
-                    </div>
-                  )}
 
                   {/* Macro breakdown pills */}
                   {(meal.proteinGrams || meal.carbsGrams || meal.fatsGrams) && (

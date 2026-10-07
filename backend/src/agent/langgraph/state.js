@@ -2,23 +2,17 @@ const { Annotation } = require("@langchain/langgraph");
 
 /**
  * AgentState definition for NutriAgent's LangGraph architecture.
- * Channels track conversational messages, clinical grounding context,
- * executed tool identifiers, UI artifact cards, and booking/payment details.
+ * Channels track conversational messages, patient clinical context,
+ * Gemini-identified operations, tool calls, tool results, and UI artifact cards.
  */
 const AgentState = Annotation.Root({
-  // Conversational messages history (uses latest validated history snapshot without duplication)
-  messages: Annotation({
-    reducer: (x, y) => (y && y.length > 0 ? y : x),
-    default: () => [],
-  }),
-
-  // Current patient input message
+  // Patient's natural-language input query
   userQuery: Annotation({
     reducer: (x, y) => y ?? x,
     default: () => "",
   }),
 
-  // Patient user ID for clinical record resolution
+  // Patient user ID for profile and record resolution
   userId: Annotation({
     reducer: (x, y) => y ?? x,
     default: () => null,
@@ -30,64 +24,88 @@ const AgentState = Annotation.Root({
     default: () => null,
   }),
 
-  // Verified clinical health profile (lab reports, biomarkers, allergies, dietitian notes)
+  // Conversational message history
+  messages: Annotation({
+    reducer: (x, y) => (y && y.length > 0 ? y : x),
+    default: () => [],
+  }),
+
+  // Optional attached clinical document
+  file: Annotation({
+    reducer: (x, y) => y ?? x,
+    default: () => null,
+  }),
+
+  // Verified clinical health profile loaded by agentContextLoader
   patientProfile: Annotation({
     reducer: (x, y) => y ?? x,
     default: () => null,
   }),
 
-  // Grounding context retrieved from specialist registry and clinical records
-  groundingContext: Annotation({
+  // Formatted clinical context string for LLM grounding
+  clinicalContextText: Annotation({
     reducer: (x, y) => y ?? x,
     default: () => "",
   }),
 
-  // Array of executed tool names across all nodes
-  toolsExecuted: Annotation({
-    reducer: (x, y) => Array.from(new Set([...(x || []), ...(y || [])])),
-    default: () => [],
+  // Identified operation and intent determined by Gemini
+  identifiedOperation: Annotation({
+    reducer: (x, y) => y ?? x,
+    default: () => null,
   }),
 
-  // Tool calls emitted by reasoning node
+  // Extracted parameters identified during understanding
+  requiredParameters: Annotation({
+    reducer: (x, y) => ({ ...(x || {}), ...(y || {}) }),
+    default: () => ({}),
+  }),
+
+  // Structured tool calls emitted by Gemini
   toolCalls: Annotation({
     reducer: (x, y) => y ?? x,
     default: () => [],
   }),
 
-  // Unprocessed text from LLM response
-  rawReply: Annotation({
-    reducer: (x, y) => y ?? x,
-    default: () => "",
-  }),
-
-  // Execution results from tool node
+  // Tool execution results from tool APIs
   toolResults: Annotation({
     reducer: (x, y) => y ?? x,
     default: () => [],
   }),
 
-  // Interactive UI cards to be rendered on the client
+  // Unique list of tool names executed across graph nodes
+  toolsExecuted: Annotation({
+    reducer: (x, y) => Array.from(new Set([...(x || []), ...(y || [])])),
+    default: () => [],
+  }),
+
+  // Interactive UI artifact cards for frontend rendering
   cards: Annotation({
     reducer: (x, y) => y ?? x,
     default: () => [],
   }),
 
-  // Active payment and checkout payload for consultation booking (resets each turn)
+  // Active Razorpay checkout details
   openPaymentDetails: Annotation({
     reducer: (x, y) => (y !== undefined ? y : null),
     default: () => null,
   }),
 
-  // Final synthesized response message for the patient
+  // Raw text emitted by Gemini
+  rawReply: Annotation({
+    reducer: (x, y) => y ?? x,
+    default: () => "",
+  }),
+
+  // Synthesized patient-facing reply text
   finalReply: Annotation({
     reducer: (x, y) => y ?? x,
     default: () => "",
   }),
 
-  // Optional uploaded clinical document (PDF/Image) for multimodal analysis
-  file: Annotation({
+  // Lifecycle execution status
+  executionStatus: Annotation({
     reducer: (x, y) => y ?? x,
-    default: () => null,
+    default: () => "idle",
   }),
 });
 

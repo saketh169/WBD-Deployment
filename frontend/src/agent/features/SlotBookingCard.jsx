@@ -37,7 +37,7 @@ export const SlotBookingCard = ({ data, onBookSlot }) => {
     dailySchedules.find((s) => s.date === selectedDate) ||
     dailySchedules[0] ||
     {};
-  const allSlots = activeDay.allSlots || [];
+  const allSlots = activeDay.allSlots || activeDay.allDaySlots || [];
   const freeSlots = activeDay.freeSlots || [];
   const userBookedSlots = activeDay.userBookedSlots || [];
   const bookedByOthers = activeDay.bookedByOthers || [];
@@ -230,9 +230,11 @@ export const SlotBookingCard = ({ data, onBookSlot }) => {
               <span
                 className={`text-[10px] font-bold uppercase ${isSelected ? "text-emerald-100" : "text-slate-400"}`}
               >
-                {day.day}
+                {day.day || day.dayOfWeek || ""}
               </span>
-              <span className="font-bold text-xs mt-0.5">{day.monthDay}</span>
+              <span className="font-bold text-xs mt-0.5">
+                {day.monthDay || day.displayDate || day.date}
+              </span>
               <span
                 className={`text-[9px] font-semibold mt-0.5 ${isSelected ? "text-emerald-100" : badgeColor}`}
               >
@@ -270,7 +272,7 @@ export const SlotBookingCard = ({ data, onBookSlot }) => {
             <Clock className="w-4 h-4 text-slate-400 shrink-0" />
             <span>
               {activeDay.isWorkingDay === false
-                ? `${dietitian.name} does not consult on ${activeDay.day}s. Please select an open date above.`
+                ? `${dietitian.name} does not consult on ${activeDay.day || activeDay.dayOfWeek || "this day"}s. Please select an open date above.`
                 : activeDay.pastSlots?.length > 0
                   ? "Consultation hours for today have ended. Please choose tomorrow or an upcoming date above to book."
                   : "No available slots on this day. Please select another date above."}
@@ -317,7 +319,7 @@ export const SlotBookingCard = ({ data, onBookSlot }) => {
         <Calendar className="w-4 h-4" />
         <span>
           {selectedSlot
-            ? `Proceed to Payment: ${formatSlotTime(selectedSlot)} (${activeDay.day}, ${activeDay.monthDay})`
+            ? `Proceed to Payment: ${formatSlotTime(selectedSlot)} (${activeDay.day || activeDay.dayOfWeek || ""}, ${activeDay.monthDay || activeDay.displayDate || activeDay.date})`
             : "Select a Slot to Continue"}
         </span>
       </button>

@@ -1,14 +1,14 @@
 const { StateGraph, START, END, MemorySaver } = require("@langchain/langgraph");
 const { AgentState } = require("./state");
 const {
-  groundingNode,
+  contextIngestionNode,
   reasoningNode,
   toolNode,
   synthesisNode,
 } = require("./nodes");
 
 /**
- * Conditional router: determines whether Gemini requested tool execution
+ * Conditional router: routes to tool_execution if Gemini identified tool actions, else straight to synthesis
  */
 function routeAfterReasoning(state) {
   if (state.toolCalls && state.toolCalls.length > 0) {
@@ -23,15 +23,15 @@ function routeAfterReasoning(state) {
 function createNutriAgentGraph() {
   const workflow = new StateGraph(AgentState);
 
-  // Add functional nodes
-  workflow.addNode("grounding", groundingNode);
+  // Add agent nodes
+  workflow.addNode("context_ingestion", contextIngestionNode);
   workflow.addNode("reasoning", reasoningNode);
   workflow.addNode("tool_execution", toolNode);
   workflow.addNode("synthesis", synthesisNode);
 
-  // Add deterministic & conditional edges
-  workflow.addEdge(START, "grounding");
-  workflow.addEdge("grounding", "reasoning");
+  // Define edges
+  workflow.addEdge(START, "context_ingestion");
+  workflow.addEdge("context_ingestion", "reasoning");
 
   workflow.addConditionalEdges("reasoning", routeAfterReasoning, {
     tool_execution: "tool_execution",

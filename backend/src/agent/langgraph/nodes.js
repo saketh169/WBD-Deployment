@@ -1,147 +1,49 @@
 const { GEMINI_MODEL, genAI } = require("../config");
-const { retrieveRAGContext } = require("../services/ragRetriever");
-const { analyzeQueryAttention } = require("../services/attentionAnalyzer");
+const { loadAgentPatientContext } = require("../services/agentContextLoader");
 const { getTemporalContext } = require("../utils/dateUtils");
+const { buildSystemPrompt, CLINICAL_SCOPE_RULES } = require("../rules");
 const {
-  TOOL_DEFINITIONS,
   GEMINI_TOOL_DECLARATIONS,
   executeLangGraphTool,
 } = require("./tools");
 
-const BASE_SYSTEM_PROMPT = `You are NutriAgent, a clinical health, nutrition, and wellness assistant for NutriConnect.
-
-Capabilities:
-- Finding verified dietitians across diverse clinical and wellness specialties.
-- Checking live dietitian schedule availability and booking consultations (09:00 AM to 08:00 PM).
-- Practical nutrition guidance, food calories/macros, and balanced meal planning.
-- Explaining lab test results, medical concepts, health conditions, symptoms, and human biology in clear, everyday language.
-
-Guidelines:
-- Simple, everyday language: The user is an everyday person, NOT a biologist or pharmacist. Do NOT use heavy biological or pharmacological jargon. Use plain words like "managing blood sugar", "heart health", "balanced meals", or "eating well".
-- Temporal Clarity: Today's date, current time, and tomorrow's date are provided in [TEMPORAL CONTEXT]. Use them accurately.
-- Patient Schedule vs Clinic Hours: When the patient asks about their own schedule, consultations, or appointments (e.g., "can i get my schedule", "my complete schedule this week"):
-  1. Retrieve and confirm upcoming appointments using their real-time verified bookings (dietitian name, date, time, and consultation type).
-  2. Let them know they can view their full interactive schedule and join meetings at /user/schedule.
-  3. Do NOT output general clinic operating hours or dietitian booking availability unless the patient specifically asks to book new appointments.
-- Conversational Continuity & Specialist Comparisons: When the patient asks a follow-up question referencing recently mentioned specialists or options (e.g. "who is best among them", "compare them", "which one should I pick"):
-  1. Ground your answer STRICTLY in the specialists presented in the immediate preceding assistant message.
-  2. Compare their specific qualifications, years of experience, ratings, and sub-specialties from that message.
-  3. Do NOT substitute them with or pivot back to historical supervising dietitians from [CLINICAL CONTEXT]. The patient is asking about the options just shown to them.
-- Clinical Records: Background lab records in [CLINICAL CONTEXT] provide personalized medical context. NEVER use existing lab records to override, dismiss, or ignore recent conversational context or dietitian searches.
-- Meal Plan Requests vs Historical Records: When generating meal plans, the patient's explicit preferences (e.g. diet type like Non-Vegetarian or Vegetarian, goals like Weight Gain or Hair Growth) MUST BE HONORED. Adapt the plan to their requested diet type and goal (e.g. incorporate lean poultry, fish, eggs and a caloric surplus of 2300-2600 kcal for non-vegetarian weight gain), while maintaining clinical safety (strictly exclude known allergies like peanuts/shellfish from their record). NEVER override or reject the user's explicit diet type or goal based on past assessments.
-- Zero Doctor Hallucinations & Specialty Integrity:
-  * NEVER fabricate, invent, or hallucinate doctor or dietitian names under ANY circumstances. You may ONLY reference verified specialists provided directly in Findings or context from the search_dietitians tool.
-  * NEVER invent, assume, or fabricate clinical specialties or expertise for any doctor. You may ONLY attribute the exact specialties listed in their verified profile (e.g. if Dr. Lisa Zhang's specialties are Skin & Hair, you must NEVER claim she specializes in mental health, cardiology, or gut health).
-  * If the patient asks why a doctor was recommended or what they specialize in, state their exact verified specialties from the database accurately and honestly.
-  * If no verified specialists in our registry match the requested specialty (e.g. mental health), state clearly and honestly that NutriConnect does not currently have verified dietitians specializing in that specific domain.
-- Domain Scope:
-  * In-Domain (Answer): Any question relating to health, medicine, human biology, medical conditions, symptoms, wellness, diet, nutrition, or NutriConnect services must be answered accurately, clearly, and helpfully in everyday language.
-  * Out-of-Domain (Refuse): If the user asks about an off-topic subject that is NOT related to health, medicine, biology, symptoms, diseases, diet, nutrition, or wellness (such as schools, education systems, coding, software, history, geography, finance, entertainment, sports, or general trivia), you MUST IMMEDIATELY DECLINE. Do NOT provide any definition, description, or explanation of the off-topic concept. Simply respond: "I am NutriAgent, specialized exclusively in clinical health, nutrition, and wellness on NutriConnect. I cannot assist with topics outside health and wellness. Please feel free to ask any health, diet, or nutrition questions!"
-- Zero Emojis: Strictly NO emojis in any response text.`;
-
-const CANDIDATE_MODELS = [GEMINI_MODEL];
-const OVERALL_TIMEOUT_MS = 38000;
+const CANDIDATE_MODELS = [
+  GEMINI_MODEL,
+  "gemini-3.5-flash",
+  "gemini-3.1-flash-lite",
+  "gemini-flash-latest",
+].filter((m, i, arr) => m && arr.indexOf(m) === i);
+const OVERALL_TIMEOUT_MS = 45000;
 const MAX_RETRIES_PER_MODEL = 2;
 
 /**
- * 1. Grounding Node: Retrieves verified clinical patient records
+ * 1. Context Ingestion Node: Loads authenticated patient context into LangGraph state.
+ * No vector embeddings, pure patient clinical profile loading.
  */
-async function groundingNode(state) {
-  const query = state.userQuery || "";
-  const context = { userId: state.userId };
-  const history = (state.messages || []).map((m) => ({
-    role: m.type === "user" ? "user" : "model",
-    content: m.content || "",
-  }));
-
-  const rag = await retrieveRAGContext(query, context, history);
+async function contextIngestionNode(state) {
+  const userId = state.userId || state.authUserId;
+  const contextData = await loadAgentPatientContext(userId);
 
   return {
-    groundingContext: rag.contextText || "",
-    cards: [...(state.cards || []), ...(rag.cards || [])],
+    patientProfile: contextData.patientProfile,
+    clinicalContextText: contextData.contextText,
+    cards: [...(state.cards || []), ...(contextData.cards || [])],
     toolsExecuted: Array.from(
-      new Set([...(state.toolsExecuted || []), ...(rag.toolsExecuted || [])])
+      new Set([...(state.toolsExecuted || []), ...(contextData.toolsExecuted || [])])
     ),
+    executionStatus: "context_loaded",
   };
 }
 
 /**
- * 2. Reasoning Node: Query Attention & Scoped Intent Routing
- * Protects against random tool selection by scoping tool declarations to detected intent.
+ * 2. Reasoning & Tool Selection Node:
+ * Uses Google Gemini to understand natural language variations, determine clinical operations,
+ * and emit structured tool calls without regex or keyword branching.
  */
 async function reasoningNode(state) {
   const userPrompt = state.userQuery?.trim() || "";
   const temporal = getTemporalContext();
-
-  // Attention analysis: classify intent and scope allowable tools
-  const attention = analyzeQueryAttention(userPrompt, state.messages);
-  const scopedToolNames = attention.scopedTools || [];
-
-  // Supply active tool declarations (or all tools if general/compound) to Gemini for genuine model reasoning
-  const activeToolDeclarations =
-    scopedToolNames.length > 0
-      ? scopedToolNames
-          .map((name) => TOOL_DEFINITIONS[name]?.declaration)
-          .filter(Boolean)
-      : GEMINI_TOOL_DECLARATIONS;
-
-  const temporalHeader = `[TEMPORAL CONTEXT]
-Today: ${temporal.todayStr} (${temporal.dayOfWeek})
-Current Local Time: ${temporal.currentTimeStr} IST
-Tomorrow: ${temporal.tomorrowStr} (${temporal.tomorrowDayOfWeek})
-Clinic Operating Hours: 09:00 AM to 08:00 PM daily. ${temporal.operatingHoursClosedToday ? "Today's clinic hours have concluded." : ""}`;
-
-  let scheduleGuidance = "";
-  if (attention.primaryIntent === "PATIENT_SCHEDULE") {
-    scheduleGuidance = `\n[PATIENT SCHEDULE GUIDANCE]
-The patient is inquiring about their personal appointments or schedule.
-- Use the available get_user_schedule tool to look up the patient's verified upcoming appointments and consultations directly.
-- Summarize any upcoming appointments (dietitian name, date, time, consultation type).
-- If no appointments are found, state that they currently have no consultations scheduled.
-- Mention that they can also manage or reschedule their appointments on their consultations page (/user/schedule).
-- Do NOT mention general clinic operating hours (09:00 AM to 08:00 PM) unless asked.`;
-  }
-
-  let compoundGuidance = "";
-  if (attention.primaryIntent === "COMPOUND") {
-    compoundGuidance = `\n[COMPOUND QUERY INSTRUCTION]
-The patient request contains multiple distinct questions or tasks. Call all relevant tools required to answer each part of the query completely.`;
-  }
-
-  let mealPlanGuidance = "";
-  if (attention.primaryIntent === "MEAL_PLAN") {
-    mealPlanGuidance = `\n[MEAL PLAN REASONING INSTRUCTION]
-The patient is requesting a personalized meal plan.
-- Call the generate_meal_plan tool with parameters matching the patient's query.
-- If the patient requests a specific diet type (e.g. Non-Vegetarian, Vegetarian, Vegan) or goal (e.g. Weight Gain, Hair Growth), you MUST honor their requested diet type and goal in your generate_meal_plan arguments.
-- For Weight Gain requests, set dailyCalories to an appropriate caloric surplus (e.g. 2300-2600 kcal) with high protein.
-- Safely exclude known clinical allergies from [CLINICAL CONTEXT] (e.g. peanuts, shellfish), but do NOT force historical vegetarian diets if the patient specifically requested non-vegetarian.`;
-  }
-
-  let generalHealthGuidance = "";
-  if (attention.primaryIntent === "GENERAL_HEALTH") {
-    generalHealthGuidance = `\n[DOMAIN SCOPE INSTRUCTION]
-Evaluate the query:
-- If about health, human biology, medical conditions (e.g. tumor), symptoms, diet, nutrition, or wellness: Answer helpfully in plain, everyday language.
-- If completely unrelated to health or wellness (e.g. schools, coding, history, trivia): Do NOT define or answer the off-topic concept. Politely decline to answer and invite them to ask a health, diet, or nutrition question.`;
-  }
-
-  let nutritionGuidance = "";
-  if (attention.primaryIntent === "NUTRITION_LOOKUP") {
-    nutritionGuidance = `\n[NUTRITION LOOKUP INSTRUCTION]
-The patient is inquiring about calories, protein, carbs, fat, or nutrients in a food item.
-- You MUST call the lookup_nutrition tool with the food item and quantity so the system can verify nutritional facts and render the interactive Nutrition Card.
-- Do NOT answer with plain text alone without calling lookup_nutrition. Always invoke lookup_nutrition.`;
-  }
-
-  const promptWithContext = `${temporalHeader}
-${scheduleGuidance}
-${compoundGuidance}
-${mealPlanGuidance}
-${nutritionGuidance}
-${generalHealthGuidance}
-${state.groundingContext ? `[CLINICAL CONTEXT]\n${state.groundingContext}\n\n` : ""}[PATIENT QUERY]
-${userPrompt}`;
+  const systemInstruction = buildSystemPrompt(temporal, state.clinicalContextText);
 
   const chatHistory = (state.messages || [])
     .filter((m) => m.content)
@@ -156,7 +58,11 @@ ${userPrompt}`;
 
   const messageParts = [];
   if (state.file?.base64 && state.file?.type) {
-    const cleanBase64 = state.file.base64.replace(/^data:[^;]+;base64,/, "");
+    const commaIdx = state.file.base64.indexOf(",");
+    const cleanBase64 =
+      commaIdx !== -1
+        ? state.file.base64.substring(commaIdx + 1)
+        : state.file.base64;
     messageParts.push({
       inlineData: {
         mimeType: state.file.type,
@@ -164,7 +70,7 @@ ${userPrompt}`;
       },
     });
   }
-  messageParts.push({ text: promptWithContext });
+  messageParts.push({ text: userPrompt });
 
   const startTime = Date.now();
   let selectedResponse = null;
@@ -180,15 +86,9 @@ ${userPrompt}`;
       try {
         const modelOptions = {
           model: modelName,
-          systemInstruction: BASE_SYSTEM_PROMPT,
+          systemInstruction,
+          tools: [{ functionDeclarations: GEMINI_TOOL_DECLARATIONS }],
         };
-
-        // Scoped tool attention: only supply tools relevant to detected intent
-        if (activeToolDeclarations.length > 0) {
-          modelOptions.tools = [
-            { functionDeclarations: activeToolDeclarations },
-          ];
-        }
 
         const model = genAI.getGenerativeModel(modelOptions, {
           timeout: 22000,
@@ -207,7 +107,7 @@ ${userPrompt}`;
         break;
       } catch (err) {
         console.warn(
-          `[ReasoningNode] ${modelName} attempt ${attempts} warning:`,
+          `[reasoningNode] ${modelName} attempt ${attempts} warning:`,
           err.status || err.message
         );
         const isTransient =
@@ -227,41 +127,17 @@ ${userPrompt}`;
       "The consultation service is temporarily experiencing high demand. Please try your request again in a moment.";
   }
 
-  // Ensure nutrition lookup tool is always executed when user inquires about food facts so card is always attached
-  if (toolCalls.length === 0 && attention.primaryIntent === "NUTRITION_LOOKUP") {
-    const cleanQuery = userPrompt
-      .replace(
-        /\b(?:how\s+much|how\s+many|what\s+are\s+the|tell\s+me|show\s+me|can\s+you\s+give|nutritional\s+value|nutritional\s+facts|calories?|protein|carbs?|carbohydrates?|fat|macros?|in|of|grams?|g|kcal|are|is|a|an)\b/gi,
-        " "
-      )
-      .replace(/[^\w\s-]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    const qtyMatch = userPrompt.match(
-      /\b(\d+(?:\.\d+)?\s*(?:g|grams?|kg|oz|cups?|bowls?|pieces?|slices?))\b/i
-    );
-    const quantity = qtyMatch ? qtyMatch[1] : undefined;
-    const foodItem = cleanQuery || userPrompt;
-
-    if (foodItem && foodItem.length >= 2) {
-      toolCalls = [
-        {
-          name: "lookup_nutrition",
-          args: { foodItem, quantity },
-        },
-      ];
-    }
-  }
-
   return {
     toolCalls,
     rawReply: rawText,
+    executionStatus: toolCalls.length > 0 ? "tool_pending" : "synthesized",
   };
 }
 
 /**
- * 3. Tool Node: Executes tools concurrently and aggregates cards
+ * 3. Tool Execution Node:
+ * Sequentially or concurrently executes all tool calls emitted by Gemini,
+ * aggregating tool results, UI cards, and payment checkout details.
  */
 async function toolNode(state) {
   const toolCalls = state.toolCalls || [];
@@ -321,11 +197,27 @@ async function toolNode(state) {
     cards,
     openPaymentDetails,
     toolResults,
+    executionStatus: "tools_completed",
   };
 }
 
 /**
- * 4. Synthesis Node: Synthesizes everyday human response
+ * Normalizes markdown bold formatting produced by Gemini.
+ * ZERO custom mappings, ZERO if-else trees.
+ */
+function boldKeyPoints(text) {
+  if (!text || typeof text !== "string") return text || "";
+  let res = text;
+  while (res.includes("****")) {
+    res = res.split("****").join("**");
+  }
+  return res;
+}
+
+/**
+ * 4. Clinical Synthesis Node:
+ * Synthesizes tool outputs and patient inquiry into a clear, everyday clinical answer.
+ * Strictly enforces zero emojis, no doctor hallucinations, and no repetitive text recipes when cards exist.
  */
 async function synthesisNode(state) {
   const userPrompt = state.userQuery || "";
@@ -339,62 +231,68 @@ async function synthesisNode(state) {
       const toolSummary = toolResults
         .map((tr) => {
           let line = `${tr.tool}: ${tr.message || "completed"}`;
-          if (tr.tool === "search_dietitians" && Array.isArray(tr.data)) {
-            line += `\nMatched verified specialists (${tr.data.length}): ${tr.data.map((d) => `${d.name} [${d.gender || "unspecified"}]`).join(", ")}`;
+          const list = tr.data || tr.dietitians;
+          if (tr.tool === "search_dietitians" && Array.isArray(list)) {
+            line += `\nMatched verified specialists (${list.length}):\n` +
+              list.map((d) => `- ${d.name} | Fee: ₹${d.fee} | Rating: ${d.rating} | Experience: ${d.experience} | Specialties: ${Array.isArray(d.specialties) ? d.specialties.join(", ") : d.specialties} | Location: ${d.location}`).join("\n");
+          }
+          if (tr.tool === "lookup_nutrition" && tr.data) {
+            line += `\nNutrition Details: ${tr.data.foodName} (${tr.data.servingSize?.amount}${tr.data.servingSize?.unit}): ${tr.data.calories} kcal, Protein: ${tr.data.protein}g, Carbs: ${tr.data.carbs}g, Fat: ${tr.data.fat}g, Fiber: ${tr.data.fiber}g`;
+          }
+          if (tr.tool === "calculate_health_metrics" && tr.data) {
+            line += `\nHealth Metrics Details: BMI: ${tr.data.bmi} (${tr.data.bmiCategory}), Weight: ${tr.data.weightKg}kg, Height: ${tr.data.heightCm}cm, BMR: ${tr.data.bmrKcal} kcal, Maintenance TDEE: ${tr.data.tdeeKcal} kcal, Source: ${tr.data.dataSource}`;
+          }
+          if (tr.tool === "check_dietitian_availability" && tr.data) {
+            line += `\nDoctor: ${tr.data.dietitian?.name} | Fee: ₹${tr.data.dietitian?.fee} | Available Slots: ${tr.data.availableSlots?.join(", ") || "None today"}`;
+          }
+          if (tr.tool === "get_user_schedule" && (tr.data?.consultations || tr.data?.bookings || Array.isArray(tr.data))) {
+            const bookings = tr.data?.consultations || tr.data?.bookings || (Array.isArray(tr.data) ? tr.data : []);
+            line += `\nUpcoming Appointments (${bookings.length}):\n` +
+              bookings.map((b) => `- ${b.dietitianName} on ${b.date} at ${b.time} (${b.consultationType})`).join("\n");
           }
           return line;
         })
-        .join("\n");
-
-      const hasMealPlan =
-        cards.some((c) => c.type === "meal_plan_card") ||
-        toolResults.some((tr) => tr.tool === "generate_meal_plan");
-      const mealPlanCard = cards.find((c) => c.type === "meal_plan_card")?.data;
-      let targetMacroSummary = "";
-      if (mealPlanCard) {
-        targetMacroSummary = `\nPlan Targets to mention in message: Diet Type: ${mealPlanCard.dietType || "Tailored"}, Focus: ${mealPlanCard.healthFocus || "Wellness"}, Daily Calories: ${mealPlanCard.dailyCalories} kcal, Protein: ${mealPlanCard.macroTargets?.proteinGrams}g, Carbs: ${mealPlanCard.macroTargets?.carbsGrams}g, Healthy Fats: ${mealPlanCard.macroTargets?.fatsGrams}g, Hydration: ${mealPlanCard.hydrationTargetLiters} L/day, Allergies Excluded: ${mealPlanCard.allergiesExcluded?.join(", ")}.`;
-      }
-      const mealPlanGuidance = hasMealPlan
-        ? `\n- An interactive meal plan card is already displayed below. DO NOT list or repeat the individual dishes, recipes, or daily menus (no Breakfast, Lunch, Snacks, Dinner) in your message text.${targetMacroSummary} Instead, clearly summarize the tailored nutritional targets (total calories, protein, carb, fat grams, hydration target, and allergy exclusions) and explain how this customized plan supports the patient's requested goals (${mealPlanCard?.healthFocus || "wellness"}). Then invite the patient to explore the detailed meals and recipes inside the interactive card below.`
-        : "";
-
-      const isPatientSchedule =
-        /\b(my\s+schedule|my\s+appointments?|my\s+bookings?|my\s+consultations?|my\s+complete\s+schedule|user\s+schedule)\b/i.test(
-          userPrompt
-        ) || toolResults.some((tr) => tr.tool === "get_user_schedule");
-      const scheduleGuidance = isPatientSchedule
-        ? `\n- The patient is inquiring about their appointments or schedule. Summarize their verified upcoming consultations clearly (doctor name, date, time, and type). An interactive schedule card is displayed below with details. Mention that they can also manage appointments or join video meetings on their consultations page (/user/schedule). Do NOT output clinic operating hours (09:00 AM to 08:00 PM) unless asked.`
-        : "";
+        .join("\n\n");
 
       const synthPrompt = `Patient Query: "${userPrompt}"
 Date Context: Today is ${temporal.todayStr} (${temporal.dayOfWeek}), ${temporal.currentTimeStr} IST.
 Findings:
 ${toolSummary}
-${state.groundingContext ? `Context:\n${state.groundingContext}\n` : ""}
+${state.clinicalContextText ? `Patient Clinical Context:\n${state.clinicalContextText}\n` : ""}
 
-Synthesize a clear, friendly, and helpful response:
-- Use simple, everyday words that anyone can understand. Do NOT use biological or pharmacological jargon.
-- If today's consultation hours have passed, explain simply that today's hours have concluded, and invite them to check open dates starting tomorrow in the card. Never call it "fully booked" when slots merely passed.
+Synthesize a clear, empathetic, and helpful clinical response for the patient:
+- Directly answer the patient's specific inquiry using the exact verified data in Findings.
+- Stay strictly focused on what the patient asked for. Do NOT introduce unrelated topics (such as consultation hours, clinic schedules, or doctor booking) unless the patient asked about scheduling or appointments.
+- For food nutrition or calorie inquiries, provide ONLY the direct nutritional breakdown of the requested food item clearly and concisely. Do NOT lecture the patient or bring up their personal lab biomarkers (such as HbA1c, LDL, or cholesterol), medical diagnoses, or historical health reports unless the patient explicitly asked about their health condition or report.
+- When interactive cards exist (such as meal plans, booking calendars, or schedules), provide a concise summary with key targets and invite the patient to explore the card below rather than repeating whole recipe menus or raw slot lists.
+- When asked about pricing or fees, compare or state the exact verified fees from Findings. Never claim that pricing details are untracked when fees are provided in Findings.
 - Accurately state how many verified dietitians were found based on Findings. If 0 specialists were found, state clearly that no verified dietitians specialize in the requested topic in our registry.
-- Do NOT fabricate or hallucinate doctor names or specialties. Only reference the exact verified names and their actual listed specialties provided in Findings. NEVER invent or claim that a doctor specializes in a topic not explicitly listed in their profile. If asked why a doctor was recommended, accurately state their real listed specialties from Findings.${mealPlanGuidance}${scheduleGuidance}
-- Strict ZERO emojis.`;
+- Do NOT fabricate or hallucinate doctor names or specialties. Use only verified facts from Findings.
+- Format all key points, specialist names, fees, calorie targets, macros, and metrics in markdown bold (**...**) so they stand out clearly for the patient.
+- Strict ZERO emojis in all output text.`;
 
-      const synthModel = genAI.getGenerativeModel(
-        {
-          model: GEMINI_MODEL,
-          systemInstruction: BASE_SYSTEM_PROMPT,
-          generationConfig: { maxOutputTokens: 800, temperature: 0.2 },
-        },
-        { timeout: 16000 }
-      );
+      for (const mName of CANDIDATE_MODELS) {
+        try {
+          const synthModel = genAI.getGenerativeModel(
+            {
+              model: mName,
+              generationConfig: { maxOutputTokens: 2500, temperature: 0.2 },
+            },
+            { timeout: 25000 }
+          );
 
-      const synthRes = await synthModel.generateContent(synthPrompt);
-      const text = synthRes.response.text();
-      if (text && text.trim()) {
-        replyText = text.trim();
+          const synthRes = await synthModel.generateContent(synthPrompt);
+          const text = synthRes.response.text();
+          if (text && text.trim()) {
+            replyText = text.trim();
+            break;
+          }
+        } catch (mErr) {
+          console.warn(`[synthesisNode] ${mName} attempt warning:`, mErr.status || mErr.message);
+        }
       }
     } catch (err) {
-      console.warn("[synthesisNode] Synthesis fallback:", err.message);
+      console.warn("[synthesisNode] Synthesis fallback warning:", err.message);
     }
   }
 
@@ -407,23 +305,33 @@ Synthesize a clear, friendly, and helpful response:
           "Here are the consultation details based on your request.";
   }
 
-  // Strict Zero Emojis enforcement
-  replyText = replyText
-    .replace(
-      /[\u{1F300}-\u{1FAD6}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}]/gu,
-      ""
-    )
+  // Strict Zero Emojis enforcement using Unicode code points without regex
+  replyText = Array.from(replyText)
+    .filter((char) => {
+      const cp = char.codePointAt(0);
+      return (
+        !(cp >= 0x1f300 && cp <= 0x1faff) &&
+        !(cp >= 0x2600 && cp <= 0x27bf) &&
+        !(cp >= 0xfe00 && cp <= 0xfe0f)
+      );
+    })
+    .join("")
     .trim();
+
+  // Bold key points in message rather than plain
+  replyText = boldKeyPoints(replyText);
 
   return {
     finalReply: replyText,
     cards,
+    executionStatus: "completed",
   };
 }
 
 module.exports = {
-  groundingNode,
+  contextIngestionNode,
   reasoningNode,
   toolNode,
   synthesisNode,
+  boldKeyPoints,
 };

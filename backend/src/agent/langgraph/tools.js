@@ -21,6 +21,10 @@ const {
   generateMealPlanDeclaration,
   executeGenerateMealPlan,
 } = require("../tools/mealPlan.tool");
+const {
+  calculateHealthMetricsDeclaration,
+  executeCalculateHealthMetrics,
+} = require("../tools/healthMetrics.tool");
 
 /**
  * Zod input schemas for validation and type-safety within LangGraph
@@ -64,9 +68,7 @@ const GetUserScheduleSchema = z
     date: z
       .string()
       .optional()
-      .describe(
-        "Optional date to filter (e.g. today, tomorrow, or YYYY-MM-DD)"
-      ),
+      .describe("Optional date to filter (e.g. today, tomorrow, or YYYY-MM-DD)"),
   })
   .passthrough();
 
@@ -99,28 +101,25 @@ const GenerateMealPlanSchema = z
   .object({
     planName: z.string().optional().describe("Clinical title of the plan"),
     dietType: z.string().optional().describe("Dietary classification"),
-    daysCount: z.number().optional().describe("Total number of days"),
     durationDays: z.number().optional().describe("Duration in days"),
     dailyCalories: z.number().optional().describe("Target daily calories"),
     macroTargets: z.any().optional().describe("Macronutrient targets"),
-    hydrationTargetLiters: z
-      .number()
-      .optional()
-      .describe("Daily water target in liters"),
     healthFocus: z.string().optional().describe("Clinical focus"),
     allergiesExcluded: z
       .array(z.string())
       .optional()
       .describe("Excluded allergens"),
-    supervisingDietitian: z
-      .string()
-      .optional()
-      .describe("Supervising dietitian name"),
     clinicalNotes: z.string().optional().describe("Clinical notes"),
-    days: z
-      .array(z.any())
-      .optional()
-      .describe("Scheduled days with planned meals"),
+  })
+  .passthrough();
+
+const CalculateHealthMetricsSchema = z
+  .object({
+    weightKg: z.number().describe("Patient weight in kg"),
+    heightCm: z.number().describe("Patient height in cm"),
+    age: z.number().optional().describe("Patient age in years"),
+    gender: z.string().optional().describe("Biological gender"),
+    activityLevel: z.string().optional().describe("Activity level"),
   })
   .passthrough();
 
@@ -164,6 +163,12 @@ const TOOL_DEFINITIONS = {
     schema: GenerateMealPlanSchema,
     execute: executeGenerateMealPlan,
   },
+  calculate_health_metrics: {
+    name: "calculate_health_metrics",
+    declaration: calculateHealthMetricsDeclaration,
+    schema: CalculateHealthMetricsSchema,
+    execute: executeCalculateHealthMetrics,
+  },
 };
 
 /**
@@ -176,6 +181,7 @@ const GEMINI_TOOL_DECLARATIONS = [
   bookDietitianAppointmentDeclaration,
   lookupNutritionDeclaration,
   generateMealPlanDeclaration,
+  calculateHealthMetricsDeclaration,
 ];
 
 /**
@@ -191,7 +197,6 @@ async function executeLangGraphTool(toolName, args, context = {}) {
     };
   }
 
-  // Parse and validate arguments against Zod schema without discarding nested structures
   const parsedArgs = toolDef.schema
     ? toolDef.schema.safeParse(args || {})
     : { success: false };
@@ -199,101 +204,25 @@ async function executeLangGraphTool(toolName, args, context = {}) {
     ? { ...(args || {}), ...parsedArgs.data }
     : args || {};
 
-  // Execute specialist registry discovery
-  if (toolName === "search_dietitians") {
-    const res = await toolDef.execute(cleanArgs, context);
-    const cards = [];
-    if (res.success && res.dietitians?.length) {
-      cards.push({ type: "dietitian_cards", data: res.dietitians });
-    }
+  try {
+    const result = await toolDef.execute(cleanArgs, context);
     return {
-      success: res.success,
-      message: res.message,
-      data: res.dietitians,
-      cards,
+      ...result,
+      success: result?.success !== false,
+      message: result?.message || `Executed ${toolName} successfully.`,
+      cards: Array.isArray(result?.cards) ? result.cards : [],
+      data: result?.data || result?.dietitians || result?.plan || null,
+      openPayment: result?.openPayment || false,
+      paymentDetails: result?.paymentDetails || null,
+    };
+  } catch (err) {
+    console.error(`[executeLangGraphTool Error in ${toolName}]:`, err);
+    return {
+      success: false,
+      message: `Execution of ${toolName} encountered an error: ${err.message}`,
+      cards: [],
     };
   }
-
-  // Inspect specialist 7-day schedule and slot availability
-  if (toolName === "check_dietitian_availability") {
-    const res = await toolDef.execute(cleanArgs, context);
-    const cards = [];
-    if (res.success && res.card) {
-      cards.push(res.card);
-    }
-    return {
-      success: res.success,
-      message: res.message,
-      data: res.dailySchedules,
-      cards,
-    };
-  }
-
-  // Inspect logged-in patient consultation schedule and appointments
-  if (toolName === "get_user_schedule") {
-    const res = await toolDef.execute(cleanArgs, context);
-    const cards = [];
-    if (res.success && res.card) {
-      cards.push(res.card);
-    }
-    return {
-      success: res.success,
-      message: res.message,
-      data: res.bookings,
-      cards,
-    };
-  }
-
-  // Validate and initiate consultation appointment booking
-  if (toolName === "book_dietitian_appointment") {
-    const res = await toolDef.execute(cleanArgs, context);
-    const cards = [];
-    if (res.success && res.booking) {
-      cards.push({ type: "booking_confirmation_card", data: res.booking });
-    }
-    return {
-      success: res.success,
-      message: res.message,
-      openPayment: res.openPayment || false,
-      paymentDetails: res.paymentDetails || null,
-      cards,
-    };
-  }
-
-  // Query USDA FoodData Central for macronutrients
-  if (toolName === "lookup_nutrition") {
-    const res = await toolDef.execute(cleanArgs);
-    const cards = [];
-    if (res.success && res.card) {
-      cards.push(res.card);
-    }
-    return {
-      success: res.success,
-      message: res.message,
-      nutrients: res.nutrients,
-      data: res.nutrients,
-      cards,
-    };
-  }
-
-  // Formulate tailored clinical meal plan with culinary recipes
-  if (toolName === "generate_meal_plan") {
-    const res = await toolDef.execute(cleanArgs, context);
-    const cards = [];
-    if (res.success && res.plan) {
-      cards.push({ type: "meal_plan_card", data: res.plan });
-    }
-    return {
-      success: res.success,
-      message:
-        res.message ||
-        `Generated clinical meal plan (${res.plan?.planName || ""}).`,
-      plan: res.plan,
-      cards,
-    };
-  }
-
-  return { success: false, message: "Unrecognized tool execution.", cards: [] };
 }
 
 module.exports = {

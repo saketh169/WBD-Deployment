@@ -11,6 +11,8 @@ const {
 } = require("../middlewares/authMiddleware");
 const { handleMCPSSE, handleMCPMessages } = require("./mcp/mcp-transport-sse");
 
+const { to24Hour, parseRelativeDate } = require("./utils/dateUtils");
+
 /**
  * Generate a clean, readable consultation session title from first user query
  */
@@ -19,7 +21,7 @@ function generateSessionTitle(prompt, file) {
     return `Doc: ${file.name.substring(0, 30)}`;
   }
   if (!prompt || typeof prompt !== "string") return "Consultation Session";
-  const clean = prompt.replace(/\s+/g, " ").trim();
+  const clean = prompt.split(" ").filter(Boolean).join(" ").trim();
   if (clean.length <= 42) return clean;
   return clean.substring(0, 39) + "...";
 }
@@ -72,46 +74,31 @@ function getUserQueryFilter(req, storageUserId) {
   return objectIds.length > 0 ? { $in: objectIds } : null;
 }
 
-const to24 = (t) => {
-  const m = String(t || "")
-    .trim()
-    .match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
-  if (!m) return (t || "").slice(0, 5);
-  let h = +m[1];
-  if (/PM/i.test(m[3]) && h < 12) h += 12;
-  if (/AM/i.test(m[3]) && h === 12) h = 0;
-  return `${h < 10 ? "0" : ""}${h}:${m[2]}`;
-};
+const to24 = (t) => to24Hour(t);
 
-const toDate = (d) => {
-  if (!d) return "";
-  const m = String(d).match(/^(\d{4}-\d{2}-\d{2})/);
-  return m
-    ? m[1]
-    : isNaN(new Date(d).getTime())
-      ? ""
-      : new Date(d).toLocaleDateString("en-CA");
-};
+const toDate = (d) => parseRelativeDate(d) || (d ? String(d).split("T")[0] : "");
+
+function cleanDoctorName(name) {
+  return (name || "")
+    .toLowerCase()
+    .replace("dr.", "")
+    .replace("dr", "")
+    .trim();
+}
 
 function applyBookingToMessageCards(messages, b) {
   if (!Array.isArray(messages) || !b) return messages;
-  const bt = to24(b.time),
-    bd = toDate(b.date);
+  const bt = to24(b.time);
+  const bd = toDate(b.date);
   if (!bt || !bd) return messages;
-  const bDoc = (b.dietitianName || "")
-    .replace(/^Dr\.?\s*/i, "")
-    .trim()
-    .toLowerCase();
+  const bDoc = cleanDoctorName(b.dietitianName);
   const bId = String(b.dietitianId || "");
 
   messages.forEach((msg) => {
     if (!Array.isArray(msg.cards)) return;
     msg.cards.forEach((c) => {
       if (c.type !== "slot_booking_card" || !c.data?.dailySchedules) return;
-      const cDoc = (c.data.dietitian?.name || "")
-        .replace(/^Dr\.?\s*/i, "")
-        .trim()
-        .toLowerCase();
+      const cDoc = cleanDoctorName(c.data.dietitian?.name);
       const cId = String(c.data.dietitian?.id || c.data.dietitian?._id || "");
       const isSame =
         (bId && cId && bId === cId) ||

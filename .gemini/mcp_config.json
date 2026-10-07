@@ -1,10 +1,8 @@
 {
-  "mcpServers": {
+  "servers": {
     "nutriconnect-local": {
-      "serverUrl": "http://localhost:5000/api/agent/mcp/sse"
-    },
-    "nutriconnect-cloud": {
-      "serverUrl": "https://nutri-connect-wbd-backend.vercel.app/api/agent/mcp/sse"
-    }
+      "type": "sse",
+      "url": "http://localhost:5000/api/agent/mcp/sse"
+    } 
   }
-}
+} 

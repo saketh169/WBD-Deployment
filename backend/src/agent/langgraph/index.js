@@ -2,11 +2,10 @@ const { nutriAgentGraph } = require("./graph");
 
 /**
  * High-level invocation entrypoint for the NutriAgent LangGraph workflow.
- * Compatible with existing controller and frontend interfaces.
  *
  * @param {string} userMessage - Patient prompt
  * @param {Array} history - Previous messages
- * @param {Object} context - Session and patient metadata (e.g. userId, sessionId)
+ * @param {Object} context - Session and patient metadata (e.g. userId, sessionId, authUserId)
  * @param {Object|null} file - Optional uploaded lab report or medical document
  * @returns {Promise<Object>} { reply, toolsExecuted, cards, openPaymentDetails }
  */
@@ -47,11 +46,15 @@ async function runLangGraphAgent(
     cards,
     toolsExecuted,
     openPaymentDetails: null,
-    groundingContext: "",
+    clinicalContextText: "",
+    patientProfile: null,
+    identifiedOperation: null,
+    requiredParameters: {},
     toolCalls: [],
     toolResults: [],
     rawReply: "",
     finalReply: "",
+    executionStatus: "idle",
     file: file || null,
   };
 
