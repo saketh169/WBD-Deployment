@@ -921,14 +921,25 @@ exports.getBookedSlots = async (req, res) => {
         date: queryDate.toISOString().split('T')[0]
       }).select("time");
 
+      const patientIdStrings = [];
+      if (validUserId) {
+        patientIdStrings.push(validUserId.toString());
+        try {
+          const { resolvePatientProfile } = require("../agent/services/userResolver");
+          const { userId: rUId, authId: rAId } = await resolvePatientProfile(validUserId);
+          if (rUId) patientIdStrings.push(rUId.toString());
+          if (rAId) patientIdStrings.push(rAId.toString());
+        } catch {}
+      }
+
       // Find all confirmed/completed bookings for this user on this date (with any dietitian)
       let userBookings = [];
-      if (validUserId) {
+      if (patientIdStrings.length > 0) {
         userBookings = await Booking.find({
-          userId: validUserId,
+          userId: { $in: patientIdStrings },
           date: { $gte: queryDate, $lt: nextDay },
           status: { $in: ["confirmed", "completed"] },
-        }).select("time dietitianName");
+        }).select("time dietitianName dietitianId");
       }
 
       // Separate user's bookings from others' bookings for this dietitian
@@ -944,15 +955,20 @@ exports.getBookedSlots = async (req, res) => {
           userName: booking.username,
           bookingId: booking._id
         });
-        if (validUserId && booking.userId.toString() === validUserId) {
+        if (booking.userId && patientIdStrings.includes(booking.userId.toString())) {
           userBookingsWithThisDietitian.push(booking.time);
         } else {
           bookedSlots.push(booking.time);
         }
       });
 
-      // Get times when user has any bookings (conflicts with booking multiple dietitians at same time)
-      const userConflictingTimes = userBookings.map(booking => booking.time);
+      // Get times when user has bookings with other dietitians
+      const userConflictingTimes = userBookings
+        .filter((b) => !b.dietitianId || b.dietitianId.toString() !== dietitianId.toString())
+        .map((booking) => ({
+          time: booking.time,
+          dietitianName: booking.dietitianName || "another specialist"
+        }));
 
       // Return all booked slots for this dietitian (including user's own)
       const allBookedSlots = [...bookedSlots, ...userBookingsWithThisDietitian];

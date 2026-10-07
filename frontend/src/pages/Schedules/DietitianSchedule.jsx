@@ -41,14 +41,59 @@ const generateWeekDates = () => {
     return weekDates;
 };
 
-const convertTimeTo24Hour = (time) => {
-    if (!time) return 0;
-    const [timePart, modifier] = time.split(' ');
-    if (!timePart || !modifier) return 0;
-    let [hours, minutes] = timePart.split(':').map(Number);
-    if (hours === 12 && modifier.toUpperCase() === 'AM') hours = 0;
-    else if (modifier.toUpperCase() === 'PM' && hours !== 12) hours += 12;
-    return hours * 100 + minutes;
+/**
+ * Converts any time string (e.g. "10:30 AM", "2:00 PM", "14:00", "09:30") to minutes from midnight (0-1439) for sorting.
+ */
+const convertTimeToMinutes = (time) => {
+    if (!time || typeof time !== 'string') return 0;
+    const clean = time.trim();
+    const upper = clean.toUpperCase();
+    const isPM = upper.includes('PM');
+    const isAM = upper.includes('AM');
+
+    const cleanTime = clean.replace(/[^0-9:]/g, '');
+    const parts = cleanTime.split(':');
+    if (parts.length < 2) return 0;
+
+    let hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1], 10);
+    if (isNaN(hours) || isNaN(minutes)) return 0;
+
+    if (isPM) {
+        if (hours < 12) hours += 12;
+    } else if (isAM) {
+        if (hours === 12) hours = 0;
+    }
+
+    return hours * 60 + minutes;
+};
+
+/**
+ * Formats time string consistently to 12-hour AM/PM format (e.g., "10:30 AM", "2:00 PM").
+ */
+const formatTimeWithAmPm = (time) => {
+    if (!time || typeof time !== 'string') return time || 'N/A';
+    const clean = time.trim();
+    const upper = clean.toUpperCase();
+    const isPM = upper.includes('PM');
+    const isAM = upper.includes('AM');
+
+    const cleanTime = clean.replace(/[^0-9:]/g, '');
+    const parts = cleanTime.split(':');
+    if (parts.length < 2) return clean;
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1];
+    if (isNaN(hours)) return clean;
+
+    if (isPM) {
+        if (hours < 12) hours += 12;
+    } else if (isAM) {
+        if (hours === 12) hours = 0;
+    }
+
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes} ${ampm}`;
 };
 
 const categorizeSlotsForDate = (slotsArr, date) => {
@@ -203,7 +248,7 @@ const DietitianSchedule = () => {
 
     const sortedAppointments = useMemo(() => {
         const dayAppts = bookingsByDay[activeDayInfo?.fullDateKey] || [];
-        return dayAppts.sort((a, b) => convertTimeTo24Hour(a.time) - convertTimeTo24Hour(b.time));
+        return [...dayAppts].sort((a, b) => convertTimeToMinutes(a.time) - convertTimeToMinutes(b.time));
     }, [activeDayInfo, bookingsByDay]);
 
     useEffect(() => { if (activeDayInfo?.fullDateKey) setDrawerDate(activeDayInfo.fullDateKey); }, [activeDayInfo]);
@@ -393,7 +438,7 @@ const DietitianSchedule = () => {
                             <div key={appt.bookingId || idx} className={`appointment-card bg-white rounded-2xl shadow-lg p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-t-4 transform ${getCardBorder(appt.consultationType)}`}>
                                 <div className="appointment-time text-sm text-gray-600 mb-3 flex items-center gap-2">
                                     <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center"><i className="fas fa-clock text-emerald-600 text-xs" /></div>
-                                    <span className="font-bold text-gray-800 text-base">{appt.time || 'N/A'}</span>
+                                    <span className="font-bold text-gray-800 text-base">{formatTimeWithAmPm(appt.time)}</span>
                                     <span className={`px-3 py-1 ml-auto text-xs font-bold rounded-full uppercase tracking-tight ${appt.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : appt.status === 'cancelled' ? 'bg-red-100 text-red-700' : appt.status === 'completed' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>{appt.status || appt.consultationType}</span>
                                 </div>
                                 <h3 className="appointment-title text-lg font-bold text-gray-800 mb-2 truncate">{appt.clientName || 'Booked Client'}</h3>

@@ -52,25 +52,33 @@ async function executeBookDietitianAppointment(args = {}, context = {}) {
       };
     }
 
-    const card = {
-      type: "booking_confirmation_card",
-      data: {
-        bookingId: result.bookingId,
-        dietitianName: result.dietitianName,
-        date: result.date,
-        time: result.time,
-        consultationType: result.consultationType,
-        fee: result.fee,
-        paymentStatus: result.paymentStatus,
-        paymentDetails: result.paymentDetails,
-      },
-    };
+    const isPaymentCompleted =
+      typeof result.paymentStatus === "string" &&
+      result.paymentStatus.toLowerCase() === "completed";
+
+    const cards = [];
+    if (isPaymentCompleted) {
+      cards.push({
+        type: "booking_confirmation_card",
+        data: {
+          bookingId: result.bookingId,
+          dietitianName: result.dietitianName,
+          date: result.date,
+          time: result.time,
+          consultationType: result.consultationType,
+          fee: result.fee,
+          paymentStatus: result.paymentStatus,
+          paymentDetails: result.paymentDetails,
+        },
+      });
+    }
 
     return {
       success: true,
       data: result,
-      cards: [card],
+      cards,
       openPayment: true,
+      openPaymentDetails: result.paymentDetails,
       paymentDetails: result.paymentDetails,
       message: result.message,
     };

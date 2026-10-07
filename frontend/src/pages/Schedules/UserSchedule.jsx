@@ -45,23 +45,58 @@ const generateWeekDates = () => {
 };
 
 /**
- * Converts time (e.g., "10:30 AM") to 24-hour minutes for sorting.
+ * Converts any time string (e.g. "10:30 AM", "2:00 PM", "14:00", "09:30") to minutes from midnight (0-1439) for sorting.
  */
-const convertTimeTo24Hour = (time) => {
-    if (!time) return 0;
-    const [timePart, modifier] = time.split(' ');
-    if (!timePart || !modifier) return 0;
-    let [hours, minutes] = timePart.split(':').map(Number);
+const convertTimeToMinutes = (time) => {
+    if (!time || typeof time !== 'string') return 0;
+    const clean = time.trim();
+    const upper = clean.toUpperCase();
+    const isPM = upper.includes('PM');
+    const isAM = upper.includes('AM');
 
-    if (hours === 12) {
-        hours = 0;
+    const cleanTime = clean.replace(/[^0-9:]/g, '');
+    const parts = cleanTime.split(':');
+    if (parts.length < 2) return 0;
+
+    let hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1], 10);
+    if (isNaN(hours) || isNaN(minutes)) return 0;
+
+    if (isPM) {
+        if (hours < 12) hours += 12;
+    } else if (isAM) {
+        if (hours === 12) hours = 0;
     }
 
-    if (modifier.toUpperCase() === 'PM') {
-        hours += 12;
+    return hours * 60 + minutes;
+};
+
+/**
+ * Formats time string consistently to 12-hour AM/PM format (e.g., "10:30 AM", "2:00 PM").
+ */
+const formatTimeWithAmPm = (time) => {
+    if (!time || typeof time !== 'string') return time || 'N/A';
+    const clean = time.trim();
+    const upper = clean.toUpperCase();
+    const isPM = upper.includes('PM');
+    const isAM = upper.includes('AM');
+
+    const cleanTime = clean.replace(/[^0-9:]/g, '');
+    const parts = cleanTime.split(':');
+    if (parts.length < 2) return clean;
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1];
+    if (isNaN(hours)) return clean;
+
+    if (isPM) {
+        if (hours < 12) hours += 12;
+    } else if (isAM) {
+        if (hours === 12) hours = 0;
     }
 
-    return hours * 100 + minutes + minutes; // Using minutes for precise sorting
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes} ${ampm}`;
 };
 
 
@@ -145,7 +180,7 @@ const UserSchedule = () => {
     // Sort appointments by time
     const sortedAppointments = useMemo(() => {
         const dayAppointments = bookingsByDay[activeDayInfo?.fullDateKey] || [];
-        return dayAppointments.sort((a, b) => convertTimeTo24Hour(a.time) - convertTimeTo24Hour(b.time));
+        return [...dayAppointments].sort((a, b) => convertTimeToMinutes(a.time) - convertTimeToMinutes(b.time));
     }, [activeDayInfo, bookingsByDay]);
 
     const handleGenerateMeetingLink = async (bookingId, consultationType) => {
@@ -330,7 +365,7 @@ const UserSchedule = () => {
                                         <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
                                             <i className="fas fa-clock text-emerald-600 text-xs"></i>
                                         </div>
-                                        <span className="font-bold text-gray-800 text-base">{appointment.time || 'N/A'}</span>
+                                        <span className="font-bold text-gray-800 text-base">{formatTimeWithAmPm(appointment.time)}</span>
                                         <span className={`px-3 py-1 ml-auto text-xs font-bold rounded-full uppercase tracking-tight whitespace-nowrap ${
                                             appointment.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : 
                                             appointment.status === 'cancelled' ? 'bg-red-100 text-red-700' :

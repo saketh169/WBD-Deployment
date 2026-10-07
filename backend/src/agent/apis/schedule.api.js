@@ -3,6 +3,7 @@ const { Dietitian } = require("../../models/userModel");
 const Booking = require("../../models/bookingModel");
 const { BlockedSlot } = require("../../models/bookingModel");
 const { parseRelativeDate, getTemporalContext } = require("../utils/dateUtils");
+const { resolvePatientProfile } = require("../services/userResolver");
 const { defaultApiClient } = require("./apiClient");
 
 function generateStandardSlots() {
@@ -31,6 +32,19 @@ async function getDietitianSlotsData(dietitianId, dietitianName, userId = null) 
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + 8);
 
+  const patientIds = [];
+  if (userId) {
+    const { userId: resolvedUserObjId, authId: resolvedAuthObjId } =
+      await resolvePatientProfile(userId);
+    if (resolvedUserObjId) patientIds.push(resolvedUserObjId);
+    if (resolvedAuthObjId) patientIds.push(resolvedAuthObjId);
+    if (mongoose.isValidObjectId(userId)) {
+      const uObj = new mongoose.Types.ObjectId(userId);
+      if (!patientIds.some((p) => p.equals(uObj))) patientIds.push(uObj);
+    }
+  }
+  const patientIdStrs = patientIds.map((id) => id.toString());
+
   const [dietitianDoc, dietitianBookings, blockedDocs, userBookings] =
     await Promise.all([
       Dietitian.findById(dietitianId).select("availability").lean(),
@@ -50,13 +64,13 @@ async function getDietitianSlotsData(dietitianId, dietitianName, userId = null) 
       })
         .select("date time")
         .lean(),
-      userId && mongoose.isValidObjectId(userId)
+      patientIds.length > 0
         ? Booking.find({
-            userId,
+            userId: { $in: patientIds },
             date: { $gte: startDate, $lt: endDate },
             status: { $in: ["confirmed", "completed", "pending"] },
           })
-            .select("date time dietitianName")
+            .select("date time dietitianName dietitianId")
             .lean()
         : [],
     ]);
@@ -78,6 +92,7 @@ async function getDietitianSlotsData(dietitianId, dietitianName, userId = null) 
 
   const userConflictByDate = new Map();
   userBookings.forEach((b) => {
+    if (b.dietitianId && String(b.dietitianId) === String(dietitianId)) return;
     const d = formatLocalDate(new Date(b.date));
     if (!userConflictByDate.has(d)) userConflictByDate.set(d, new Map());
     userConflictByDate.get(d).set(b.time, b.dietitianName || "Another Specialist");
@@ -107,11 +122,6 @@ async function getDietitianSlotsData(dietitianId, dietitianName, userId = null) 
         : true;
 
     let daySlots = standardSlots;
-    const startHour = dietitianDoc?.availability?.workingHours?.start;
-    const endHour = dietitianDoc?.availability?.workingHours?.end;
-    if (startHour && endHour) {
-      daySlots = standardSlots.filter((s) => s >= startHour && s <= endHour);
-    }
 
     const dayBookings = bookedByDate.get(dateStr) || [];
     const blockedSet = blockedByDate.get(dateStr) || new Set();
@@ -123,7 +133,8 @@ async function getDietitianSlotsData(dietitianId, dietitianName, userId = null) 
 
     dayBookings.forEach((b) => {
       allBooked.add(b.time);
-      if (userId && b.userId && String(b.userId) === String(userId)) {
+      const isThisUser = b.userId && patientIdStrs.includes(String(b.userId));
+      if (isThisUser) {
         userBookedSlots.push(b.time);
       } else {
         bookedByOthers.push(b.time);
@@ -162,7 +173,9 @@ async function getDietitianSlotsData(dietitianId, dietitianName, userId = null) 
       freeSlots,
       userBookedSlots,
       userConflictSlots,
-      bookedSlots: bookedByOthers,
+      bookedSlots: Array.from(allBooked),
+      bookedByOthers,
+      blockedSlots: Array.from(blockedSet),
       pastSlots,
       allSlots: daySlots,
       allDaySlots: daySlots,

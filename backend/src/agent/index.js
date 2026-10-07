@@ -48,8 +48,9 @@ async function resolveStorageUserId(userId) {
 
 function getAuthUserId(req) {
   return (
-    req.user?.userId ||
     req.user?.roleId ||
+    req.body?.userId ||
+    req.user?.userId ||
     req.user?.id ||
     req.user?._id ||
     null

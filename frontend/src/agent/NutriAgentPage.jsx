@@ -84,10 +84,9 @@ function applyBookingToCards(cards, b, currentUserId) {
     .trim()
     .toLowerCase();
   const bId = String(b.dietitianId || "");
-  const isCurrentUser =
-    currentUserId && b.userId
-      ? String(b.userId) === String(currentUserId)
-      : true;
+  const isCurrentUser = Boolean(
+    currentUserId && b.userId && String(b.userId) === String(currentUserId)
+  );
 
   return cards.map((c) => {
     if (c.type !== "slot_booking_card" || !c.data?.dailySchedules) return c;
@@ -255,6 +254,11 @@ export function NutriAgentPage() {
     const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000", {
       withCredentials: true,
     });
+
+    const currentUserId = user?.id || user?._id || user?.roleId || null;
+    if (currentUserId) {
+      socket.emit("register_dietitian", currentUserId);
+    }
 
     const handleLiveBookingUpdate = (booking) => {
       if (!booking) return;

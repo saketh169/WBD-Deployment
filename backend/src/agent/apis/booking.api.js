@@ -223,6 +223,20 @@ async function bookDietitianAppointmentApi({
     });
     await newBooking.save();
 
+    try {
+      const { invalidateCache } = require("../../utils/redisClient");
+      invalidateCache(`slots:${doc._id}:*`);
+      invalidateCache(`slots:*`);
+      invalidateCache(`bookings:*`);
+    } catch {}
+
+    try {
+      const { notifyDietitianNewBooking } = require("../../utils/socket");
+      notifyDietitianNewBooking(doc._id.toString(), newBooking);
+    } catch (socketErr) {
+      console.error("[Socket Notification Warning]:", socketErr);
+    }
+
     const bookingIdStr = bookingId.toString();
 
     let razorpayOrderId = null;
@@ -240,10 +254,17 @@ async function bookDietitianAppointmentApi({
     const paymentDetails = {
       orderId: razorpayOrderId || `order_${bookingIdStr}`,
       bookingId: bookingIdStr,
+      dietitianId: doc._id?.toString(),
       amount: fee,
+      fee: fee,
       currency: "INR",
       keyId: paymentKeyId,
       dietitianName: docDisplayName,
+      dietitianEmail: doc.email || "dietitian@test.com",
+      dietitianSpecialization:
+        (Array.isArray(doc.specialties) ? doc.specialties[0] : doc.specialties) ||
+        doc.specialization ||
+        "Dietitian",
       clientName: userRecord.name || "Patient",
       clientEmail: userRecord.email || "",
       date: cleanDate,

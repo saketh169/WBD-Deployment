@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Calendar,
   Clock,
@@ -6,6 +6,9 @@ import {
   ShieldCheck,
   AlertCircle,
 } from "lucide-react";
+import { useAuthContext } from "../../hooks/useAuthContext";
+import axiosInstance from "../../utils/axiosInstance";
+import { io } from "socket.io-client";
 
 const to24 = (t) => {
   const m = String(t || "")
@@ -24,31 +27,118 @@ const formatSlotTime = (t) => {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
 };
 
+const DEFAULT_ALL_DAY_SLOTS = [
+  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+  "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
+  "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
+  "18:00", "18:30", "19:00", "19:30", "20:00"
+];
+
 export const SlotBookingCard = ({ data, onBookSlot }) => {
   const dietitian = data?.dietitian || data?.doctor;
   const dailySchedules = data?.dailySchedules || [];
   if (!data || !dietitian) return null;
 
+  const { user } = useAuthContext();
+  const dietitianId = dietitian?.id || dietitian?._id;
+  const currentUserId = user?.id || user?._id || user?.roleId || "";
+  const getStoredUserId = () => {
+    try {
+      const authUser = JSON.parse(localStorage.getItem("authUser_user") || "{}");
+      return authUser.id || authUser._id || authUser.roleId || "";
+    } catch {
+      return "";
+    }
+  };
+  const effectiveUserId = currentUserId || getStoredUserId();
+
   const initialDate = data.selectedDate || dailySchedules[0]?.date || "";
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [liveSlotData, setLiveSlotData] = useState(null);
+
+  const fetchLiveSlots = useCallback(async () => {
+    if (!dietitianId || !selectedDate) return;
+    try {
+      const res = await axiosInstance.get(
+        `/api/bookings/dietitian/${dietitianId}/booked-slots?date=${selectedDate}&userId=${effectiveUserId}`
+      );
+      const dataPayload = res.data?.data || res.data;
+      if (dataPayload) {
+        setLiveSlotData(dataPayload);
+      }
+    } catch {
+      // Non-fatal fallback
+    }
+  }, [dietitianId, selectedDate, effectiveUserId]);
+
+  useEffect(() => {
+    setLiveSlotData(null);
+  }, [selectedDate]);
+
+  useEffect(() => {
+    fetchLiveSlots();
+  }, [fetchLiveSlots]);
+
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000", {
+      withCredentials: true,
+    });
+    const onLiveUpdate = () => {
+      fetchLiveSlots();
+    };
+    socket.on("new_booking", onLiveUpdate);
+    socket.on("booking_updated", onLiveUpdate);
+
+    return () => {
+      socket.off("new_booking", onLiveUpdate);
+      socket.off("booking_updated", onLiveUpdate);
+      socket.disconnect();
+    };
+  }, [fetchLiveSlots]);
 
   const activeDay =
     dailySchedules.find((s) => s.date === selectedDate) ||
     dailySchedules[0] ||
     {};
-  const allSlots = activeDay.allSlots || activeDay.allDaySlots || [];
-  const freeSlots = activeDay.freeSlots || [];
-  const userBookedSlots = activeDay.userBookedSlots || [];
-  const bookedByOthers = activeDay.bookedByOthers || [];
-  const bookedSlots = activeDay.bookedSlots || [];
-  const blockedSlots = activeDay.blockedSlots || [];
-  const pastSlots = activeDay.pastSlots || [];
-  const userConflictSlots = activeDay.userConflictSlots || [];
 
+  const userBookedSlots = liveSlotData?.userBookings
+    ? liveSlotData.userBookings
+    : activeDay.userBookedSlots || [];
+
+  const bookedSlots = liveSlotData?.bookedSlots
+    ? liveSlotData.bookedSlots
+    : activeDay.bookedSlots || [];
+
+  const blockedSlots = liveSlotData?.blockedSlots
+    ? liveSlotData.blockedSlots
+    : activeDay.blockedSlots || [];
+
+  const userConflictSlots = liveSlotData?.userConflictingTimes
+    ? liveSlotData.userConflictingTimes
+    : activeDay.userConflictSlots || [];
+
+  const bookedByOthers = bookedSlots.filter(
+    (b) => !userBookedSlots.some((u) => to24(u) === to24(b))
+  );
+
+  const pastSlots = activeDay.pastSlots || [];
   const pastSet = new Set((pastSlots || []).map(to24));
-  // Filter out past slots completely, matching the dietitian page logic
+  const rawSlots = activeDay.allSlots || activeDay.allDaySlots || [];
+  const allSlots =
+    rawSlots.length >= 23
+      ? rawSlots
+      : DEFAULT_ALL_DAY_SLOTS;
   const displaySlots = allSlots.filter((s) => !pastSet.has(to24(s)));
+
+  const freeSlots = displaySlots.filter((slot) => {
+    const norm = to24(slot);
+    return (
+      !bookedSlots.some((b) => to24(b) === norm) &&
+      !blockedSlots.some((b) => to24(b) === norm) &&
+      !userConflictSlots.some((c) => to24(c.time || c) === norm)
+    );
+  });
 
   const sections = [
     {
@@ -114,10 +204,10 @@ export const SlotBookingCard = ({ data, onBookSlot }) => {
       title = `${formatSlotTime(slot)} - Booked by you`;
     } else if (conflict) {
       cls +=
-        "bg-yellow-100 text-yellow-900 border-yellow-300 cursor-not-allowed opacity-90";
-      badge = "Conflict";
-      badgeCls = "text-[9px] font-bold uppercase mt-0.5 text-yellow-800";
-      title = `Booked with ${conflict.dietitianName || "another doctor"}`;
+        "bg-orange-100 text-orange-800 border-orange-300 cursor-not-allowed opacity-90";
+      badge = "Busy";
+      badgeCls = "text-[9px] font-bold uppercase mt-0.5 text-orange-700";
+      title = `Busy - Booked with ${conflict.dietitianName || "another specialist"}`;
     } else if (isOtherBooked || !isAvailable) {
       cls +=
         "bg-orange-100 text-orange-800 border-orange-300 cursor-not-allowed opacity-90";
@@ -195,7 +285,9 @@ export const SlotBookingCard = ({ data, onBookSlot }) => {
       <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
         {dailySchedules.map((day) => {
           const isSelected = day.date === selectedDate;
-          const openCount = day.freeSlotsCount ?? day.freeSlots?.length ?? 0;
+          const openCount = isSelected
+            ? freeSlots.length
+            : (day.freeSlotsCount ?? day.freeSlots?.length ?? 0);
           const isOff = day.isWorkingDay === false;
           const isEnded =
             !isOff && (day.pastSlots?.length || 0) > 0 && openCount === 0;
@@ -253,11 +345,11 @@ export const SlotBookingCard = ({ data, onBookSlot }) => {
         </span>
         <span className="flex items-center gap-1 text-rose-700 font-semibold">
           <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Booked (
-          {userBookedSlots.length + userConflictSlots.length})
+          {userBookedSlots.length})
         </span>
         <span className="flex items-center gap-1 text-orange-700 font-semibold">
           <span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Busy (
-          {bookedByOthers.length})
+          {bookedByOthers.length + userConflictSlots.length})
         </span>
         <span className="flex items-center gap-1 text-amber-700 font-semibold">
           <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Blocked (
