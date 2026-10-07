@@ -122,7 +122,6 @@ const swaggerOptions = {
       { name: 'Bookings', description: 'Consultation bookings' },
       { name: 'Payments', description: 'Payment processing' },
       { name: 'NutriAgent', description: 'NutriAgent AI clinical assistant and MCP server' },
-      { name: 'Chatbot', description: 'Chatbot interaction' },
       { name: 'Blog', description: 'Blog management' },
       { name: 'Meal Plans', description: 'Meal plan operations' },
       { name: 'Health Reports', description: 'Health report management' },
