@@ -54,74 +54,93 @@ router.get('/', optionalAuthenticateJWT, async (req, res) => {
     const maxLimit = Math.max(1, Math.min(parseInt(limit, 10) || 3, 20));
     const safeRegex = new RegExp(escapeRegex(trimmed), 'i');
 
+    const userRole = req.user?.role || null;
+    const isAuthenticated = !!req.user;
+
+    // 1. Dietitians: available to authenticated users, organizations, employees, and admins
+    const shouldFetchDietitians = isAuthenticated && ['user', 'admin', 'organization', 'employee'].includes(userRole);
+    // 2. Blogs: public and universally accessible
+    const shouldFetchBlogs = true;
+    // 3. Clients/Users: restricted to dietitians and admins
+    const shouldFetchUsers = isAuthenticated && ['dietitian', 'admin'].includes(userRole);
+    // 4. Meal Plans: available to clients, dietitians, and admins
+    const shouldFetchMealPlans = isAuthenticated && ['user', 'dietitian', 'admin'].includes(userRole);
+    // 5. Organizations: restricted to admins
+    const shouldFetchOrganizations = isAuthenticated && userRole === 'admin';
+
     const [dietitians, blogs, users, mealplans, organizations] = await Promise.all([
-      // 1. Dietitians: verified & active
-      Dietitian.find({
-        isDeleted: { $ne: true },
-        $or: [
-          { name: safeRegex },
-          { specializationDomain: safeRegex },
-          { specialization: safeRegex },
-          { specialties: safeRegex },
-          { location: safeRegex },
-          { about: safeRegex }
-        ]
-      })
-        .select('_id name specializationDomain profileImage location about')
-        .limit(maxLimit)
-        .lean(),
+      shouldFetchDietitians
+        ? Dietitian.find({
+            isDeleted: { $ne: true },
+            $or: [
+              { name: safeRegex },
+              { specializationDomain: safeRegex },
+              { specialization: safeRegex },
+              { specialties: safeRegex },
+              { location: safeRegex },
+              { about: safeRegex }
+            ]
+          })
+            .select('_id name specializationDomain profileImage location about')
+            .limit(maxLimit)
+            .lean()
+        : Promise.resolve([]),
 
-      // 2. Blogs: active/published
-      Blog.find({
-        isPublished: true,
-        status: { $ne: 'removed' },
-        $or: [
-          { title: safeRegex },
-          { excerpt: safeRegex },
-          { category: safeRegex },
-          { tags: safeRegex }
-        ]
-      })
-        .select('_id title excerpt category views featuredImage')
-        .limit(maxLimit)
-        .lean(),
+      shouldFetchBlogs
+        ? Blog.find({
+            isPublished: true,
+            status: { $ne: 'removed' },
+            $or: [
+              { title: safeRegex },
+              { excerpt: safeRegex },
+              { category: safeRegex },
+              { tags: safeRegex }
+            ]
+          })
+            .select('_id title excerpt category views featuredImage')
+            .limit(maxLimit)
+            .lean()
+        : Promise.resolve([]),
 
-      // 3. Clients / Users
-      User.find({
-        isDeleted: { $ne: true },
-        $or: [
-          { name: safeRegex },
-          { address: safeRegex }
-        ]
-      })
-        .select('_id name profileImage address')
-        .limit(maxLimit)
-        .lean(),
+      shouldFetchUsers
+        ? User.find({
+            isDeleted: { $ne: true },
+            $or: [
+              { name: safeRegex },
+              { address: safeRegex }
+            ]
+          })
+            .select('_id name profileImage address')
+            .limit(maxLimit)
+            .lean()
+        : Promise.resolve([]),
 
-      // 4. Meal Plans
-      MealPlan.find({
-        $or: [
-          { planName: safeRegex },
-          { dietType: safeRegex },
-          { notes: safeRegex }
-        ]
-      })
-        .select('_id planName dietType calories notes imageUrl')
-        .limit(maxLimit)
-        .lean(),
+      shouldFetchMealPlans
+        ? MealPlan.find({
+            $or: [
+              { planName: safeRegex },
+              { dietType: safeRegex },
+              { notes: safeRegex }
+            ]
+          })
+            .select('_id planName dietType calories notes imageUrl')
+            .limit(maxLimit)
+            .lean()
+        : Promise.resolve([]),
 
-      // 5. Organizations
-      Organization.find({
-        isDeleted: { $ne: true },
-        $or: [
-          { name: safeRegex },
-          { organizationType: safeRegex },
-          { address: safeRegex }
-        ]
-      })
-        .select('_id name organizationType address profileImage')
-        .limit(maxLimit)
-        .lean()
+      shouldFetchOrganizations
+        ? Organization.find({
+            isDeleted: { $ne: true },
+            $or: [
+              { name: safeRegex },
+              { organizationType: safeRegex },
+              { address: safeRegex }
+            ]
+          })
+            .select('_id name organizationType address profileImage')
+            .limit(maxLimit)
+            .lean()
+        : Promise.resolve([])
     ]);
 
     // Map fields cleanly for frontend consumers
