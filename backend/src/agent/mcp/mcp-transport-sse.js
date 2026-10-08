@@ -11,7 +11,12 @@ const activeTransports = new Map();
  */
 async function handleMCPSSE(req, res) {
   try {
-    const userId = req.user?.id || req.user?._id || null;
+    const userId =
+      req.user?.roleId ||
+      req.user?.userId ||
+      req.user?.id ||
+      req.user?._id ||
+      null;
     const server = createNutriConnectMCPServer(userId);
     const transport = new SSEServerTransport("/api/agent/mcp/messages", res);
     const sessionId = transport.sessionId;

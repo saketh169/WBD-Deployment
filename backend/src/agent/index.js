@@ -49,7 +49,6 @@ async function resolveStorageUserId(userId) {
 function getAuthUserId(req) {
   return (
     req.user?.roleId ||
-    req.body?.userId ||
     req.user?.userId ||
     req.user?.id ||
     req.user?._id ||
@@ -293,9 +292,7 @@ router.post("/chat", authenticateJWT, async (req, res) => {
     const userFilter = getUserQueryFilter(req, storageUserId);
     let sessionDoc = await ChatHistory.findOne({
       sessionId: currentSessionId,
-      ...(userFilter
-        ? { $or: [{ userId: userFilter }, { userId: null }] }
-        : {}),
+      ...(userFilter ? { userId: userFilter } : { userId: null }),
     });
     if (!sessionDoc) {
       const generatedTitle = generateSessionTitle(message?.trim(), file);
@@ -426,7 +423,7 @@ router.get("/session/:sessionId", authenticateJWT, async (req, res) => {
 
     const query = { sessionId };
     if (userFilter) {
-      query.$or = [{ userId: userFilter }, { userId: null }];
+      query.userId = userFilter;
     }
 
     const session = await ChatHistory.findOne(query).lean();
@@ -530,7 +527,7 @@ router.post(
 
       const query = { sessionId };
       if (userFilter) {
-        query.$or = [{ userId: userFilter }, { userId: null }];
+        query.userId = userFilter;
       }
 
       let sessionDoc = await ChatHistory.findOne(query);
@@ -612,7 +609,7 @@ router.delete("/session/:sessionId", authenticateJWT, async (req, res) => {
 
     const query = { sessionId };
     if (userFilter) {
-      query.$or = [{ userId: userFilter }, { userId: null }];
+      query.userId = userFilter;
     }
 
     const result = await ChatHistory.findOneAndDelete(query);
