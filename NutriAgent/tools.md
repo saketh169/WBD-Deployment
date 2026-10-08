@@ -9,7 +9,7 @@ This document provides a complete technical reference for all 7 clinical tools a
 Every tool follows a clean two-layer structure:
 1. **LangGraph / MCP Tool Layer (`backend/src/agent/tools/` & `backend/src/agent/langgraph/tools.js`)**:
    - Declares the Gemini function calling schema (`parameters`).
-   - Validates inputs using Zod schemas (`safeParse`).
+   - Validates inputs using strict Zod schemas (`safeParse` with `.strict()`) and typed validation for nested macro targets (`macroTargets`).
    - Resolves patient identity and extracts relevant clinical grounding from MongoDB.
    - Formats return payloads containing both structured raw data for the LLM and pre-built interactive UI cards for the frontend.
 2. **Dedicated Tool API Layer (`backend/src/agent/apis/`)**:
@@ -23,13 +23,13 @@ Every tool follows a clean two-layer structure:
 
 | Tool Name | Underlying API | Auth Required | UI Card Produced | Primary Purpose |
 | :--- | :--- | :---: | :--- | :--- |
-| `search_dietitians` | `apis/specialist.api.js` | No | `dietitian_cards` | Search verified specialists by condition, specialty, name, gender, or fee. |
-| `check_dietitian_availability` | `apis/schedule.api.js` | No | `slot_booking_card` | Retrieve open/busy consultation slots (09:00 AM to 08:00 PM) for any doctor. |
-| `get_user_schedule` | `apis/schedule.api.js` | Yes | `user_schedule_card` | Retrieve the authenticated patient's upcoming booked appointments. |
-| `book_dietitian_appointment` | `apis/booking.api.js` | Yes | `booking_confirmation_card` | Reserve a consultation slot with conflict detection. |
-| `lookup_nutrition` | `apis/nutrition.api.js` | No | `nutrition_card` | Query macronutrients and calories via USDA FoodData Central. |
-| `generate_meal_plan` | `apis/mealPlan.api.js` | No (Grounded if Auth) | `meal_plan_card` | Generate structured multi-meal daily clinical diet plans. |
-| `get_user_health_reports` | `tools/healthReports.tool.js` | Yes | `patient_profile_card` | Retrieve verified clinical health reports, lab tests, and doctor notes. |
+| `search_dietitians` | `apis/specialist.api.js` | No (Public) | `dietitian_cards` | Search verified specialists by condition, specialty, name, gender, or fee. |
+| `check_dietitian_availability` | `apis/schedule.api.js` | No (Public, null userId) | `slot_booking_card` | Retrieve open/busy consultation slots (09:00 AM to 08:00 PM) without exposing patient conflicts. |
+| `get_user_schedule` | `apis/schedule.api.js` | Yes (Protected) | `user_schedule_card` | Retrieve the authenticated patient's upcoming booked appointments. |
+| `book_dietitian_appointment` | `apis/booking.api.js` | Yes (Protected) | `booking_confirmation_card` | Reserve a consultation slot with conflict detection. |
+| `lookup_nutrition` | `apis/nutrition.api.js` | No (Public) | `nutrition_card` | Query macronutrients and calories via USDA FoodData Central. |
+| `generate_meal_plan` | `apis/mealPlan.api.js` | Yes (Protected) | `meal_plan_card` | Generate structured multi-meal daily clinical diet plans grounded in verified health records. |
+| `get_user_health_reports` | `tools/healthReports.tool.js` | Yes (Protected) | `patient_profile_card` | Retrieve verified clinical health reports, lab tests, and doctor notes. |
 
 ---
 
@@ -112,4 +112,5 @@ Every tool follows a clean two-layer structure:
   - Resolves authenticated patient ID and queries MongoDB `HealthReport` and `LabReport` collections.
   - Returns full clinical diagnosis, doctor notes, vital signs, lipid/metabolic panels, and diagnostic findings sorted by most recent date.
   - Automatically attaches interactive `patient_profile_card` for frontend display.
+  - Validates date format strictly: passing an unparseable date immediately returns an explicit error message rather than silently falling back to recent records.
   - If patient asks for health calculations (BMI, caloric needs, metabolic rate) not explicitly stored in the report, Gemini reasons over the clinical data and performs the calculations directly without relying on a rigid hardcoded tool.

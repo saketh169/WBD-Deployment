@@ -10,6 +10,22 @@
 
 This project consists of a backend and frontend setup. The backend is a Node.js-based server, while the frontend is a React application.
 
+---
+
+## NutriAgent: Clinical AI Agent Platform
+
+NutriConnect features **NutriAgent**, an autonomous clinical nutrition and telehealth AI co-pilot:
+- **Direct Clinical Grounding (Zero RAG)**: Ingests patient medical profiles, diagnoses, and lab biomarkers directly from MongoDB without probabilistic vector retrieval or embedding drift.
+- **LangGraph State Machine**: State-driven decision loop with Google Gemini function calling and loop cycle protection.
+- **Model Context Protocol (MCP)**: Implements standard MCP interfaces over both STDIO (Claude Desktop, Cursor) and HTTP Server-Sent Events (SSE).
+- **USDA FoodData Central Integration**: Live ground-truth calorie and macronutrient verification.
+- **Live Specialist Scheduling**: 7-day slot availability with real-time cross-doctor conflict detection and WebSocket synchronization.
+- **Multi-Tenant Security**: Strict JWT identity resolution, session isolation, and MCP session ownership verification.
+
+For the complete technical breakdown, architecture diagrams, tool schemas, and interview playbook, see the **[NutriAgent Master Documentation](NutriAgent/Documentation.md)**.
+
+---
+
 ##  How to Run the Application
 
 ### Prerequisites

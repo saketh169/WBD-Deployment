@@ -102,6 +102,12 @@ This project backend consists of the following structure:
   - **`Readme.md`**: Backend documentation.
   - **`scripts/`**: Utility and seeding scripts.
   - **`src/`**: Contains backend source code.
+    - **`agent/`**: NutriAgent clinical AI platform (LangGraph state machine, MCP server, tool APIs, and guards). See [NutriAgent Master Documentation](../NutriAgent/Documentation.md).
+      - **`apis/`**: Dedicated tool API layer (zero-regex database & remote service queries).
+      - **`langgraph/`**: LangGraph StateGraph, nodes, and typed Zod tool schemas.
+      - **`mcp/`**: Model Context Protocol dual transport (STDIO + SSE).
+      - **`services/`**: Direct clinical grounding and identity resolution.
+      - **`tools/`**: Gemini function calling declarations and execution handlers.
     - **`controllers/`**: Request handlers and business logic.
     - **`middlewares/`**: Express middleware functions.
     - **`models/`**: MongoDB data models/schemas.
@@ -109,5 +115,4 @@ This project backend consists of the following structure:
     - **`services/`**: Business logic services.
     - **`utils/`**: Utility functions and helpers.
       - **`db.js`**: Database connection utility.
-      - **`.env`**: Environment variables file.
     - **`server.js`**: Main server entry point.

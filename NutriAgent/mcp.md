@@ -64,10 +64,25 @@ function createNutriConnectMCPServer(userId = null) {
     return { tools };
   });
 
-  // 2. Route MCP tools/call directly to executeLangGraphTool
+  // 2. Route MCP tools/call with security tiers
+  const PATIENT_PROTECTED_TOOLS = new Set([
+    "get_user_schedule",
+    "get_user_health_reports",
+    "book_dietitian_appointment",
+    "generate_meal_plan",
+  ]);
+
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-    const result = await executeLangGraphTool(name, args || {}, { userId });
+    if (PATIENT_PROTECTED_TOOLS.has(name) && !userId) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "UNAUTHORIZED" }) }],
+        isError: true,
+      };
+    }
+
+    const toolContext = PATIENT_PROTECTED_TOOLS.has(name) ? { userId } : { userId: null };
+    const result = await executeLangGraphTool(name, args || {}, toolContext);
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       isError: !result.success,
@@ -86,9 +101,9 @@ function createNutriConnectMCPServer(userId = null) {
 1. **STDIO Transport (`mcp-server.js`)**:
    Uses standard process I/O. When executed via `node mcp-server.js`, it connects via `StdioServerTransport` so desktop apps (Claude Desktop, MCP Inspector) can pipe requests via stdin/stdout.
 2. **SSE Transport (`mcp-transport-sse.js`)**:
-   Uses HTTP Server-Sent Events. Mounted in `backend/src/agent/index.js`:
-   - `GET /api/agent/mcp/sse` – Establishes the real-time event stream.
-   - `POST /api/agent/mcp/messages` – Handles incoming JSON-RPC 2.0 messages keyed by session ID.
+   Uses HTTP Server-Sent Events mounted in `backend/src/agent/index.js`:
+   - `GET /api/agent/mcp/sse`: Resolves verified user identity (`roleId || userId || id || _id`) and stores `{ server, transport, userId }` in active transport map.
+   - `POST /api/agent/mcp/messages`: Verifies session ownership by matching the authenticated caller against `sessionData.userId`. Mismatches return HTTP 403 Forbidden. Handles JSON-RPC 2.0 messages keyed by `sessionId`.
 
 ---
 
