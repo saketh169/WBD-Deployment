@@ -78,6 +78,7 @@ async function executeGenerateMealPlan(args = {}, context = {}) {
     let effectiveDietType = dietType;
     let effectiveDietitian = supervisingDietitian || "NutriConnect Clinical Team";
     let effectiveAllergies = allergiesExcluded || [];
+    let effectiveNotes = clinicalNotes || "";
 
     if (context.userId) {
       try {
@@ -106,6 +107,12 @@ async function executeGenerateMealPlan(args = {}, context = {}) {
                 new Set([...effectiveAllergies, ...report.allergies])
               );
             }
+            if (!effectiveDietType) {
+              effectiveDietType = report.dietType || report.dietaryRecommendations;
+            }
+            if (!effectiveNotes && report.dietaryRecommendations) {
+              effectiveNotes = report.dietaryRecommendations;
+            }
           }
         }
       } catch (err) {
@@ -123,7 +130,7 @@ async function executeGenerateMealPlan(args = {}, context = {}) {
       macroTargets: effectiveMacros,
       healthFocus: healthFocus || "General Wellness",
       allergiesExcluded: effectiveAllergies,
-      clinicalNotes: clinicalNotes || "",
+      clinicalNotes: effectiveNotes,
       supervisingDietitian: effectiveDietitian,
     });
 

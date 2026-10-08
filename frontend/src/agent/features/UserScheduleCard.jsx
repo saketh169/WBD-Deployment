@@ -22,7 +22,8 @@ export const UserScheduleCard = ({ data }) => {
   const navigate = useNavigate();
   if (!data) return null;
 
-  const { patientName = "Patient", bookings = [], count = 0 } = data;
+  const { patientName = "Patient", bookings = [], count, totalBookings } = data;
+  const displayCount = count ?? totalBookings ?? bookings.length;
 
   return (
     <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-slate-50 border-2 border-emerald-500 rounded-2xl p-4 shadow-sm max-w-xl space-y-3 font-sans">
@@ -37,7 +38,7 @@ export const UserScheduleCard = ({ data }) => {
               My Consultations Schedule
             </h4>
             <p className="text-[11px] text-emerald-800 font-medium">
-              {patientName} • {count} upcoming session(s)
+              {patientName} • {displayCount} upcoming session(s)
             </p>
           </div>
         </div>

@@ -30,7 +30,11 @@ export const DietitianCard = ({ doc, onBook }) => {
                 {experience && (
                   <>
                     <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{experience} exp</span>
+                    <span>
+                      {String(experience).toLowerCase().includes("exp")
+                        ? experience
+                        : `${experience} exp`}
+                    </span>
                   </>
                 )}
                 {doc.location && (

@@ -36,6 +36,11 @@ const getUserScheduleDeclaration = {
         description:
           "Optional date to filter appointments (e.g. today, tomorrow, or YYYY-MM-DD)",
       },
+      dietitianName: {
+        type: "STRING",
+        description:
+          "Optional doctor or dietitian name to filter consultations with a specific specialist (e.g. Dr. Kavita Menon)",
+      },
     },
   },
 };
@@ -86,11 +91,12 @@ async function executeCheckDietitianAvailability(args = {}, context = {}) {
 
 async function executeGetUserSchedule(args = {}, context = {}) {
   try {
-    const { date } = args;
+    const { date, dietitianName } = args;
     const result = await getUserScheduleApi({
       userId: context.userId,
       authUserId: context.authUserId,
       date,
+      dietitianName,
     });
 
     if (!result.success) {
@@ -106,6 +112,7 @@ async function executeGetUserSchedule(args = {}, context = {}) {
       data: {
         patientName: result.patientName,
         totalBookings: result.totalBookings,
+        count: result.totalBookings,
         bookings: result.bookings,
       },
     };

@@ -1,6 +1,6 @@
 # LangGraph: Clinical Agent Architecture & Implementation in NutriConnect
 
-This document explains what LangGraph is, why it was chosen for NutriConnect, how our cyclical state graph was designed, and how each node and edge operates in production.
+This document explains what LangGraph is, why it was chosen for NutriConnect, how our cyclical state graph is designed, and how each node and edge operates in production.
 
 ---
 
@@ -10,60 +10,59 @@ This document explains what LangGraph is, why it was chosen for NutriConnect, ho
 
 ### Why Not Traditional Linear Chains?
 Traditional LLM chains (like standard prompt chains or basic LCEL pipelines) are strictly linear (A -> B -> C). They fail in clinical workflows because:
-- Medical inquiries are non-linear (a patient may start with a food question, ask about a doctor, and then request a meal plan).
-- ReAct loops without graph boundaries are prone to endless loops or random tool hallucinations.
-- Clinical safety requires guaranteed checkpoints where patient data is grounded before reasoning begins.
+- Medical inquiries are non-linear (a patient may ask about food, inquire about a doctor, and request a booking in one message).
+- Standard ReAct loops without graph boundaries are prone to endless loops or random tool hallucinations.
+- Clinical safety requires guaranteed checkpoints where patient health context is loaded before reasoning begins.
 
-### Why LangGraph for Healthcare & Nutrition?
+### Why LangGraph for NutriConnect?
 1. **Deterministic State Machine**: Every step in the conversation is an explicit node with defined input and output schemas.
-2. **Cyclical & Branching Logic**: Enables parallel tool execution, conditional branching, and iterative refinement.
-3. **State Persistence**: Every turn's state (messages, clinical context, UI cards) is tracked through state channels.
-4. **Safety Boundaries**: Anti-hallucination guardrails and non-prescription boundaries can be enforced as discrete graph constraints.
+2. **Cyclical & Branching Logic**: Enables parallel tool execution, conditional branching, and fallback models.
+3. **State Persistence**: Every turn's state (messages, clinical context, UI cards) is tracked through state channels and persisted with `MemorySaver`.
+4. **Safety Boundaries**: Anti-hallucination guardrails and non-prescription boundaries are enforced as discrete graph constraints.
+5. **Zero RAG / Direct Grounding**: Instead of vector embeddings and retrieval pipelines, clinical context is loaded directly from MongoDB records into state before reasoning.
 
 ---
 
 ## 2. Directory Location & File Structure
 
-The LangGraph architecture is structured from the workspace root as follows:
-
-### Path Breadcrumb
-`root > backend > src > agent > langgraph/`
+The LangGraph architecture is structured inside `backend/src/agent/langgraph/`:
 
 ### File Layout
 
 ```text
-root
-> backend
-  > src
-    > agent
-      > langgraph
-        > graph.js
-        > index.js
-        > nodes.js
-        > state.js
-        > tools.js
-      > services
-      > tools
-      > utils
-      > config.js
-      > index.js
+backend
+> src
+  > agent
+    > langgraph
+      > graph.js    // StateGraph definition, node binding, compilation
+      > index.js    // Entry point: runLangGraphAgent runner
+      > nodes.js    // contextIngestionNode, reasoningNode, toolNode, synthesisNode
+      > state.js    // AgentState annotation and channel reducers
+      > tools.js    // Declarations, schemas, executeLangGraphTool registry
+    > apis          // Dedicated tool API implementations
+    > services      // agentContextLoader.js, userResolver.js
+    > tools         // Tool declarations and execution handlers
+    > utils         // dateUtils.js
+    > config.js     // Gemini models & SDK initialization
+    > index.js      // Express router mounting /api/agent/*
+    > guardrails.js // Central clinical rules, safety guardrails & prompt builder
 ```
 
 ---
 
 ## 3. Graph Topology & Workflow Design
 
-The NutriConnect LangGraph workflow is modeled as a directed acyclic state graph (DAG) with conditional routing:
+The NutriConnect LangGraph workflow is modeled as a state graph with conditional routing:
 
 ```mermaid
 flowchart TD
-    START([__start__]) --> GroundingNode[1. Grounding Node<br/>Retrieve Patient Lab Records & History]
-    GroundingNode --> ReasoningNode[2. Reasoning Node<br/>Intent Attention & Tool Scoping]
+    START([__start__]) --> ContextIngestionNode["1. context_ingestion<br/>Direct MongoDB Patient Health Record Loading"]
+    ContextIngestionNode --> ReasoningNode["2. reasoning<br/>Gemini Multi-Model Intent & Tool Selection"]
     
-    ReasoningNode --> ConditionalRouter{Route Check<br/>toolCalls.length > 0?}
+    ReasoningNode --> ConditionalRouter{"Route Check<br/>toolCalls.length > 0?"}
     
-    ConditionalRouter -->|Yes| ToolNode[3. Tool Node<br/>Concurrent Promise.all Execution]
-    ConditionalRouter -->|No| SynthesisNode[4. Synthesis Node<br/>Plain Language & Guardrail Synthesis]
+    ConditionalRouter -->|Yes| ToolNode["3. tool_execution<br/>Concurrent Promise.all Tool Execution"]
+    ConditionalRouter -->|No| SynthesisNode["4. synthesis<br/>Plain Language & Zero-Emoji Response"]
     
     ToolNode --> SynthesisNode
     SynthesisNode --> END([__end__])
@@ -71,82 +70,104 @@ flowchart TD
 
 ---
 
-## 3. State Schema & Channels (`state.js`)
+## 4. State Schema & Channels (`state.js`)
 
 The state represents the single source of truth passed across all nodes in the graph. It is defined using `@langchain/langgraph` channel annotations:
 
 ```javascript
-const AgentStateAnnotation = Annotation.Root({
+const AgentState = Annotation.Root({
   userQuery: Annotation({
-    reducer: (curr, next) => next !== undefined ? next : curr,
+    reducer: (x, y) => y ?? x,
     default: () => "",
   }),
   userId: Annotation({
-    reducer: (curr, next) => next !== undefined ? next : curr,
+    reducer: (x, y) => y ?? x,
     default: () => null,
   }),
   authUserId: Annotation({
-    reducer: (curr, next) => next !== undefined ? next : curr,
+    reducer: (x, y) => y ?? x,
     default: () => null,
   }),
   messages: Annotation({
-    reducer: (curr, next) => next !== undefined ? next : curr,
+    reducer: (x, y) => (y && y.length > 0 ? y : x),
     default: () => [],
   }),
-  cards: Annotation({
-    reducer: (curr, next) => next !== undefined ? next : curr,
-    default: () => [],
+  file: Annotation({
+    reducer: (x, y) => y ?? x,
+    default: () => null,
   }),
-  toolsExecuted: Annotation({
-    reducer: (curr, next) => Array.from(new Set([...(curr || []), ...(next || [])])),
-    default: () => [],
+  patientProfile: Annotation({
+    reducer: (x, y) => y ?? x,
+    default: () => null,
   }),
-  groundingContext: Annotation({
-    reducer: (curr, next) => next !== undefined ? next : curr,
+  clinicalContextText: Annotation({
+    reducer: (x, y) => y ?? x,
     default: () => "",
   }),
+  identifiedOperation: Annotation({
+    reducer: (x, y) => y ?? x,
+    default: () => null,
+  }),
+  requiredParameters: Annotation({
+    reducer: (x, y) => ({ ...(x || {}), ...(y || {}) }),
+    default: () => ({}),
+  }),
   toolCalls: Annotation({
-    reducer: (curr, next) => next !== undefined ? next : curr,
+    reducer: (x, y) => y ?? x,
     default: () => [],
   }),
   toolResults: Annotation({
-    reducer: (curr, next) => next !== undefined ? next : curr,
+    reducer: (x, y) => y ?? x,
     default: () => [],
   }),
+  toolsExecuted: Annotation({
+    reducer: (x, y) => Array.from(new Set([...(x || []), ...(y || [])])),
+    default: () => [],
+  }),
+  cards: Annotation({
+    reducer: (x, y) => y ?? x,
+    default: () => [],
+  }),
+  openPaymentDetails: Annotation({
+    reducer: (x, y) => (y !== undefined ? y : null),
+    default: () => null,
+  }),
   rawReply: Annotation({
-    reducer: (curr, next) => next !== undefined ? next : curr,
+    reducer: (x, y) => y ?? x,
     default: () => "",
   }),
   finalReply: Annotation({
-    reducer: (curr, next) => next !== undefined ? next : curr,
+    reducer: (x, y) => y ?? x,
     default: () => "",
   }),
-  file: Annotation({
-    reducer: (curr, next) => next !== undefined ? next : curr,
-    default: () => null,
+  executionStatus: Annotation({
+    reducer: (x, y) => y ?? x,
+    default: () => "idle",
   }),
 });
 ```
 
 ---
 
-## 4. Deep Dive: Node Implementations (`nodes.js`)
+## 5. Node Implementations (`nodes.js`)
 
-### Node 1: `groundingNode`
-Retrieves background medical context without triggering external actions.
-- Queries MongoDB via `retrieveRAGContext()` to fetch verified patient lab panels (HbA1c, fasting glucose, LDL, HDL, Triglycerides).
-- Injects active supervising dietitian clinical notes (e.g., allergies, daily protein/calorie targets).
-- Ensures subsequent nodes have verified clinical facts, preventing the model from hallucinating medical history.
+### Node 1: `context_ingestion` (`contextIngestionNode`)
+Retrieves real patient medical background without vector databases:
+- Calls `loadAgentPatientContext(userId)` from `services/agentContextLoader.js`.
+- Queries MongoDB `User` and `HealthReport` collections.
+- Extracted parameters include recent diagnosis, blood biomarkers (HbA1c, fasting glucose, lipid counts), target macros, target calories, known allergies, and supervising dietitian notes.
+- Generates `patient_profile_card` for immediate UI rendering.
 
-### Node 2: `reasoningNode`
-Performs query attention analysis and decides what actions (if any) to take.
-- **Query Attention Analysis**: Passes the query through `analyzeQueryAttention()`.
-- **Fast-Path Shortcuts**: If high-confidence parameters were extracted for a single intent (e.g. appointment booking or specialist search), it immediately constructs the exact tool call without unnecessary LLM overhead.
-- **Compound Query Handling**: If the query contains multiple requests (e.g. searching for a doctor, checking slots, and looking up food macros), it sets `primaryIntent = 'COMPOUND'`, scopes all matching tool declarations, and sends them to Gemini.
-- **Gemini Function Calling**: Uses `gemini-flash-lite-latest` to emit tool calls in parallel.
+### Node 2: `reasoning` (`reasoningNode`)
+Evaluates the patient inquiry against clinical tools:
+- Injects temporal context (IST date/time and clinic operating hours 09:00 AM to 08:00 PM).
+- Injects patient clinical context.
+- Binds `GEMINI_TOOL_DECLARATIONS` to Google Gemini.
+- Uses retry/fallback across candidate models (`gemini-3.1-flash-lite`, `gemini-3.5-flash`).
+- Emits structured tool calls with validated arguments.
 
-### Node 3: `toolNode`
-Executes all requested tools concurrently and compiles interactive UI cards.
+### Node 3: `tool_execution` (`toolNode`)
+Executes all requested tools concurrently:
 - Uses `Promise.all` to run all tool calls simultaneously:
   ```javascript
   const toolResults = await Promise.all(
@@ -161,59 +182,48 @@ Executes all requested tools concurrently and compiles interactive UI cards.
     })
   );
   ```
-- Collects UI cards from each tool (`dietitian_cards`, `slot_booking_card`, `nutrition_card`, `meal_plan_card`, `user_schedule_card`) and deduplicates them into `state.cards`.
+- Collects UI cards from tools (`dietitian_cards`, `slot_booking_card`, `nutrition_card`, `meal_plan_card`, `user_schedule_card`) and deduplicates them into `state.cards`.
 
-### Node 4: `synthesisNode`
-Synthesizes the final conversational response presented to the patient.
-- Combines tool execution results, temporal context (current time in IST, operating hours), and clinical grounding.
+### Node 4: `synthesis` (`synthesisNode`)
+Synthesizes the final conversational response presented to the patient:
+- Combines tool execution results, temporal context, and clinical grounding.
 - Enforces three strict clinical guidelines:
-  1. **Everyday Language**: Translates biological jargon into simple, empowering words.
+  1. **Everyday Language**: Translates medical numbers into simple, clear words.
   2. **Zero Doctor Hallucinations**: Strictly prohibits mentioning doctor names that were not provided in verified findings.
   3. **Strict Zero Emojis**: Strips all emoji characters via regex filter.
 
 ---
 
-## 5. Conditional Routing (`graph.js`)
-
-The graph uses a conditional edge from `reasoningNode` to decide whether tool execution is necessary:
+## 6. Conditional Routing (`graph.js`)
 
 ```javascript
-function shouldContinue(state) {
-  const toolCalls = state.toolCalls || [];
-  if (toolCalls.length > 0) {
-    return "tools";
+function routeAfterReasoning(state) {
+  if (state.toolCalls && state.toolCalls.length > 0) {
+    return "tool_execution";
   }
   return "synthesis";
 }
 
-const workflow = new StateGraph(AgentStateAnnotation)
-  .addNode("grounding", groundingNode)
-  .addNode("reasoning", reasoningNode)
-  .addNode("tools", toolNode)
-  .addNode("synthesis", synthesisNode)
-  .addEdge("__start__", "grounding")
-  .addEdge("grounding", "reasoning")
-  .addConditionalEdges("reasoning", shouldContinue, {
-    tools: "tools",
+function createNutriAgentGraph() {
+  const workflow = new StateGraph(AgentState);
+
+  workflow.addNode("context_ingestion", contextIngestionNode);
+  workflow.addNode("reasoning", reasoningNode);
+  workflow.addNode("tool_execution", toolNode);
+  workflow.addNode("synthesis", synthesisNode);
+
+  workflow.addEdge(START, "context_ingestion");
+  workflow.addEdge("context_ingestion", "reasoning");
+
+  workflow.addConditionalEdges("reasoning", routeAfterReasoning, {
+    tool_execution: "tool_execution",
     synthesis: "synthesis",
-  })
-  .addEdge("tools", "synthesis")
-  .addEdge("synthesis", "__end__");
+  });
 
-const checkpointer = new MemorySaver();
-const nutriAgentGraph = workflow.compile({ checkpointer });
+  workflow.addEdge("tool_execution", "synthesis");
+  workflow.addEdge("synthesis", END);
+
+  const checkpointer = new MemorySaver();
+  return workflow.compile({ checkpointer });
+}
 ```
-
----
-
-## 6. How Compound Multi-Tool Queries Work
-
-When a patient asks a compound question:
-> *"Find me a verified dietitian for heart health, check Dr. Arjun Reddy available slots tomorrow, and tell me the calories and protein in 100g oats"*
-
-1. **`attentionAnalyzer`** detects that 3 intents matched (`SPECIALIST_SEARCH`, `SCHEDULE_AVAILABILITY`, `NUTRITION_LOOKUP`).
-2. It sets `primaryIntent = 'COMPOUND'` and scopes 3 tools: `['search_dietitians', 'check_dietitian_availability', 'lookup_nutrition']`.
-3. In **`reasoningNode`**, Gemini receives all 3 tool declarations and emits 3 parallel function calls.
-4. In **`toolNode`**, all 3 tools run concurrently via `Promise.all`.
-5. Three interactive cards are attached: `dietitian_cards`, `slot_booking_card`, and `nutrition_card`.
-6. In **`synthesisNode`**, a unified everyday explanation is generated addressing the doctors, the available slots, and the nutrition facts in a single turn.

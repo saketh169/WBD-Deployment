@@ -268,7 +268,14 @@ async function checkDietitianAvailabilityApi({
  * Dedicated API to retrieve the patient's own scheduled consultations
  * ZERO REGEX: Pure ID and status filtering.
  */
-async function getUserScheduleApi({ userId, patientId = null, authUserId = null, date = null } = {}) {
+async function getUserScheduleApi({
+  userId,
+  patientId = null,
+  authUserId = null,
+  date = null,
+  dietitianName = null,
+  upcomingOnly = true,
+} = {}) {
   try {
     const idToUse = userId || patientId || authUserId;
     if (!idToUse || !mongoose.isValidObjectId(idToUse)) {
@@ -277,6 +284,8 @@ async function getUserScheduleApi({ userId, patientId = null, authUserId = null,
         message: "Authenticated patient ID is required to look up personal appointments.",
         bookings: [],
         consultations: [],
+        totalBookings: 0,
+        count: 0,
       };
     }
 
@@ -297,11 +306,33 @@ async function getUserScheduleApi({ userId, patientId = null, authUserId = null,
         end.setDate(end.getDate() + 1);
         queryFilter.date = { $gte: start, $lt: end };
       }
+    } else if (upcomingOnly) {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      queryFilter.date = { $gte: startOfToday };
     }
 
-    const bookings = await Booking.find(queryFilter)
+    let bookings = await Booking.find(queryFilter)
       .sort({ date: 1, time: 1 })
       .lean();
+
+    if (dietitianName) {
+      const cleanTarget = String(dietitianName)
+        .toLowerCase()
+        .replace(/^dr\.?\s*/i, "")
+        .trim();
+      if (cleanTarget) {
+        bookings = bookings.filter((b) => {
+          const docName = (b.dietitianName || "")
+            .toLowerCase()
+            .replace(/^dr\.?\s*/i, "")
+            .trim();
+          return (
+            docName.includes(cleanTarget) || cleanTarget.includes(docName)
+          );
+        });
+      }
+    }
 
     const formatted = bookings.map((b) => ({
       bookingId: b._id.toString(),
@@ -318,6 +349,7 @@ async function getUserScheduleApi({ userId, patientId = null, authUserId = null,
       success: true,
       patientName: user?.name || "Patient",
       totalBookings: formatted.length,
+      count: formatted.length,
       bookings: formatted,
       consultations: formatted,
       message:

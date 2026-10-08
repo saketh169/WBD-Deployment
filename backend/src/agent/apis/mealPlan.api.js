@@ -53,7 +53,7 @@ async function generateMealPlanApi({
 
     let generatedDays = Array.isArray(days) && days.length > 0 ? days : [];
 
-    if (generatedDays.length === 0 && genAI) {
+    if (generatedDays.length === 0 && genAI && process.env.NODE_ENV !== "test") {
       try {
         const model = genAI.getGenerativeModel(
           {

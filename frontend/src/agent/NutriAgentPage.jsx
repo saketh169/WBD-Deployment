@@ -488,31 +488,7 @@ export function NutriAgentPage() {
     setMessages([...baseHistory, userMsg]);
     setInputValue("");
     setIsTyping(true);
-
-    const qLower = query.toLowerCase();
-    const isMeal =
-      /(meal\s*plan|diet\s*plan|diet\s*chart|\b\d+\s*days?\s*plan|\bweek\s*plan|what\s+to\s+eat|what\s+should\s+i\s+eat|breakfast|lunch|dinner|menu)/i.test(
-        qLower,
-      );
-    const isBooking = /(book|slot|schedule|appointment)/i.test(qLower);
-    const isDoctor =
-      /(who is a dietitian|doctor|specialist|recommend a doctor|fees|consult)/i.test(
-        qLower,
-      ) && !isMeal;
-    const isNutr =
-      /(calorie|protein|carb|macro|how much.*in)/i.test(qLower) && !isMeal;
-
-    if (isMeal) {
-      setTypingStatus("Formulating personalized clinical meal plan...");
-    } else if (isBooking) {
-      setTypingStatus("Checking dietitian calendar availability...");
-    } else if (isDoctor) {
-      setTypingStatus("Searching verified dietitian directory...");
-    } else if (isNutr) {
-      setTypingStatus("Querying verified nutritional records...");
-    } else {
-      setTypingStatus("Formulating evidence-based response...");
-    }
+    setTypingStatus("Formulating clinical response...");
 
     try {
       const currentUserId = user?.id || user?._id || user?.roleId || null;
@@ -645,7 +621,7 @@ export function NutriAgentPage() {
                 </h1>
                 <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Verified Health RAG
+                  Verified Clinical AI
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium hidden sm:block">
@@ -786,66 +762,33 @@ export function NutriAgentPage() {
                       <span className="text-[11px] font-semibold text-slate-500">
                         Verified Sources:
                       </span>
-                      {msg.toolsExecuted.map((tool, tIdx) => {
-                        const toolName =
-                          typeof tool === "string" ? tool : tool.tool;
-                        let label = "Live Medical Lookup";
-                        if (
-                          toolName === "lookup_nutrition" ||
-                          toolName === "nutrition_knowledge_retriever" ||
-                          toolName === "nutrition_retriever"
-                        )
-                          label = "USDA FoodData Central";
-                        else if (
-                          toolName === "search_dietitians" ||
-                          toolName === "semantic_specialist_retriever" ||
-                          toolName === "dietitian_retriever"
-                        )
-                          label = "Specialist Registry";
-                        else if (
-                          toolName === "get_user_health_profile" ||
-                          toolName === "patient_record_retriever"
-                        )
-                          label = "Patient Clinical Record";
-                        else if (toolName === "get_medical_reports")
-                          label = "Medical Lab Reports";
-                        else if (toolName === "get_health_assessments")
-                          label = "Dietitian Health Assessment";
-                        else if (
-                          toolName === "check_dietitian_availability" ||
-                          toolName === "check_doctor_availability" ||
-                          toolName === "get_dietitian_slots" ||
-                          toolName === "get_doctor_slots"
-                        )
-                          label = "Live Dietitian Schedule";
-                        else if (
-                          toolName === "get_user_schedule" ||
-                          toolName === "user_schedule_retriever"
-                        )
-                          label = "User Consultation Calendar";
-                        else if (
-                          toolName === "book_dietitian_appointment" ||
-                          toolName === "book_doctor_appointment" ||
-                          toolName === "book_appointment"
-                        )
-                          label = "Confirmed Consultation Booking";
-                        else if (toolName === "document_analysis")
-                          label = "Clinical Document Analysis";
-                        else if (
-                          toolName === "generate_meal_plan" ||
-                          toolName === "generate_7day_meal_plan"
-                        )
-                          label = "AI Clinical Meal Plan Engine";
-                        return (
-                          <span
-                            key={tIdx}
-                            className="bg-emerald-50 text-emerald-800 text-xs font-medium px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1"
-                          >
-                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                            {label}
-                          </span>
-                        );
-                      })}
+                      {msg.toolsExecuted
+                        .filter((t) => {
+                          const name = typeof t === "string" ? t : t?.tool || "";
+                          return name && name !== "patient_context_loader";
+                        })
+                        .map((tool, tIdx) => {
+                          const toolName = typeof tool === "string" ? tool : tool?.tool || "";
+                          const labelMap = {
+                            search_dietitians: "Specialist Registry",
+                            check_dietitian_availability: "Live Dietitian Schedule",
+                            get_user_schedule: "User Consultation Calendar",
+                            book_dietitian_appointment: "Confirmed Consultation Booking",
+                            lookup_nutrition: "USDA FoodData Central",
+                            generate_meal_plan: "Clinical Meal Plan Engine",
+                            get_user_health_reports: "Clinical Health & Lab Reports",
+                          };
+                          const label = labelMap[toolName] || toolName.replace(/_/g, " ");
+                          return (
+                            <span
+                              key={tIdx}
+                              className="bg-emerald-50 text-emerald-800 text-xs font-medium px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1"
+                            >
+                              <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                              {label}
+                            </span>
+                          );
+                        })}
                     </div>
                   )}
 

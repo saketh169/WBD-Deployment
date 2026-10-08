@@ -7,7 +7,7 @@ const agentRoutes = require("../src/agent");
 const { executeLangGraphTool } = require("../src/agent/langgraph/tools");
 const { loadAgentPatientContext } = require("../src/agent/services/agentContextLoader");
 const { findDietitiansApi } = require("../src/agent/apis/specialist.api");
-const { calculateHealthMetricsApi } = require("../src/agent/apis/healthMetrics.api");
+const { executeGetUserHealthReports } = require("../src/agent/tools/healthReports.tool");
 const { lookupNutritionApi } = require("../src/agent/apis/nutrition.api");
 const { generateMealPlanApi } = require("../src/agent/apis/mealPlan.api");
 const { AgentState } = require("../src/agent/langgraph/state");
@@ -154,19 +154,34 @@ describe("NutriAgent GenAI Agent Pipeline Security & Verification Tests", () => 
       expect(names.some((n) => n.includes("Arjun") || n.includes("Vikash"))).toBe(true);
     });
 
-    test("calculateHealthMetricsApi calculates BMI, BMR, TDEE correctly", async () => {
-      const res = await calculateHealthMetricsApi({
-        weightKg: 70,
-        heightCm: 175,
-        age: 28,
-        gender: "male",
-        activityLevel: "moderate",
+    test("executeGetUserHealthReports retrieves patient clinical reports with date and recency filters", async () => {
+      const { HealthReport } = require("../src/models/healthReportModel");
+      const testUserId = new mongoose.Types.ObjectId();
+      const testDietitianId = new mongoose.Types.ObjectId();
+
+      await HealthReport.create({
+        clientId: testUserId,
+        clientName: "Test Patient",
+        dietitianId: testDietitianId,
+        dietitianName: "Dr. Neha Agarwal",
+        title: "Metabolic & Thyroid Evaluation",
+        diagnosis: "Hypothyroidism",
+        dietaryRecommendations: "High fiber iodine rich protocol",
+        createdAt: new Date("2026-10-01T10:00:00Z"),
       });
+
+      const res = await executeGetUserHealthReports(
+        { reportType: "health", limit: 3 },
+        { userId: testUserId }
+      );
       expect(res.success).toBe(true);
-      expect(res.metrics.bmi).toBe(22.9);
-      expect(res.metrics.bmiCategory).toBe("Normal weight");
-      expect(res.metrics.bmrKcal).toBeGreaterThan(1400);
-      expect(res.metrics.tdeeKcal).toBeGreaterThan(2000);
+      expect(res.data.healthReports.length).toBe(1);
+      expect(res.data.healthReports[0].title).toBe("Metabolic & Thyroid Evaluation");
+      expect(res.data.healthReports[0].diagnosis).toBe("Hypothyroidism");
+      expect(res.cards.length).toBe(1);
+      expect(res.cards[0].type).toBe("patient_profile_card");
+
+      await HealthReport.deleteMany({ clientId: testUserId });
     });
 
     test("lookupNutritionApi retrieves calories and macros for paneer", async () => {
@@ -387,6 +402,47 @@ describe("NutriAgent GenAI Agent Pipeline Security & Verification Tests", () => 
       expect(res.cards[0]?.type).toBe("user_schedule_card");
       expect(res.cards[0]?.data?.patientName).toBe("Schedule Test Patient");
 
+      await User.deleteOne({ _id: testUser._id });
+    });
+
+    test("should execute get_user_health_reports tool cleanly and return patient_profile_card", async () => {
+      const { HealthReport } = require("../src/models/healthReportModel");
+      const testUser = await User.create({
+        name: "Report Test Patient",
+        email: "report.patient@test.com",
+        phone: "9999977777",
+        gender: "female",
+        dob: new Date("1995-03-15"),
+        address: "789 Health St, Mumbai",
+      });
+
+      const testDietitianId = new mongoose.Types.ObjectId();
+      await HealthReport.create({
+        clientId: testUser._id,
+        clientName: "Report Test Patient",
+        dietitianId: testDietitianId,
+        dietitianName: "Dr. Kavita Menon",
+        title: "Comprehensive Metabolic Assessment",
+        diagnosis: "Insulin Resistance",
+        dietaryRecommendations: "Low glycemic index whole foods",
+        targetCalories: 1700,
+      });
+
+      const res = await executeLangGraphTool(
+        "get_user_health_reports",
+        {},
+        { userId: testUser._id }
+      );
+
+      expect(res.success).toBe(true);
+      expect(res.data.healthReports.length).toBe(1);
+      expect(res.data.healthReports[0].title).toBe("Comprehensive Metabolic Assessment");
+      expect(res.data.healthReports[0].dietitianName).toBe("Dr. Kavita Menon");
+      expect(res.cards.length).toBe(1);
+      expect(res.cards[0].type).toBe("patient_profile_card");
+      expect(res.cards[0].data.clinicalDiagnosis).toBe("Insulin Resistance");
+
+      await HealthReport.deleteMany({ clientId: testUser._id });
       await User.deleteOne({ _id: testUser._id });
     });
   });

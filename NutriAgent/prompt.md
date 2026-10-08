@@ -34,6 +34,7 @@ We executed all 6 tools live against `http://localhost:5000/api/agent/mcp/sse`:
 | `check_dietitian_availability` | **Works** | **Works** | Verified | Live consultation slots (9:00 AM - 8:00 PM) for any doctor |
 | `lookup_nutrition` | **Works** | **Works** | Verified | Calories, protein, carbs, and fats scaled to portion |
 | `generate_meal_plan` | **Works** | **Works** | Verified | 3 to 5-day structured meal plans (Breakfast, Lunch, Snacks, Dinner) |
+| `get_user_health_reports` | **Requires Token** | **Works** | Verified | Retrieves verified medical health reports, lab test diagnostics, and doctor notes |
 | `get_user_schedule` | **Requires Token** | **Works** | Verified | *"Please sign in to view your consultations schedule"* without token; returns live bookings when JWT token is passed |
 | `book_dietitian_appointment` | **Requires Token** | **Works** | Verified | *"A valid patient profile session is required to book an appointment"* without token; reserves slot when JWT token is passed |
 
@@ -91,18 +92,30 @@ We executed all 6 tools live against `http://localhost:5000/api/agent/mcp/sse`:
 
 ### Group B: Authenticated Patient Tools (Requires JWT Token)
 
-These tools access personal patient records and booking tables.
+These tools access personal patient records, lab test reports, and booking tables.
 
 - **Without Token**: Returns a clean explanation asking you to sign in.
-- **With Token**: Returns your personal consultation schedule and confirms appointments.
+- **With Token**: Returns your verified health reports, personal consultation schedule, and confirms appointments.
 
-#### 5. `get_user_schedule`
+#### 5. `get_user_health_reports` (Clinical Health & Lab Reports)
+```text
+#nutriconnect-local Show my recent health reports from Dr. Kavita Menon
+```
+```text
+#nutriconnect-local Get my latest blood test lab report
+```
+```text
+#nutriconnect-local What did my last clinical consultation report conclude?
+```
+*(Without Token response: "Authentication required. Please log in to access your personal health reports.")*
+
+#### 6. `get_user_schedule`
 ```text
 #nutriconnect-local Check my upcoming dietitian consultations schedule
 ```
 *(Without Token response: "Please sign in to view your consultations schedule.")*
 
-#### 6. `book_dietitian_appointment`
+#### 7. `book_dietitian_appointment`
 ```text
 #nutriconnect-local Book an Online consultation with Dr. Arjun Reddy on 2026-10-15 at 10:30
 ```
@@ -112,7 +125,7 @@ These tools access personal patient records and booking tables.
 
 ## 4. How to Add a JWT Token to Unlock Patient Tools
 
-To unlock `get_user_schedule` and `book_dietitian_appointment`:
+To unlock `get_user_health_reports`, `get_user_schedule`, and `book_dietitian_appointment`:
 
 Add `?token=YOUR_JWT_TOKEN` to your URL in `mcp.json`:
 

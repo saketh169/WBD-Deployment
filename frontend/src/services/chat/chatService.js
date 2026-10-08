@@ -12,6 +12,8 @@ export const getMessages = (conversationId) =>
 export const sendChatMessage = (messageData) =>
   makeRequest(() => axiosInstance.post('/api/chat/message', messageData));
 
+export const sendMessage = sendChatMessage;
+
 export const editMessage = (messageId, payload) => {
   const data = typeof payload === 'string' ? { content: payload, text: payload } : payload;
   return makeRequest(() => axiosInstance.put(`/api/chat/message/${messageId}`, data));

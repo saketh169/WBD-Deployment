@@ -50,10 +50,19 @@ export const getProfileByRole = async (role = 'user', options = {}) => {
     try {
       const res = await axiosInstance.get(endpoint);
       const data = res.data;
-      if (!data?.isError) {
-        profileCache.set(normalizedRole, data);
+      const formatted = (data && typeof data === 'object' && data.isError !== undefined)
+        ? data
+        : {
+            isError: false,
+            success: true,
+            data: data?.data !== undefined ? data.data : data,
+            message: data?.message || 'Profile fetched',
+            status: res.status || 200,
+          };
+      if (!formatted.isError) {
+        profileCache.set(normalizedRole, formatted);
       }
-      return data;
+      return formatted;
     } catch (error) {
       return {
         isError: true,

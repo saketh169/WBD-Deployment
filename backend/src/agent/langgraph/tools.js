@@ -22,9 +22,9 @@ const {
   executeGenerateMealPlan,
 } = require("../tools/mealPlan.tool");
 const {
-  calculateHealthMetricsDeclaration,
-  executeCalculateHealthMetrics,
-} = require("../tools/healthMetrics.tool");
+  getUserHealthReportsDeclaration,
+  executeGetUserHealthReports,
+} = require("../tools/healthReports.tool");
 
 /**
  * Zod input schemas for validation and type-safety within LangGraph
@@ -113,13 +113,20 @@ const GenerateMealPlanSchema = z
   })
   .passthrough();
 
-const CalculateHealthMetricsSchema = z
+const GetUserHealthReportsSchema = z
   .object({
-    weightKg: z.number().describe("Patient weight in kg"),
-    heightCm: z.number().describe("Patient height in cm"),
-    age: z.number().optional().describe("Patient age in years"),
-    gender: z.string().optional().describe("Biological gender"),
-    activityLevel: z.string().optional().describe("Activity level"),
+    reportType: z
+      .enum(["all", "health", "lab"])
+      .optional()
+      .describe("Type of report to retrieve: 'health', 'lab', or 'all'"),
+    date: z
+      .string()
+      .optional()
+      .describe("Optional date filter (YYYY-MM-DD)"),
+    limit: z
+      .number()
+      .optional()
+      .describe("Maximum number of reports to retrieve"),
   })
   .passthrough();
 
@@ -163,11 +170,11 @@ const TOOL_DEFINITIONS = {
     schema: GenerateMealPlanSchema,
     execute: executeGenerateMealPlan,
   },
-  calculate_health_metrics: {
-    name: "calculate_health_metrics",
-    declaration: calculateHealthMetricsDeclaration,
-    schema: CalculateHealthMetricsSchema,
-    execute: executeCalculateHealthMetrics,
+  get_user_health_reports: {
+    name: "get_user_health_reports",
+    declaration: getUserHealthReportsDeclaration,
+    schema: GetUserHealthReportsSchema,
+    execute: executeGetUserHealthReports,
   },
 };
 
@@ -181,7 +188,7 @@ const GEMINI_TOOL_DECLARATIONS = [
   bookDietitianAppointmentDeclaration,
   lookupNutritionDeclaration,
   generateMealPlanDeclaration,
-  calculateHealthMetricsDeclaration,
+  getUserHealthReportsDeclaration,
 ];
 
 /**
