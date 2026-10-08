@@ -20,9 +20,9 @@ function determineGender(name) {
 
 const connectDB = async () => {
   try {
-    const MONGODB_URI = process.env.MONGODB_URL || "mongodb://localhost:27017/NutriConnectDatabase";
+    const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/NutriConnectDatabase";
     if (!MONGODB_URI) {
-      throw new Error('MONGODB_URL is not defined');
+      throw new Error('MONGODB_URI is not defined');
     }
     await mongoose.connect(MONGODB_URI);
     console.log('✅ MongoDB Connected Successfully!');

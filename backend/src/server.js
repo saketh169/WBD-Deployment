@@ -62,7 +62,20 @@ app.use(cors({
 
 // --- Middlewares ---
 // Connect to the database
-connectDB();
+connectDB().catch(() => {});
+
+// Ensure database connection is established before processing requests
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: 'Database connection failed. Please check connection string.',
+    });
+  }
+});
 
 // Security middlewares
 app.use(helmetMiddleware);
@@ -278,3 +291,5 @@ const server = app.listen(PORT, () => {
 
 // Initialize Socket.io
 require('./utils/socket').init(server, ALLOWED_ORIGINS);
+
+module.exports = app;

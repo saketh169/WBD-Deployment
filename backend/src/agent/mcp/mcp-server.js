@@ -161,8 +161,8 @@ async function runStdioServer() {
   require("dotenv").config({
     path: require("path").join(__dirname, "..", "..", "..", ".env"),
   });
-  if (process.env.MONGODB_URL && mongoose.connection.readyState === 0) {
-    await mongoose.connect(process.env.MONGODB_URL);
+  if (process.env.MONGODB_URI && mongoose.connection.readyState === 0) {
+    await mongoose.connect(process.env.MONGODB_URI);
   }
 
   const server = createNutriConnectMCPServer();

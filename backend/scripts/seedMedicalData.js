@@ -9,7 +9,7 @@ const MealPlan = require('../src/models/mealPlanModel');
 
 async function seedMedicalData() {
   try {
-    const mongoUri = process.env.MONGODB_URL || 'mongodb://localhost:27017/NutriConnectDatabase';
+    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/NutriConnectDatabase';
     await mongoose.connect(mongoUri);
     console.log('✅ Connected to MongoDB');
 

@@ -33,7 +33,7 @@ const mockDietitians = [
 
 async function repairImages() {
   try {
-    const MONGODB_URI = process.env.MONGODB_URL || "mongodb://localhost:27017/NutriConnectDatabase";
+    const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/NutriConnectDatabase";
     await mongoose.connect(MONGODB_URI);
 
     console.log('🔄 Starting image reseed...');

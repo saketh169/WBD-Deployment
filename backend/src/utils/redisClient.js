@@ -8,7 +8,7 @@ const crypto = require('crypto');
 
 // Unique identifier for current database to prevent cache pollution across environments
 const getDbIdentifier = () => {
-  const mongoUrl = process.env.MONGODB_URL || 'mongodb://localhost:27017/NutriConnectDatabase';
+  const mongoUrl = process.env.MONGODB_URI || 'mongodb://localhost:27017/NutriConnectDatabase';
   return crypto.createHash('md5').update(mongoUrl).digest('hex').substring(0, 8);
 };
 
