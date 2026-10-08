@@ -21,7 +21,11 @@ async function handleMCPSSE(req, res) {
     const transport = new SSEServerTransport("/api/agent/mcp/messages", res);
     const sessionId = transport.sessionId;
 
-    activeTransports.set(sessionId, { server, transport });
+    activeTransports.set(sessionId, {
+      server,
+      transport,
+      userId: userId ? String(userId) : null,
+    });
 
     transport.onclose = () => {
       activeTransports.delete(sessionId);
@@ -53,7 +57,23 @@ async function handleMCPMessages(req, res) {
       });
     }
 
-    const { transport } = activeTransports.get(sessionId);
+    const sessionData = activeTransports.get(sessionId);
+    const callerUserId =
+      req.user?.roleId ||
+      req.user?.userId ||
+      req.user?.id ||
+      req.user?._id ||
+      null;
+    const normalizedCallerId = callerUserId ? String(callerUserId) : null;
+
+    if (sessionData.userId && sessionData.userId !== normalizedCallerId) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: You do not have ownership of this MCP session.",
+      });
+    }
+
+    const { transport } = sessionData;
     await transport.handlePostMessage(req, res, req.body);
   } catch (err) {
     console.error("[MCP Message Error]:", err);

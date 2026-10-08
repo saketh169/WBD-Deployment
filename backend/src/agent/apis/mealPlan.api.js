@@ -48,10 +48,10 @@ async function generateMealPlanApi({
             .lean();
 
           if (report) {
-            if (!effectiveCalories && report.targetCalories) {
+            if (report.targetCalories) {
               effectiveCalories = report.targetCalories;
             }
-            if (!effectiveMacros && report.targetMacros) {
+            if (report.targetMacros) {
               effectiveMacros = report.targetMacros;
             }
             if (!effectiveDietitian && report.dietitianName) {

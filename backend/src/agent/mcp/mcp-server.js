@@ -114,7 +114,10 @@ function createNutriConnectMCPServer(userId = null) {
     }
 
     try {
-      const result = await executeLangGraphTool(name, args || {}, { userId });
+      const toolContext = PATIENT_PROTECTED_TOOLS.has(name)
+        ? { userId }
+        : { userId: null };
+      const result = await executeLangGraphTool(name, args || {}, toolContext);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         isError: !result.success,

@@ -63,14 +63,19 @@ async function executeGetUserHealthReports(args = {}, context = {}) {
 
     if (targetDate) {
       const d = new Date(targetDate);
-      if (!isNaN(d.getTime())) {
-        const start = new Date(d);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(d);
-        end.setHours(23, 59, 59, 999);
-        healthQuery.createdAt = { $gte: start, $lte: end };
-        labQuery.createdAt = { $gte: start, $lte: end };
+      if (isNaN(d.getTime())) {
+        return {
+          success: false,
+          cards: [],
+          message: `Invalid date format "${targetDate}". Please provide a valid date in YYYY-MM-DD format.`,
+        };
       }
+      const start = new Date(d);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(d);
+      end.setHours(23, 59, 59, 999);
+      healthQuery.createdAt = { $gte: start, $lte: end };
+      labQuery.createdAt = { $gte: start, $lte: end };
     }
 
     const fetchHealth = reportType === "all" || reportType === "health";

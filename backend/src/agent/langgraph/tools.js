@@ -49,7 +49,7 @@ const SearchDietitiansSchema = z
       .optional()
       .describe("Number of verified dietitians to return"),
   })
-  .passthrough();
+  .strict();
 
 const CheckAvailabilitySchema = z
   .object({
@@ -61,7 +61,7 @@ const CheckAvailabilitySchema = z
       .optional()
       .describe("Optional date to inspect in YYYY-MM-DD format"),
   })
-  .passthrough();
+  .strict();
 
 const GetUserScheduleSchema = z
   .object({
@@ -69,8 +69,12 @@ const GetUserScheduleSchema = z
       .string()
       .optional()
       .describe("Optional date to filter (e.g. today, tomorrow, or YYYY-MM-DD)"),
+    dietitianName: z
+      .string()
+      .optional()
+      .describe("Optional dietitian name to filter"),
   })
-  .passthrough();
+  .strict();
 
 const BookDietitianAppointmentSchema = z
   .object({
@@ -85,7 +89,7 @@ const BookDietitianAppointmentSchema = z
       .default("Online")
       .describe("Consultation mode"),
   })
-  .passthrough();
+  .strict();
 
 const LookupNutritionSchema = z
   .object({
@@ -95,23 +99,33 @@ const LookupNutritionSchema = z
       .optional()
       .describe("Optional portion or quantity (e.g. 100g, 1 cup)"),
   })
-  .passthrough();
+  .strict();
 
 const GenerateMealPlanSchema = z
   .object({
     planName: z.string().optional().describe("Clinical title of the plan"),
     dietType: z.string().optional().describe("Dietary classification"),
     durationDays: z.number().optional().describe("Duration in days"),
+    daysCount: z.number().optional().describe("Alias for durationDays"),
     dailyCalories: z.number().optional().describe("Target daily calories"),
-    macroTargets: z.any().optional().describe("Macronutrient targets"),
+    targetCalories: z.number().optional().describe("Target daily calories"),
+    macroTargets: z
+      .object({
+        proteinGrams: z.number().nonnegative(),
+        carbsGrams: z.number().nonnegative(),
+        fatsGrams: z.number().nonnegative(),
+      })
+      .optional()
+      .describe("Macronutrient targets"),
     healthFocus: z.string().optional().describe("Clinical focus"),
     allergiesExcluded: z
       .array(z.string())
       .optional()
       .describe("Excluded allergens"),
     clinicalNotes: z.string().optional().describe("Clinical notes"),
+    supervisingDietitian: z.string().optional().describe("Supervising dietitian"),
   })
-  .passthrough();
+  .strict();
 
 const GetUserHealthReportsSchema = z
   .object({
@@ -128,7 +142,7 @@ const GetUserHealthReportsSchema = z
       .optional()
       .describe("Maximum number of reports to retrieve"),
   })
-  .passthrough();
+  .strict();
 
 /**
  * Unified Tool Registry for LangGraph Nodes
