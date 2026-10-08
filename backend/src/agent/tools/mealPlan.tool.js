@@ -76,7 +76,7 @@ async function executeGenerateMealPlan(args = {}, context = {}) {
     let effectiveCalories = dailyCalories;
     let effectiveMacros = macroTargets;
     let effectiveDietType = dietType;
-    let effectiveDietitian = supervisingDietitian || "NutriConnect Clinical Team";
+    let effectiveDietitian = supervisingDietitian || null;
     let effectiveAllergies = allergiesExcluded || [];
     let effectiveNotes = clinicalNotes || "";
 
@@ -84,6 +84,7 @@ async function executeGenerateMealPlan(args = {}, context = {}) {
       try {
         const { resolvePatientProfile } = require("../services/userResolver");
         const { HealthReport } = require("../../models/healthReportModel");
+        const { LabReport } = require("../../models/labReportModel");
         const { userId: resolvedId } = await resolvePatientProfile(context.userId);
         const effectiveId = resolvedId || context.userId;
         if (effectiveId) {
@@ -99,7 +100,7 @@ async function executeGenerateMealPlan(args = {}, context = {}) {
             if (!effectiveMacros && report.targetMacros) {
               effectiveMacros = report.targetMacros;
             }
-            if (!supervisingDietitian && report.dietitianName) {
+            if (!effectiveDietitian && report.dietitianName) {
               effectiveDietitian = report.dietitianName;
             }
             if (report.allergies?.length) {
@@ -114,6 +115,26 @@ async function executeGenerateMealPlan(args = {}, context = {}) {
               effectiveNotes = report.dietaryRecommendations;
             }
           }
+
+          // If calories not found in HealthReport, check LabReport fitness metrics
+          if (!effectiveCalories) {
+            const lab = await LabReport.findOne({
+              $or: [{ clientId: effectiveId }, { userId: effectiveId }],
+              "fitnessMetrics.currentWeight": { $exists: true, $gt: 0 },
+            })
+              .sort({ createdAt: -1 })
+              .lean();
+            if (lab?.fitnessMetrics?.currentWeight && lab?.fitnessMetrics?.heightCm) {
+              const w = Number(lab.fitnessMetrics.currentWeight);
+              const h = Number(lab.fitnessMetrics.heightCm);
+              const a = Number(lab.clientAge) || 30;
+              const bmr = 10 * w + 6.25 * h - 5 * a + 5;
+              effectiveCalories = Math.round(bmr * 1.35);
+              if (!effectiveNotes) {
+                effectiveNotes = `Calibrated to patient biological metrics (${w}kg, ${h}cm, maintenance ${effectiveCalories} kcal).`;
+              }
+            }
+          }
         }
       } catch (err) {
         console.warn("[mealPlan.tool context grounding warning]:", err.message);
@@ -121,17 +142,19 @@ async function executeGenerateMealPlan(args = {}, context = {}) {
     }
 
     const effectiveDuration = durationDays || daysCount || 3;
+    const finalCalories = effectiveCalories || 2000;
+    const finalDietitian = effectiveDietitian || "Unassigned (AI Clinical Protocol)";
 
     const result = await generateMealPlanApi({
       planName: planName || "Personalized Clinical Meal Plan",
       dietType: effectiveDietType || "Balanced",
       durationDays: effectiveDuration,
-      dailyCalories: effectiveCalories || 1800,
+      dailyCalories: finalCalories,
       macroTargets: effectiveMacros,
       healthFocus: healthFocus || "General Wellness",
       allergiesExcluded: effectiveAllergies,
       clinicalNotes: effectiveNotes,
-      supervisingDietitian: effectiveDietitian,
+      supervisingDietitian: finalDietitian,
     });
 
     if (!result.success || !result.plan) {

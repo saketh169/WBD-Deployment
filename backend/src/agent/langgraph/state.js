@@ -66,6 +66,12 @@ const AgentState = Annotation.Root({
     default: () => [],
   }),
 
+  // Iteration loop counter for multi-turn reasoning and tool invocation
+  loopCount: Annotation({
+    reducer: (x, y) => (y !== undefined ? y : (x || 0)),
+    default: () => 0,
+  }),
+
   // Tool execution results from tool APIs
   toolResults: Annotation({
     reducer: (x, y) => y ?? x,

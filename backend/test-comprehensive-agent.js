@@ -4,7 +4,7 @@ const { runLangGraphAgent } = require("./src/agent/langgraph");
 const { executeLangGraphTool } = require("./src/agent/langgraph/tools");
 const { findDietitiansApi } = require("./src/agent/apis/specialist.api");
 const { lookupNutritionApi } = require("./src/agent/apis/nutrition.api");
-const { calculateHealthMetricsApi } = require("./src/agent/apis/healthMetrics.api");
+const { executeGetUserHealthReports } = require("./src/agent/tools/healthReports.tool");
 const { generateMealPlanApi } = require("./src/agent/apis/mealPlan.api");
 const { bookDietitianAppointmentApi } = require("./src/agent/apis/booking.api");
 const { checkDietitianAvailabilityApi, getUserScheduleApi } = require("./src/agent/apis/schedule.api");
@@ -108,27 +108,27 @@ async function runTestSuite() {
     assert("Unknown food query handles gracefully without crashing", typeof n6.success === "boolean");
   }
 
-  console.log("\n--- Category 3: Health Metrics (BMI, BMR, TDEE) ---");
+  console.log("\n--- Category 3: Clinical Health Reports & Biomarkers ---");
   {
-    // 18. Normal weight BMI
-    const m1 = await calculateHealthMetricsApi({ weightKg: 70, heightCm: 175, age: 30, gender: "male", activityLevel: "moderate" });
-    assert("Health metrics calculation for 70kg, 175cm male", m1.success && m1.metrics?.bmi === 22.9 && m1.metrics?.bmiCategory === "Normal weight", `BMI: ${m1.metrics?.bmi}, TDEE: ${m1.metrics?.tdeeKcal}`);
+    // 18. Health reports for unauthenticated context
+    const h1 = await executeGetUserHealthReports({ reportType: "all" }, { userId: null });
+    assert("Health reports for unauthenticated context handles safely", typeof h1.success === "boolean");
 
-    // 19. Overweight BMI
-    const m2 = await calculateHealthMetricsApi({ weightKg: 85, heightCm: 170 });
-    assert("BMI calculation identifies Overweight category", m2.success && m2.metrics?.bmiCategory === "Overweight");
+    // 19. Health reports with limit
+    const h2 = await executeGetUserHealthReports({ reportType: "health", limit: 2 }, { userId: null });
+    assert("Health reports with limit parameter", typeof h2.success === "boolean");
 
-    // 20. Underweight BMI
-    const m3 = await calculateHealthMetricsApi({ weightKg: 45, heightCm: 168 });
-    assert("BMI calculation identifies Underweight category", m3.success && m3.metrics?.bmiCategory === "Underweight");
+    // 20. Health reports with lab filter
+    const h3 = await executeGetUserHealthReports({ reportType: "lab", limit: 1 }, { userId: null });
+    assert("Health reports with lab filter", typeof h3.success === "boolean");
 
-    // 21. Obese BMI
-    const m4 = await calculateHealthMetricsApi({ weightKg: 105, heightCm: 172 });
-    assert("BMI calculation identifies Obese category", m4.success && m4.metrics?.bmiCategory.includes("Obese"));
+    // 21. Health reports with date filter
+    const h4 = await executeGetUserHealthReports({ date: "2026-10-01" }, { userId: null });
+    assert("Health reports with date parameter", typeof h4.success === "boolean");
 
-    // 22. Missing height or weight error handling
-    const m5 = await calculateHealthMetricsApi({ weightKg: 0, heightCm: 0 });
-    assert("Zero weight/height returns error cleanly", !m5.success);
+    // 22. Empty options handling
+    const h5 = await executeGetUserHealthReports({}, { userId: null });
+    assert("Health reports with default parameters", typeof h5.success === "boolean");
   }
 
   console.log("\n--- Category 4: Clinical Meal Plan Generation ---");

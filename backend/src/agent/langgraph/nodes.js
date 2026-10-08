@@ -77,6 +77,13 @@ async function reasoningNode(state) {
   }
   messageParts.push({ text: userPrompt });
 
+  if (state.toolResults && state.toolResults.length > 0) {
+    const priorSummary = formatToolSummary(state.toolResults);
+    messageParts.push({
+      text: `Intermediate Tool Execution Findings:\n${priorSummary}\n\nReview the findings above. If additional tool actions are strictly required, invoke them now. Otherwise, proceed without calling more tools.`,
+    });
+  }
+
   const startTime = Date.now();
   let selectedResponse = null;
   let toolCalls = [];
@@ -139,7 +146,7 @@ async function reasoningNode(state) {
 
 /**
  * 3. Tool Execution Node:
- * Sequentially or concurrently executes all tool calls emitted by Gemini,
+ * Executes tool calls emitted by Gemini without running side-effects blindly in parallel,
  * aggregating tool results, UI cards, and payment checkout details.
  */
 async function toolNode(state) {
@@ -147,9 +154,16 @@ async function toolNode(state) {
   const toolsExecuted = [...(state.toolsExecuted || [])];
   let cards = [...(state.cards || [])];
   let openPaymentDetails = state.openPaymentDetails || null;
+  const existingToolResults = [...(state.toolResults || [])];
 
-  const toolResults = await Promise.all(
-    toolCalls.map(async (call) => {
+  const MUTATING_TOOLS = new Set(["book_dietitian_appointment"]);
+
+  const readCalls = toolCalls.filter((c) => !MUTATING_TOOLS.has(c.name));
+  const mutatingCalls = toolCalls.filter((c) => MUTATING_TOOLS.has(c.name));
+
+  // 1. Execute read/lookup tools concurrently
+  const newReadResults = await Promise.all(
+    readCalls.map(async (call) => {
       const { name, args } = call;
       const res = await executeLangGraphTool(name, args, {
         userId: state.userId,
@@ -160,7 +174,21 @@ async function toolNode(state) {
     })
   );
 
-  for (const tr of toolResults) {
+  // 2. Execute side-effecting / mutating tools sequentially after reads
+  const newMutatingResults = [];
+  for (const call of mutatingCalls) {
+    const { name, args } = call;
+    const res = await executeLangGraphTool(name, args, {
+      userId: state.userId,
+      authUserId: state.authUserId,
+      userQuery: state.userQuery,
+    });
+    newMutatingResults.push({ tool: name, args, ...res });
+  }
+
+  const newToolResults = [...newReadResults, ...newMutatingResults];
+
+  for (const tr of newToolResults) {
     if (!toolsExecuted.includes(tr.tool)) toolsExecuted.push(tr.tool);
 
     if (tr.cards?.length > 0) {
@@ -172,11 +200,15 @@ async function toolNode(state) {
     }
   }
 
+  const allToolResults = [...existingToolResults, ...newToolResults];
+
   return {
     toolsExecuted,
     cards,
     openPaymentDetails,
-    toolResults,
+    toolResults: allToolResults,
+    toolCalls: [],
+    loopCount: (state.loopCount || 0) + 1,
     executionStatus: "tools_completed",
   };
 }

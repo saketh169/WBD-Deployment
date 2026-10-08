@@ -25,14 +25,13 @@ async function main() {
   const agentFiles = [
     "src/agent/config.js",
     "src/agent/index.js",
-    "src/agent/rules.js",
+    "src/agent/guardrails.js",
     "src/agent/apis/apiClient.js",
     "src/agent/apis/specialist.api.js",
     "src/agent/apis/schedule.api.js",
     "src/agent/apis/booking.api.js",
     "src/agent/apis/nutrition.api.js",
     "src/agent/apis/mealPlan.api.js",
-    "src/agent/apis/healthMetrics.api.js",
     "src/agent/langgraph/graph.js",
     "src/agent/langgraph/index.js",
     "src/agent/langgraph/nodes.js",
@@ -41,9 +40,10 @@ async function main() {
     "src/agent/mcp/mcp-server.js",
     "src/agent/mcp/mcp-transport-sse.js",
     "src/agent/services/agentContextLoader.js",
+    "src/agent/services/presentationFormatter.js",
     "src/agent/services/userResolver.js",
     "src/agent/tools/booking.tool.js",
-    "src/agent/tools/healthMetrics.tool.js",
+    "src/agent/tools/healthReports.tool.js",
     "src/agent/tools/mealPlan.tool.js",
     "src/agent/tools/nutrition.tool.js",
     "src/agent/tools/schedule.tool.js",
@@ -66,7 +66,7 @@ async function main() {
   try {
     const { findDietitiansApi } = require("./src/agent/apis/specialist.api");
     const { lookupNutritionApi } = require("./src/agent/apis/nutrition.api");
-    const { calculateHealthMetricsApi } = require("./src/agent/apis/healthMetrics.api");
+    const { executeGetUserHealthReports } = require("./src/agent/tools/healthReports.tool");
     const { generateMealPlanApi } = require("./src/agent/apis/mealPlan.api");
 
     // Test Nutrition API (external USDA or fallback)
@@ -77,18 +77,15 @@ async function main() {
       `Calories: ${nutResult.data?.calories} kcal, Protein: ${nutResult.data?.protein}g`
     );
 
-    // Test Health Metrics API
-    const metricsResult = await calculateHealthMetricsApi({
-      weightKg: 70,
-      heightCm: 175,
-      age: 28,
-      gender: "male",
-      activityLevel: "moderate",
-    });
+    // Test Health Reports Tool
+    const reportsResult = await executeGetUserHealthReports(
+      { reportType: "all", limit: 3 },
+      { userId: null }
+    );
     report(
-      "Dedicated API: calculateHealthMetricsApi",
-      metricsResult.success && metricsResult.metrics?.bmi > 0,
-      `BMI: ${metricsResult.metrics?.bmi}, Maintenance TDEE: ${metricsResult.metrics?.tdeeKcal} kcal`
+      "Dedicated Tool: executeGetUserHealthReports",
+      reportsResult.success !== undefined,
+      `Result message: ${reportsResult.message}`
     );
 
     // Test Meal Plan API
@@ -132,7 +129,7 @@ async function main() {
       "book_dietitian_appointment",
       "lookup_nutrition",
       "generate_meal_plan",
-      "calculate_health_metrics",
+      "get_user_health_reports",
     ];
 
     const registeredKeys = Object.keys(TOOL_DEFINITIONS);
@@ -171,14 +168,14 @@ async function main() {
       const callToolResponse = await callToolHandler({
         method: "tools/call",
         params: {
-          name: "calculate_health_metrics",
-          arguments: { weightKg: 70, heightCm: 175 },
+          name: "lookup_nutrition",
+          arguments: { foodItem: "paneer", quantity: "100g" },
         },
       });
       const content = callToolResponse?.content?.[0]?.text;
       const parsed = content ? JSON.parse(content) : null;
       report(
-        "MCP CallTool Request (calculate_health_metrics)",
+        "MCP CallTool Request (lookup_nutrition)",
         !callToolResponse?.isError && parsed?.success,
         `Result: ${parsed?.message}`
       );

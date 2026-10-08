@@ -11,20 +11,20 @@ async function generateMealPlanApi({
   planName = "Personalized Nutrition Plan",
   dietType = "Balanced",
   durationDays = 3,
-  dailyCalories = 1800,
+  dailyCalories = 2000,
   targetCalories: explicitTargetCalories = null,
   macroTargets = null,
   healthFocus = "General Wellness",
   allergiesExcluded = [],
   clinicalNotes = "",
-  supervisingDietitian = "NutriConnect Clinical Team",
+  supervisingDietitian = null,
   days = [],
   useHttpApi = false,
 } = {}) {
   try {
     const rawDays = Number(durationDays);
     const daysCount = isNaN(rawDays) ? 3 : Math.max(1, Math.min(rawDays, 7));
-    const targetCalories = Math.max(1200, Number(explicitTargetCalories || dailyCalories) || 1800);
+    const targetCalories = Math.max(1200, Number(explicitTargetCalories || dailyCalories) || 2000);
 
     const calculatedMacros = macroTargets || {
       proteinGrams: Math.round((targetCalories * 0.25) / 4),

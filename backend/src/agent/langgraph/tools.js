@@ -204,12 +204,21 @@ async function executeLangGraphTool(toolName, args, context = {}) {
     };
   }
 
-  const parsedArgs = toolDef.schema
-    ? toolDef.schema.safeParse(args || {})
-    : { success: false };
-  const cleanArgs = parsedArgs.success
-    ? { ...(args || {}), ...parsedArgs.data }
-    : args || {};
+  let cleanArgs = args || {};
+  if (toolDef.schema) {
+    const parsedArgs = toolDef.schema.safeParse(args || {});
+    if (!parsedArgs.success) {
+      const issueDetails = parsedArgs.error.issues
+        .map((issue) => `${issue.path.join(".") || "parameter"}: ${issue.message}`)
+        .join("; ");
+      return {
+        success: false,
+        message: `Validation failed for tool "${toolName}": ${issueDetails}`,
+        cards: [],
+      };
+    }
+    cleanArgs = { ...(args || {}), ...parsedArgs.data };
+  }
 
   try {
     const result = await toolDef.execute(cleanArgs, context);

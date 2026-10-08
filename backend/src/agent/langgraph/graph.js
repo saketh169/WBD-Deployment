@@ -7,12 +7,28 @@ const {
   synthesisNode,
 } = require("./nodes");
 
+const MAX_REASONING_LOOPS = 2;
+
 /**
- * Conditional router: routes to tool_execution if Gemini identified tool actions, else straight to synthesis
+ * Conditional router after reasoning:
+ * Routes to tool_execution if Gemini identified tool actions, else straight to synthesis.
  */
 function routeAfterReasoning(state) {
   if (state.toolCalls && state.toolCalls.length > 0) {
     return "tool_execution";
+  }
+  return "synthesis";
+}
+
+/**
+ * Controlled loop router after tool execution:
+ * Allows Gemini to review intermediate findings and invoke follow-up tools
+ * up to MAX_REASONING_LOOPS iterations. If the bound is reached, proceeds to synthesis.
+ */
+function routeAfterTools(state) {
+  const currentLoop = state.loopCount || 0;
+  if (currentLoop < MAX_REASONING_LOOPS) {
+    return "reasoning";
   }
   return "synthesis";
 }
@@ -38,7 +54,12 @@ function createNutriAgentGraph() {
     synthesis: "synthesis",
   });
 
-  workflow.addEdge("tool_execution", "synthesis");
+  // Controlled multi-turn reasoning loop: tools -> reasoning -> tools -> synthesis
+  workflow.addConditionalEdges("tool_execution", routeAfterTools, {
+    reasoning: "reasoning",
+    synthesis: "synthesis",
+  });
+
   workflow.addEdge("synthesis", END);
 
   const checkpointer = new MemorySaver();

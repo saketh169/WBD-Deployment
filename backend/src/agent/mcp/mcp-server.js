@@ -85,8 +85,34 @@ function createNutriConnectMCPServer(userId = null) {
   });
 
   // 2. MCP Tool Execution with authenticated context
+  const PATIENT_PROTECTED_TOOLS = new Set([
+    "get_user_schedule",
+    "get_user_health_reports",
+    "book_dietitian_appointment",
+  ]);
+
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+    if (PATIENT_PROTECTED_TOOLS.has(name) && !userId) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                success: false,
+                error: "UNAUTHORIZED",
+                message: `Tool "${name}" accesses protected patient clinical data. An authenticated patient session is required.`,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+        isError: true,
+      };
+    }
+
     try {
       const result = await executeLangGraphTool(name, args || {}, { userId });
       return {

@@ -100,11 +100,15 @@ class ApiClient {
   }
 
   post(endpoint, body = {}, options = {}) {
-    return this.request(url, { ...options, method: "POST", body });
+    return this.request(endpoint, { ...options, method: "POST", body });
   }
 
   put(endpoint, body = {}, options = {}) {
-    return this.request(url, { ...options, method: "PUT", body });
+    return this.request(endpoint, { ...options, method: "PUT", body });
+  }
+
+  patch(endpoint, body = {}, options = {}) {
+    return this.request(endpoint, { ...options, method: "PATCH", body });
   }
 
   delete(endpoint, options = {}) {

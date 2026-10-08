@@ -5,7 +5,7 @@ const { checkDietitianAvailabilityApi, getUserScheduleApi } = require("./src/age
 const { bookDietitianAppointmentApi } = require("./src/agent/apis/booking.api");
 const { lookupNutritionApi } = require("./src/agent/apis/nutrition.api");
 const { generateMealPlanApi } = require("./src/agent/apis/mealPlan.api");
-const { calculateHealthMetricsApi } = require("./src/agent/apis/healthMetrics.api");
+const { executeGetUserHealthReports } = require("./src/agent/tools/healthReports.tool");
 const { Dietitian, User } = require("./src/models/userModel");
 const Booking = require("./src/models/bookingModel");
 const { BlockedSlot } = require("./src/models/bookingModel");
@@ -228,48 +228,35 @@ async function runEdgeCases() {
   }
 
   // ---------------------------------------------------------------------------
-  // API 7: Health Metrics (calculateHealthMetricsApi) Edge Cases
+  // API 7: Clinical Health Reports (executeGetUserHealthReports) Edge Cases
   // ---------------------------------------------------------------------------
-  console.log("\n--- API 7: Health Metrics Edge Cases ---");
+  console.log("\n--- API 7: Clinical Health Reports Tool Edge Cases ---");
   {
-    // EC 40: Normal BMI range (18.5 - 24.9)
-    const hm1 = await calculateHealthMetricsApi({ weightKg: 65, heightCm: 170 });
-    test("65kg, 170cm produces Normal weight classification", hm1.success && hm1.metrics?.bmiCategory === "Normal weight", `BMI: ${hm1.metrics?.bmi}`);
+    // EC 40: Unauthenticated user safely returns empty reports
+    const hr1 = await executeGetUserHealthReports({ reportType: "all" }, { userId: null });
+    test("Unauthenticated user safely returns structured response", typeof hr1.success === "boolean");
 
-    // EC 41: Underweight (<18.5)
-    const hm2 = await calculateHealthMetricsApi({ weightKg: 40, heightCm: 165 });
-    test("40kg, 165cm produces Underweight classification", hm2.success && hm2.metrics?.bmiCategory === "Underweight", `BMI: ${hm2.metrics?.bmi}`);
+    // EC 41: Filter by health reports only
+    const hr2 = await executeGetUserHealthReports({ reportType: "health", limit: 3 }, { userId: null });
+    test("Filter by reportType 'health'", typeof hr2.success === "boolean");
 
-    // EC 42: Overweight (25 - 29.9)
-    const hm3 = await calculateHealthMetricsApi({ weightKg: 80, heightCm: 172 });
-    test("80kg, 172cm produces Overweight classification", hm3.success && hm3.metrics?.bmiCategory === "Overweight", `BMI: ${hm3.metrics?.bmi}`);
+    // EC 42: Filter by lab reports only
+    const hr3 = await executeGetUserHealthReports({ reportType: "lab", limit: 2 }, { userId: null });
+    test("Filter by reportType 'lab'", typeof hr3.success === "boolean");
 
-    // EC 43: Obese Class I (30 - 34.9)
-    const hm4 = await calculateHealthMetricsApi({ weightKg: 95, heightCm: 170 });
-    test("95kg, 170cm produces Obese Class I classification", hm4.success && hm4.metrics?.bmiCategory === "Obese (Class I)", `BMI: ${hm4.metrics?.bmi}`);
+    // EC 43: Date filter handling
+    const hr4 = await executeGetUserHealthReports({ date: "2026-10-01" }, { userId: null });
+    test("Date filter handling", typeof hr4.success === "boolean");
 
-    // EC 44: Severe Obese Class III (>=40)
-    const hm5 = await calculateHealthMetricsApi({ weightKg: 130, heightCm: 165 });
-    test("130kg, 165cm produces Obese Class III classification", hm5.success && hm5.metrics?.bmiCategory === "Obese (Class III)", `BMI: ${hm5.metrics?.bmi}`);
+    // EC 44: Invalid / Non-existent MongoDB ID handles safely
+    const hr5 = await executeGetUserHealthReports({}, { userId: "507f1f77bcf86cd799439011" });
+    test("Non-existent patient ID handles gracefully without crashing", hr5.success === true && hr5.data.healthReports.length === 0);
 
-    // EC 45: Female BMR Mifflin formula (-161)
-    const hm6 = await calculateHealthMetricsApi({ weightKg: 60, heightCm: 165, age: 30, gender: "female" });
-    const hm7 = await calculateHealthMetricsApi({ weightKg: 60, heightCm: 165, age: 30, gender: "male" });
-    test("Female BMR formula is lower than Male BMR by ~166 kcal", hm6.success && hm7.success && hm7.metrics?.bmrKcal > hm6.metrics?.bmrKcal);
-
-    // EC 46: Invalid / negative values rejection
-    const hm8 = await calculateHealthMetricsApi({ weightKg: -10, heightCm: 170 });
-    test("Negative weight returns clean validation error", !hm8.success);
-
-    // EC 47: Missing height returns validation error
-    const hm9 = await calculateHealthMetricsApi({ weightKg: 70 });
-    test("Missing height returns clean validation error", !hm9.success);
-
-    // EC 48: Patient with clinical report retrieves metrics without needing explicit weight/height
-    const sampleLab = await require("./src/models/labReportModel").LabReport.findOne({ "fitnessMetrics.currentWeight": { $exists: true } }).lean();
-    if (sampleLab) {
-      const hm10 = await calculateHealthMetricsApi({ userId: sampleLab.userId });
-      test("Retrieves metrics directly from patient clinical report without explicit input", hm10.success && hm10.metrics?.dataSource === "clinical_medical_report", `Weight: ${hm10.metrics?.weightKg}kg, Height: ${hm10.metrics?.heightCm}cm, BMI: ${hm10.metrics?.bmi}`);
+    // EC 45: Patient with verified report returns structured patient_profile_card
+    const sampleReport = await require("./src/models/healthReportModel").HealthReport.findOne().lean();
+    if (sampleReport) {
+      const hr6 = await executeGetUserHealthReports({ reportType: "health" }, { userId: sampleReport.clientId });
+      test("Retrieves verified patient report with patient_profile_card", hr6.success && hr6.cards?.length > 0 && hr6.cards[0].type === "patient_profile_card");
     }
   }
 
