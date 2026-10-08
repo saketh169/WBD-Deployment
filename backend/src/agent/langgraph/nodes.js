@@ -95,9 +95,7 @@ async function reasoningNode(state) {
           tools: [{ functionDeclarations: GEMINI_TOOL_DECLARATIONS }],
         };
 
-        const model = genAI.getGenerativeModel(modelOptions, {
-          timeout: 22000,
-        });
+        const model = genAI.getGenerativeModel(modelOptions);
         const chat = model.startChat({ history: chatHistory });
         const res = await chat.sendMessage(messageParts);
 
@@ -218,13 +216,10 @@ Synthesize a clear, empathetic, and helpful clinical response for the patient:
 
       for (const mName of CANDIDATE_MODELS) {
         try {
-          const synthModel = genAI.getGenerativeModel(
-            {
-              model: mName,
-              generationConfig: { maxOutputTokens: 2500, temperature: 0.2 },
-            },
-            { timeout: 25000 }
-          );
+          const synthModel = genAI.getGenerativeModel({
+            model: mName,
+            generationConfig: { maxOutputTokens: 2500, temperature: 0.2 },
+          });
 
           const synthRes = await synthModel.generateContent(synthPrompt);
           const text = synthRes.response.text();

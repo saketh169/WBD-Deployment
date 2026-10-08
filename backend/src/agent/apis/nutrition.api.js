@@ -54,12 +54,10 @@ function parsePortionMultiplier(qtyStr) {
  * ZERO REGEX: Pure substring extraction.
  */
 async function getGeminiNutritionEstimate(foodItem, quantity) {
+  let timer = null;
   try {
     if (!genAI) return null;
-    const model = genAI.getGenerativeModel(
-      { model: GEMINI_MODEL },
-      { timeout: 10000 }
-    );
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
     const prompt = `You are a clinical dietitian. Provide authentic, accurate nutritional breakdown for: "${foodItem}" ${quantity ? `(${quantity})` : "(standard 100g portion)"}.
 Return ONLY a valid JSON object without markdown or commentary with schema:
 {
@@ -73,8 +71,13 @@ Return ONLY a valid JSON object without markdown or commentary with schema:
   "servingSize": { "amount": number, "unit": "g" }
 }`;
 
-    const res = await model.generateContent(prompt);
-    const text = res.response.text() || "";
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Gemini nutrition estimation timed out")), 10000);
+      if (timer.unref) timer.unref();
+    });
+
+    const res = await Promise.race([model.generateContent(prompt), timeoutPromise]);
+    const text = res?.response?.text?.() || "";
     const jsonStart = text.indexOf("{");
     const jsonEnd = text.lastIndexOf("}");
     const jsonStr = jsonStart !== -1 && jsonEnd !== -1 ? text.substring(jsonStart, jsonEnd + 1) : text;
@@ -94,6 +97,10 @@ Return ONLY a valid JSON object without markdown or commentary with schema:
     }
   } catch (err) {
     console.warn("[getGeminiNutritionEstimate Error]:", err.message);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
   }
   return null;
 }

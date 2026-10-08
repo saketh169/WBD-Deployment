@@ -54,17 +54,15 @@ async function generateMealPlanApi({
     let generatedDays = Array.isArray(days) && days.length > 0 ? days : [];
 
     if (generatedDays.length === 0 && genAI && process.env.NODE_ENV !== "test") {
+      let mealTimer = null;
       try {
-        const model = genAI.getGenerativeModel(
-          {
-            model: GEMINI_MODEL,
-            generationConfig: {
-              responseMimeType: "application/json",
-              temperature: 0.3,
-            },
+        const model = genAI.getGenerativeModel({
+          model: GEMINI_MODEL,
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.3,
           },
-          { timeout: 15000 }
-        );
+        });
 
         const prompt = `Generate a realistic ${daysCount}-day ${dietType} meal plan matching these nutritional targets:
 - Plan Name: ${planName}
@@ -101,8 +99,13 @@ Return JSON with schema:
   ]
 }`;
 
-        const res = await model.generateContent(prompt);
-        const text = res.response.text() || "";
+        const timeoutPromise = new Promise((_, reject) => {
+          mealTimer = setTimeout(() => reject(new Error("Gemini meal plan generation timed out")), 15000);
+          if (mealTimer.unref) mealTimer.unref();
+        });
+
+        const res = await Promise.race([model.generateContent(prompt), timeoutPromise]);
+        const text = res?.response?.text?.() || "";
         const jsonStart = text.indexOf("{");
         const jsonEnd = text.lastIndexOf("}");
         const jsonStr = jsonStart !== -1 && jsonEnd !== -1 ? text.substring(jsonStart, jsonEnd + 1) : text;
@@ -112,6 +115,10 @@ Return JSON with schema:
         }
       } catch (genErr) {
         console.warn("[generateMealPlanApi Generation Warning]:", genErr.message);
+      } finally {
+        if (mealTimer) {
+          clearTimeout(mealTimer);
+        }
       }
     }
 
