@@ -249,26 +249,42 @@ export function NutriAgentPage() {
     };
   }, []);
 
+  const currentAuthUserId = user?.id || user?._id || user?.roleId || "";
+
   // Real-time WebSocket listener for live slot availability updates
   useEffect(() => {
     const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000", {
       withCredentials: true,
     });
 
-    const currentUserId = user?.id || user?._id || user?.roleId || null;
-    if (currentUserId) {
-      socket.emit("register_dietitian", currentUserId);
+    if (currentAuthUserId) {
+      socket.emit("register_dietitian", currentAuthUserId);
     }
+
+    let lastBookingKey = "";
+    let lastBookingTime = 0;
 
     const handleLiveBookingUpdate = (booking) => {
       if (!booking) return;
-      const currentUserId = user?.id || user?._id || user?.roleId || null;
+      const bookingKey = String(
+        booking._id || booking.id || `${booking.date}_${booking.time}_${booking.dietitianId}`
+      );
+      const now = Date.now();
+      if (lastBookingKey === bookingKey && now - lastBookingTime < 1500) {
+        return;
+      }
+      lastBookingKey = bookingKey;
+      lastBookingTime = now;
+
+      window.dispatchEvent(
+        new CustomEvent("nutri_booking_update", { detail: booking })
+      );
       setMessages((prevMsgs) =>
         prevMsgs.map((msg) => {
           if (!msg.cards?.length) return msg;
           return {
             ...msg,
-            cards: applyBookingToCards(msg.cards, booking, currentUserId),
+            cards: applyBookingToCards(msg.cards, booking, currentAuthUserId),
           };
         }),
       );
@@ -282,7 +298,7 @@ export function NutriAgentPage() {
       socket.off("booking_updated", handleLiveBookingUpdate);
       socket.disconnect();
     };
-  }, [user]);
+  }, [currentAuthUserId]);
 
   const handleStartEdit = (index, content) => {
     setEditingIndex(index);

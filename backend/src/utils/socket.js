@@ -13,12 +13,9 @@ module.exports = {
     });
 
     io.on('connection', (socket) => {
-      console.log('Client connected:', socket.id);
-
       socket.on('register_dietitian', (dietitianId) => {
         if (!dietitianId) return;
 
-        console.log(`Dietitian ${dietitianId} registered their socket ${socket.id}`);
         // Add to mapped sockets
         if (!dietitianSockets.has(dietitianId)) {
           dietitianSockets.set(dietitianId, []);
@@ -33,11 +30,9 @@ module.exports = {
       socket.on('join_conversation', (conversationId) => {
         if (!conversationId) return;
         socket.join(`conversation_${conversationId}`);
-        console.log(`Socket ${socket.id} joined conversation ${conversationId}`);
       });
 
       socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
         // Remove from tracked sockets
         dietitianSockets.forEach((sockets, dietitianId) => {
           const index = sockets.indexOf(socket.id);
@@ -63,9 +58,7 @@ module.exports = {
 
   notifyDietitianNewBooking: (dietitianId, bookingData) => {
     if (io) {
-      io.to(`dietitian_${dietitianId}`).emit('new_booking', bookingData);
       io.emit('new_booking', bookingData);
-      io.emit('booking_updated', bookingData);
     }
   },
 
@@ -77,7 +70,6 @@ module.exports = {
 
   notifyBookingUpdate: (dietitianId, bookingData) => {
     if (io) {
-      io.to(`dietitian_${dietitianId}`).emit('booking_updated', bookingData);
       io.emit('booking_updated', bookingData);
     }
   },
