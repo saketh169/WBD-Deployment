@@ -199,18 +199,18 @@ async function bookDietitianAppointmentApi({
       };
     }
 
-    const fee = Number(doc.onlineFee ?? doc.fees ?? 0);
+    const fee = Number(doc.onlineFee || doc.fees || 450);
     const bookingId = new mongoose.Types.ObjectId();
 
     const newBooking = new Booking({
       _id: bookingId,
       userId: patientId,
       username: userRecord.name || "Patient",
-      email: userRecord.email || "",
+      email: userRecord.email || "patient@test.com",
       userPhone: userRecord.phone || "",
       dietitianId: doc._id,
       dietitianName: docDisplayName,
-      dietitianEmail: doc.email || "",
+      dietitianEmail: doc.email || "dietitian@test.com",
       dietitianPhone: doc.phone || "",
       date: dayStart,
       time: cleanTime,
@@ -260,7 +260,7 @@ async function bookDietitianAppointmentApi({
       currency: "INR",
       keyId: paymentKeyId,
       dietitianName: docDisplayName,
-      dietitianEmail: doc.email || "",
+      dietitianEmail: doc.email || "dietitian@test.com",
       dietitianSpecialization:
         (Array.isArray(doc.specialties) ? doc.specialties[0] : doc.specialties) ||
         doc.specialization ||

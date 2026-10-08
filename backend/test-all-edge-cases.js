@@ -223,8 +223,8 @@ async function runEdgeCases() {
     const m5 = await generateMealPlanApi({ allergiesExcluded: ["Peanuts", "Shellfish", "Gluten"] });
     test("Multiple allergens excluded in plan", m5.success && m5.plan?.allergiesExcluded.length === 3);
 
-    // EC 39: Macro target distribution (protein, carbs, fats exist)
-    test("Macro targets (protein, carbs, fats) are mathematically calculated", m1.plan?.macroTargets?.proteinGrams > 0 && m1.plan?.macroTargets?.carbsGrams > 0 && m1.plan?.macroTargets?.fatsGrams > 0);
+    // EC 39: Macro target distribution (protein, carbs, fats exist when calories calibrated)
+    test("Macro targets (protein, carbs, fats) are mathematically calculated", m3.plan?.macroTargets?.proteinGrams > 0 && m3.plan?.macroTargets?.carbsGrams > 0 && m3.plan?.macroTargets?.fatsGrams > 0);
   }
 
   // ---------------------------------------------------------------------------

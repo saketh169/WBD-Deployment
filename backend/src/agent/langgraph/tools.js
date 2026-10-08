@@ -39,16 +39,13 @@ const SearchDietitiansSchema = z
       .enum(["male", "female", "any"])
       .optional()
       .describe("Gender filter for the dietitian"),
-    maxFee: z.number().positive().optional().describe("Maximum consultation fee in INR"),
+    maxFee: z.number().optional().describe("Maximum consultation fee in INR"),
     name: z
       .string()
       .optional()
       .describe("Name or partial name of a specific dietitian"),
     limit: z
       .number()
-      .int()
-      .positive()
-      .max(100)
       .optional()
       .describe("Number of verified dietitians to return"),
   })
@@ -58,7 +55,6 @@ const CheckAvailabilitySchema = z
   .object({
     dietitianName: z
       .string()
-      .min(1)
       .describe("Name of the dietitian or doctor to check"),
     date: z
       .string()
@@ -73,10 +69,6 @@ const GetUserScheduleSchema = z
       .string()
       .optional()
       .describe("Optional date to filter (e.g. today, tomorrow, or YYYY-MM-DD)"),
-    dietitianName: z
-      .string()
-      .optional()
-      .describe("Optional doctor or dietitian name filter"),
   })
   .passthrough();
 
@@ -84,28 +76,20 @@ const BookDietitianAppointmentSchema = z
   .object({
     dietitianName: z
       .string()
-      .min(1)
       .describe("Name of the dietitian (e.g. Dr. Zara Ahmed)"),
-    date: z.string().min(1).describe("Date in YYYY-MM-DD format"),
-    time: z.string().min(1).describe("Time slot in HH:MM format (e.g. 12:30)"),
+    date: z.string().describe("Date in YYYY-MM-DD format"),
+    time: z.string().describe("Time slot in HH:MM format (e.g. 12:30)"),
     consultationType: z
       .enum(["Online", "In-person"])
       .optional()
       .default("Online")
       .describe("Consultation mode"),
-    confirmedByUser: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe(
-        "True if the patient has explicitly confirmed booking this slot and fee. False if unconfirmed."
-      ),
   })
   .passthrough();
 
 const LookupNutritionSchema = z
   .object({
-    foodItem: z.string().min(1).describe("Name of the single food item or ingredient"),
+    foodItem: z.string().describe("Name of the single food item or ingredient"),
     quantity: z
       .string()
       .optional()
@@ -117,15 +101,8 @@ const GenerateMealPlanSchema = z
   .object({
     planName: z.string().optional().describe("Clinical title of the plan"),
     dietType: z.string().optional().describe("Dietary classification"),
-    durationDays: z.number().int().min(1).max(7).optional().describe("Duration in days (1-7)"),
-    daysCount: z.number().int().min(1).max(7).optional().describe("Alias for durationDays"),
-    dailyCalories: z
-      .number()
-      .positive()
-      .min(500)
-      .max(10000)
-      .optional()
-      .describe("Target daily calories"),
+    durationDays: z.number().optional().describe("Duration in days"),
+    dailyCalories: z.number().optional().describe("Target daily calories"),
     macroTargets: z.any().optional().describe("Macronutrient targets"),
     healthFocus: z.string().optional().describe("Clinical focus"),
     allergiesExcluded: z
@@ -133,7 +110,6 @@ const GenerateMealPlanSchema = z
       .optional()
       .describe("Excluded allergens"),
     clinicalNotes: z.string().optional().describe("Clinical notes"),
-    supervisingDietitian: z.string().optional().describe("Name of supervising dietitian"),
   })
   .passthrough();
 
@@ -142,7 +118,6 @@ const GetUserHealthReportsSchema = z
     reportType: z
       .enum(["all", "health", "lab"])
       .optional()
-      .default("all")
       .describe("Type of report to retrieve: 'health', 'lab', or 'all'"),
     date: z
       .string()
@@ -150,9 +125,6 @@ const GetUserHealthReportsSchema = z
       .describe("Optional date filter (YYYY-MM-DD)"),
     limit: z
       .number()
-      .int()
-      .positive()
-      .max(50)
       .optional()
       .describe("Maximum number of reports to retrieve"),
   })

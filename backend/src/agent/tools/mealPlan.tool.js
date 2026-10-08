@@ -60,9 +60,10 @@ const generateMealPlanDeclaration = {
 
 async function executeGenerateMealPlan(args = {}, context = {}) {
   try {
+    const userId = context.userId || context.authUserId || null;
     const result = await generateMealPlanApi({
       ...args,
-      userId: context.userId || context.authUserId,
+      userId,
     });
 
     if (!result.success || !result.plan) {

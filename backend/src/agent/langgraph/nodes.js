@@ -14,12 +14,10 @@ const {
 
 const CANDIDATE_MODELS = [
   GEMINI_MODEL,
-  "gemini-3.5-flash",
-  "gemini-3.1-flash-lite",
-  "gemini-flash-latest",
+  "gemini-flash-lite-latest",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i);
-const OVERALL_TIMEOUT_MS = 45000;
-const MAX_RETRIES_PER_MODEL = 2;
+const OVERALL_TIMEOUT_MS = 6000;
+const MAX_RETRIES_PER_MODEL = 1;
 
 /**
  * 1. Context Ingestion Node: Loads authenticated patient context into LangGraph state.
@@ -50,50 +48,38 @@ async function reasoningNode(state) {
   const temporal = getTemporalContext();
   const systemInstruction = buildSystemPrompt(temporal, state.clinicalContextText);
 
-  const baseChatHistory = (state.messages || [])
+  const chatHistory = (state.messages || [])
     .filter((m) => m.content)
     .map((m) => ({
       role: m.type === "user" ? "user" : "model",
       parts: [{ text: m.content }],
     }));
 
-  while (baseChatHistory.length > 0 && baseChatHistory[0].role !== "user") {
-    baseChatHistory.shift();
+  while (chatHistory.length > 0 && chatHistory[0].role !== "user") {
+    chatHistory.shift();
   }
 
-  const intermediateHistory = state.intermediateHistory || [];
-  const chatHistory = [...baseChatHistory, ...intermediateHistory];
-
   const messageParts = [];
-  if (state.loopCount === 0) {
-    if (state.file?.base64 && state.file?.type) {
-      const commaIdx = state.file.base64.indexOf(",");
-      const cleanBase64 =
-        commaIdx !== -1
-          ? state.file.base64.substring(commaIdx + 1)
-          : state.file.base64;
-      messageParts.push({
-        inlineData: {
-          mimeType: state.file.type,
-          data: cleanBase64,
-        },
-      });
-    }
-    messageParts.push({ text: userPrompt });
-  } else {
-    const recentResults = state.latestToolResults || state.toolResults || [];
-    messageParts.push(
-      ...recentResults.map((tr) => ({
-        functionResponse: {
-          name: tr.tool,
-          response: {
-            success: tr.success !== false,
-            message: tr.message || "",
-            data: tr.data || null,
-          },
-        },
-      }))
-    );
+  if (state.file?.base64 && state.file?.type) {
+    const commaIdx = state.file.base64.indexOf(",");
+    const cleanBase64 =
+      commaIdx !== -1
+        ? state.file.base64.substring(commaIdx + 1)
+        : state.file.base64;
+    messageParts.push({
+      inlineData: {
+        mimeType: state.file.type,
+        data: cleanBase64,
+      },
+    });
+  }
+  messageParts.push({ text: userPrompt });
+
+  if (state.toolResults && state.toolResults.length > 0) {
+    const priorSummary = formatToolSummary(state.toolResults);
+    messageParts.push({
+      text: `Intermediate Tool Execution Findings:\n${priorSummary}\n\nReview the findings above. If additional tool actions are strictly required, invoke them now. Otherwise, proceed without calling more tools.`,
+    });
   }
 
   const startTime = Date.now();
@@ -149,35 +135,8 @@ async function reasoningNode(state) {
       "The consultation service is temporarily experiencing high demand. Please try your request again in a moment.";
   }
 
-  const newIntermediateHistory = [...intermediateHistory];
-  if (state.loopCount === 0) {
-    newIntermediateHistory.push({
-      role: "user",
-      parts: messageParts,
-    });
-  } else if (messageParts.length > 0) {
-    newIntermediateHistory.push({
-      role: "function",
-      parts: messageParts,
-    });
-  }
-
-  if (toolCalls.length > 0) {
-    newIntermediateHistory.push({
-      role: "model",
-      parts: toolCalls.map((c) => ({
-        functionCall: {
-          name: c.name,
-          args: c.args || {},
-        },
-      })),
-    });
-  }
-
   return {
     toolCalls,
-    executedToolCalls: toolCalls,
-    intermediateHistory: newIntermediateHistory,
     rawReply: rawText,
     executionStatus: toolCalls.length > 0 ? "tool_pending" : "synthesized",
   };
@@ -197,8 +156,24 @@ async function toolNode(state) {
 
   const MUTATING_TOOLS = new Set(["book_dietitian_appointment"]);
 
-  const readCalls = toolCalls.filter((c) => !MUTATING_TOOLS.has(c.name));
-  const mutatingCalls = toolCalls.filter((c) => MUTATING_TOOLS.has(c.name));
+  const executedSignatures = new Set(
+    existingToolResults.map((tr) => `${tr.tool}:${JSON.stringify(tr.args || {})}`)
+  );
+  const uniqueToolCalls = [];
+  const seenThisTurn = new Set();
+
+  for (const call of toolCalls) {
+    if (!call?.name) continue;
+    const sig = `${call.name}:${JSON.stringify(call.args || {})}`;
+    if (seenThisTurn.has(sig) || executedSignatures.has(sig)) {
+      continue;
+    }
+    seenThisTurn.add(sig);
+    uniqueToolCalls.push(call);
+  }
+
+  const readCalls = uniqueToolCalls.filter((c) => !MUTATING_TOOLS.has(c.name));
+  const mutatingCalls = uniqueToolCalls.filter((c) => MUTATING_TOOLS.has(c.name));
 
   // 1. Execute read/lookup tools concurrently
   const newReadResults = await Promise.all(
@@ -246,8 +221,6 @@ async function toolNode(state) {
     cards,
     openPaymentDetails,
     toolResults: allToolResults,
-    latestToolResults: newToolResults,
-    executedToolCalls: toolCalls,
     toolCalls: [],
     loopCount: (state.loopCount || 0) + 1,
     executionStatus: "tools_completed",
@@ -267,45 +240,45 @@ async function synthesisNode(state) {
   let replyText = "";
 
   if (toolResults.length > 0) {
-    try {
-      const toolSummary = formatToolSummary(toolResults);
+    if (toolResults.length === 1 && toolResults[0].message) {
+      replyText = toolResults[0].message;
+    } else {
+      try {
+        const toolSummary = formatToolSummary(toolResults);
 
-      const synthPrompt = `Patient Query: "${userPrompt}"
+        const synthPrompt = `Patient Query: "${userPrompt}"
 Date Context: Today is ${temporal.todayStr} (${temporal.dayOfWeek}), ${temporal.currentTimeStr} IST.
 Findings:
 ${toolSummary}
 ${state.clinicalContextText ? `Patient Clinical Context:\n${state.clinicalContextText}\n` : ""}
 
-Synthesize a clear, empathetic, and helpful clinical response for the patient:
+Synthesize a clear, empathetic, and concise clinical response for the patient:
 - Directly answer the patient's specific inquiry using the exact verified data in Findings.
-- Stay strictly focused on what the patient asked for. Do NOT introduce unrelated topics (such as consultation hours, clinic schedules, or doctor booking) unless the patient asked about scheduling or appointments.
-- For food nutrition or calorie inquiries, provide ONLY the direct nutritional breakdown of the requested food item clearly and concisely. Do NOT lecture the patient or bring up their personal lab biomarkers (such as HbA1c, LDL, or cholesterol), medical diagnoses, or historical health reports unless the patient explicitly asked about their health condition or report.
-- When interactive cards exist (such as meal plans, booking calendars, or schedules), provide a concise summary with key targets and invite the patient to explore the card below rather than repeating whole recipe menus or raw slot lists.
-- When asked about pricing or fees, compare or state the exact verified fees from Findings. Never claim that pricing details are untracked when fees are provided in Findings.
-- Accurately state how many verified dietitians were found based on Findings. If 0 specialists were found, state clearly that no verified dietitians specialize in the requested topic in our registry.
-- Do NOT fabricate or hallucinate doctor names or specialties. Use only verified facts from Findings.
-- Format all key points, specialist names, fees, calorie targets, macros, and metrics in markdown bold (**...**) so they stand out clearly for the patient.
+- Stay strictly focused on what the patient asked for.
+- When interactive cards exist (meal plans, bookings, schedules), provide a concise summary and invite the patient to view the card below.
+- Format all key points, doctor names, fees, calorie targets, macros, and metrics in markdown bold (**...**).
 - Strict ZERO emojis in all output text.`;
 
-      for (const mName of CANDIDATE_MODELS) {
-        try {
-          const synthModel = genAI.getGenerativeModel({
-            model: mName,
-            generationConfig: { maxOutputTokens: 2500, temperature: 0.2 },
-          });
+        for (const mName of CANDIDATE_MODELS) {
+          try {
+            const synthModel = genAI.getGenerativeModel({
+              model: mName,
+              generationConfig: { maxOutputTokens: 600, temperature: 0.2 },
+            });
 
-          const synthRes = await synthModel.generateContent(synthPrompt);
-          const text = synthRes.response.text();
-          if (text && text.trim()) {
-            replyText = text.trim();
-            break;
+            const synthRes = await synthModel.generateContent(synthPrompt);
+            const text = synthRes.response.text();
+            if (text && text.trim()) {
+              replyText = text.trim();
+              break;
+            }
+          } catch (mErr) {
+            console.warn(`[synthesisNode] ${mName} attempt warning:`, mErr.status || mErr.message);
           }
-        } catch (mErr) {
-          console.warn(`[synthesisNode] ${mName} attempt warning:`, mErr.status || mErr.message);
         }
+      } catch (err) {
+        console.warn("[synthesisNode] Synthesis fallback warning:", err.message);
       }
-    } catch (err) {
-      console.warn("[synthesisNode] Synthesis fallback warning:", err.message);
     }
   }
 

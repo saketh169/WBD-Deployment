@@ -11,7 +11,7 @@ const { resolvePatientProfile } = require("./userResolver");
  * No vector embeddings, no cosine similarity, pure agentic context provider.
  */
 async function loadAgentPatientContext(userId, userQuery = "") {
-  if (!userId || !mongoose.isValidObjectId(userId)) {
+  if (!userId || !mongoose.isValidObjectId(userId) || mongoose.connection.readyState !== 1) {
     return {
       patientProfile: null,
       contextText: "",

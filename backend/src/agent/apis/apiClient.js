@@ -7,7 +7,7 @@ const fetch = global.fetch || require("node-fetch");
 class ApiClient {
   constructor(config = {}) {
     this.baseUrl = config.baseUrl || process.env.API_BASE_URL || "http://localhost:5000";
-    this.timeout = config.timeout || 12000;
+    this.timeout = config.timeout || 5000;
     this.defaultHeaders = {
       "Content-Type": "application/json",
       ...(config.headers || {}),

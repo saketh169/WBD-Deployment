@@ -20,11 +20,19 @@ function routeAfterReasoning(state) {
   return "synthesis";
 }
 
+const TERMINAL_TOOLS = new Set([
+  "lookup_nutrition",
+  "generate_meal_plan",
+  "get_user_schedule",
+  "get_user_health_reports",
+  "book_dietitian_appointment",
+]);
+
 /**
  * Controlled loop router after tool execution:
- * Prevents unnecessary tool loops when existing tool results are already sufficient.
- * Chainable multi-step workflows (specialist search -> availability -> booking) are
- * routed to reasoning up to MAX_REASONING_LOOPS; standalone tools proceed directly to synthesis.
+ * Optimizes the reasoning loop by routing terminal tool executions straight to synthesis.
+ * If exploratory tools were executed (e.g. search_dietitians), permits controlled follow-up
+ * reasoning up to MAX_REASONING_LOOPS iterations.
  */
 function routeAfterTools(state) {
   const currentLoop = state.loopCount || 0;
@@ -32,17 +40,12 @@ function routeAfterTools(state) {
     return "synthesis";
   }
 
-  // Standalone terminal tools already provide complete results
-  const CHAINABLE_TOOLS = new Set([
-    "search_dietitians",
-    "check_dietitian_availability",
-  ]);
-
-  const recentTools = (state.latestToolResults || []).map((r) => r.tool);
-  const hasChainableTool = recentTools.some((t) => CHAINABLE_TOOLS.has(t));
-
-  if (!hasChainableTool) {
-    return "synthesis";
+  const results = state.toolResults || [];
+  if (results.length > 0) {
+    const onlyTerminal = results.every((r) => TERMINAL_TOOLS.has(r.tool));
+    if (onlyTerminal) {
+      return "synthesis";
+    }
   }
 
   return "reasoning";

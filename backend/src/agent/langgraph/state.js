@@ -66,24 +66,6 @@ const AgentState = Annotation.Root({
     default: () => [],
   }),
 
-  // Most recent tool calls for native multi-turn function calling
-  executedToolCalls: Annotation({
-    reducer: (x, y) => y ?? x,
-    default: () => [],
-  }),
-
-  // Intermediate conversational turns for native multi-turn Gemini reasoning loop
-  intermediateHistory: Annotation({
-    reducer: (x, y) => y ?? x,
-    default: () => [],
-  }),
-
-  // Latest tool results from the most recent tool execution step
-  latestToolResults: Annotation({
-    reducer: (x, y) => y ?? x,
-    default: () => [],
-  }),
-
   // Iteration loop counter for multi-turn reasoning and tool invocation
   loopCount: Annotation({
     reducer: (x, y) => (y !== undefined ? y : (x || 0)),
