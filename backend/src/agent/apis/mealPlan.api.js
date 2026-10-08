@@ -8,10 +8,12 @@ const { defaultApiClient } = require("./apiClient");
  * Customizable: Supports invoking remote meal plan services or generating tailored plans in-process.
  */
 async function generateMealPlanApi({
+  userId = null,
   planName = "Personalized Nutrition Plan",
   dietType = "Balanced",
   durationDays = 3,
-  dailyCalories = 2000,
+  daysCount = null,
+  dailyCalories = null,
   targetCalories: explicitTargetCalories = null,
   macroTargets = null,
   healthFocus = "General Wellness",
@@ -22,15 +24,63 @@ async function generateMealPlanApi({
   useHttpApi = false,
 } = {}) {
   try {
-    const rawDays = Number(durationDays);
-    const daysCount = isNaN(rawDays) ? 3 : Math.max(1, Math.min(rawDays, 7));
-    const targetCalories = Math.max(1200, Number(explicitTargetCalories || dailyCalories) || 2000);
+    let effectiveCalories = Number(explicitTargetCalories || dailyCalories) || null;
+    let effectiveMacros = macroTargets;
+    let effectiveDietType = dietType;
+    let effectiveDietitian = supervisingDietitian || null;
+    let effectiveAllergies = Array.isArray(allergiesExcluded) ? [...allergiesExcluded] : [];
+    let effectiveNotes = clinicalNotes || "";
 
-    const calculatedMacros = macroTargets || {
+    // Service-layer patient record grounding
+    if (userId) {
+      try {
+        const { resolvePatientProfile } = require("../services/userResolver");
+        const { HealthReport } = require("../../models/healthReportModel");
+        const { userId: resolvedId } = await resolvePatientProfile(userId);
+        const effectiveId = resolvedId || userId;
+        if (effectiveId) {
+          const report = await HealthReport.findOne({
+            $or: [{ clientId: effectiveId }, { userId: effectiveId }],
+          })
+            .sort({ createdAt: -1 })
+            .lean();
+          if (report) {
+            if (!effectiveCalories && report.targetCalories) {
+              effectiveCalories = report.targetCalories;
+            }
+            if (!effectiveMacros && report.targetMacros) {
+              effectiveMacros = report.targetMacros;
+            }
+            if (!effectiveDietitian && report.dietitianName) {
+              effectiveDietitian = report.dietitianName;
+            }
+            if (report.allergies?.length) {
+              effectiveAllergies = Array.from(
+                new Set([...effectiveAllergies, ...report.allergies])
+              );
+            }
+            if (!effectiveDietType || effectiveDietType === "Balanced") {
+              effectiveDietType = report.dietType || report.dietaryRecommendations || effectiveDietType;
+            }
+            if (!effectiveNotes && report.dietaryRecommendations) {
+              effectiveNotes = report.dietaryRecommendations;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[generateMealPlanApi Grounding Warning]:", err.message);
+      }
+    }
+
+    const rawDays = Number(durationDays || daysCount);
+    const finalDaysCount = isNaN(rawDays) ? 3 : Math.max(1, Math.min(rawDays, 7));
+    const targetCalories = effectiveCalories;
+
+    const calculatedMacros = effectiveMacros || (targetCalories ? {
       proteinGrams: Math.round((targetCalories * 0.25) / 4),
       carbsGrams: Math.round((targetCalories * 0.5) / 4),
       fatsGrams: Math.round((targetCalories * 0.25) / 9),
-    };
+    } : null);
 
     if (useHttpApi) {
       const apiRes = await defaultApiClient.post("/api/meal-plans", {
@@ -54,7 +104,6 @@ async function generateMealPlanApi({
     let generatedDays = Array.isArray(days) && days.length > 0 ? days : [];
 
     if (generatedDays.length === 0 && genAI && process.env.NODE_ENV !== "test") {
-      let mealTimer = null;
       try {
         const model = genAI.getGenerativeModel({
           model: GEMINI_MODEL,
@@ -99,12 +148,7 @@ Return JSON with schema:
   ]
 }`;
 
-        const timeoutPromise = new Promise((_, reject) => {
-          mealTimer = setTimeout(() => reject(new Error("Gemini meal plan generation timed out")), 15000);
-          if (mealTimer.unref) mealTimer.unref();
-        });
-
-        const res = await Promise.race([model.generateContent(prompt), timeoutPromise]);
+        const res = await model.generateContent(prompt);
         const text = res?.response?.text?.() || "";
         const jsonStart = text.indexOf("{");
         const jsonEnd = text.lastIndexOf("}");
@@ -115,65 +159,65 @@ Return JSON with schema:
         }
       } catch (genErr) {
         console.warn("[generateMealPlanApi Generation Warning]:", genErr.message);
-      } finally {
-        if (mealTimer) {
-          clearTimeout(mealTimer);
-        }
       }
     }
 
     if (generatedDays.length === 0) {
-      const bCal = Math.round(targetCalories * 0.25);
-      const lCal = Math.round(targetCalories * 0.35);
-      const sCal = Math.round(targetCalories * 0.15);
-      const dCal = Math.round(targetCalories * 0.25);
+      const cal = targetCalories || 0;
+      const bCal = Math.round(cal * 0.25);
+      const lCal = Math.round(cal * 0.35);
+      const sCal = Math.round(cal * 0.15);
+      const dCal = Math.round(cal * 0.25);
+      const prot = calculatedMacros?.proteinGrams || 0;
+      const carb = calculatedMacros?.carbsGrams || 0;
+      const fat = calculatedMacros?.fatsGrams || 0;
 
-      for (let i = 1; i <= daysCount; i++) {
+      for (let i = 1; i <= finalDaysCount; i++) {
         generatedDays.push({
           dayIndex: i,
           dayLabel: `Day ${i}`,
-          dayCalories: targetCalories,
-          proteinGrams: calculatedMacros.proteinGrams,
-          carbsGrams: calculatedMacros.carbsGrams,
-          fatsGrams: calculatedMacros.fatsGrams,
+          dayCalories: cal || null,
+          proteinGrams: prot || null,
+          carbsGrams: carb || null,
+          fatsGrams: fat || null,
           meals: [
             {
               mealType: "Breakfast",
               name: `${dietType} Nutrition Meal`,
-              calories: bCal,
-              proteinGrams: Math.round(calculatedMacros.proteinGrams * 0.25),
-              carbsGrams: Math.round(calculatedMacros.carbsGrams * 0.25),
-              fatsGrams: Math.round(calculatedMacros.fatsGrams * 0.25),
+              calories: bCal || null,
+              proteinGrams: Math.round(prot * 0.25) || null,
+              carbsGrams: Math.round(carb * 0.25) || null,
+              fatsGrams: Math.round(fat * 0.25) || null,
               ingredients: ["Nutrient-dense whole grains", "Protein", "Fresh seasonal produce"],
               prepSteps: ["Prepared to meet nutritional targets."],
             },
             {
               mealType: "Lunch",
               name: `${dietType} Balanced Plate`,
-              calories: lCal,
-              proteinGrams: Math.round(calculatedMacros.proteinGrams * 0.35),
-              carbsGrams: Math.round(calculatedMacros.carbsGrams * 0.35),
-              fatsGrams: Math.round(calculatedMacros.fatsGrams * 0.35),
+              calories: lCal || null,
+              proteinGrams: Math.round(prot * 0.35) || null,
+              carbsGrams: Math.round(carb * 0.35) || null,
+              fatsGrams: Math.round(fat * 0.35) || null,
               ingredients: ["Complex carbohydrates", "Dietary protein", "Fiber-rich vegetables"],
               prepSteps: ["Balanced macro preparation."],
             },
             {
               mealType: "Snacks",
               name: "Nutrient-Dense Snack",
-              calories: sCal,
-              proteinGrams: Math.round(calculatedMacros.proteinGrams * 0.15),
-              carbsGrams: Math.round(calculatedMacros.carbsGrams * 0.15),
-              fatsGrams: Math.round(calculatedMacros.fatsGrams * 0.15),
+              calories: sCal || null,
+              proteinGrams: Math.round(prot * 0.15) || null,
+              carbsGrams: Math.round(carb * 0.15) || null,
+              fatsGrams: Math.round(fat * 0.15) || null,
               ingredients: ["Healthy whole snack", "Hydration beverage"],
               prepSteps: ["Portioned midday nutrition."],
             },
             {
               mealType: "Dinner",
               name: `${dietType} Restorative Dinner`,
-              calories: dCal,
-              proteinGrams: Math.round(calculatedMacros.proteinGrams * 0.25),
-              carbsGrams: Math.round(calculatedMacros.carbsGrams * 0.25),
-              fatsGrams: Math.round(calculatedMacros.fatsGrams * 0.25),
+              calories: dCal || null,
+              proteinGrams: Math.round(prot * 0.25) || null,
+              carbsGrams: Math.round(carb * 0.25) || null,
+              fatsGrams: Math.round(fat * 0.25) || null,
               ingredients: ["Light protein", "Micronutrient-dense greens"],
               prepSteps: ["Light evening preparation."],
             },
@@ -184,22 +228,22 @@ Return JSON with schema:
 
     const planData = {
       planName,
-      dietType,
-      daysCount,
+      dietType: effectiveDietType,
+      daysCount: finalDaysCount,
       dailyCalories: targetCalories,
       macroTargets: calculatedMacros,
       hydrationTargetLiters: 2.5,
       healthFocus,
-      allergiesExcluded: allergiesExcluded || [],
-      supervisingDietitian,
-      clinicalNotes: clinicalNotes || `Tailored ${dietType} protocol aligned with clinical guidelines.`,
+      allergiesExcluded: effectiveAllergies,
+      supervisingDietitian: effectiveDietitian,
+      clinicalNotes: effectiveNotes || `Tailored ${effectiveDietType} protocol aligned with clinical guidelines.`,
       days: generatedDays,
     };
 
     return {
       success: true,
       plan: planData,
-      message: `Generated ${daysCount}-day ${dietType} meal plan targeting ${targetCalories} kcal daily for ${healthFocus}.`,
+      message: `Generated ${finalDaysCount}-day ${effectiveDietType} meal plan${targetCalories ? ` targeting ${targetCalories} kcal daily` : ""} for ${healthFocus}.`,
     };
   } catch (error) {
     console.error("[generateMealPlanApi Error]:", error);

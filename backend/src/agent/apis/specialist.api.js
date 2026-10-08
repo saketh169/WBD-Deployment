@@ -113,17 +113,17 @@ async function findDietitiansApi({
         : doc.specialization?.length
           ? doc.specialization
           : [];
-      const fee = doc.onlineFee || doc.fees || 450;
+      const fee = Number(doc.onlineFee ?? doc.fees ?? 0);
       return {
         id: doc._id.toString(),
         name: doc.name,
         email: doc.email || "",
         gender: doc.gender || "unspecified",
         specialties: specs,
-        experience: doc.experience ? `${doc.experience} yrs exp` : "Experienced",
-        fee: Number(fee),
-        rating: doc.rating ? Number(doc.rating) : 4.8,
-        location: doc.location || "India",
+        experience: doc.experience ? `${doc.experience} yrs exp` : null,
+        fee,
+        rating: typeof doc.rating === "number" ? doc.rating : null,
+        location: doc.location || null,
         about: doc.about || "",
         profileImage: doc.profileImage || null,
       };

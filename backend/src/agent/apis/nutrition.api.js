@@ -54,7 +54,6 @@ function parsePortionMultiplier(qtyStr) {
  * ZERO REGEX: Pure substring extraction.
  */
 async function getGeminiNutritionEstimate(foodItem, quantity) {
-  let timer = null;
   try {
     if (!genAI) return null;
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -71,12 +70,7 @@ Return ONLY a valid JSON object without markdown or commentary with schema:
   "servingSize": { "amount": number, "unit": "g" }
 }`;
 
-    const timeoutPromise = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error("Gemini nutrition estimation timed out")), 10000);
-      if (timer.unref) timer.unref();
-    });
-
-    const res = await Promise.race([model.generateContent(prompt), timeoutPromise]);
+    const res = await model.generateContent(prompt);
     const text = res?.response?.text?.() || "";
     const jsonStart = text.indexOf("{");
     const jsonEnd = text.lastIndexOf("}");
@@ -97,10 +91,6 @@ Return ONLY a valid JSON object without markdown or commentary with schema:
     }
   } catch (err) {
     console.warn("[getGeminiNutritionEstimate Error]:", err.message);
-  } finally {
-    if (timer) {
-      clearTimeout(timer);
-    }
   }
   return null;
 }
@@ -207,23 +197,6 @@ async function lookupNutritionApi({ foodItem, quantity = "100g" } = {}) {
           source: "Clinical Food Composition Database",
         };
       }
-    }
-
-    if (!foodData && process.env.NODE_ENV === "test") {
-      foodData = {
-        foodName: cleanQuery,
-        calories: Math.round(296 * portionInfo.multiplier),
-        protein: Math.round(18 * portionInfo.multiplier),
-        carbs: Math.round(4 * portionInfo.multiplier),
-        fat: Math.round(21 * portionInfo.multiplier),
-        fiber: 0,
-        sugar: 0,
-        servingSize: {
-          amount: portionInfo.amount,
-          unit: portionInfo.unit,
-        },
-        source: "Clinical Reference Database (Test CI)",
-      };
     }
 
     if (!foodData) {

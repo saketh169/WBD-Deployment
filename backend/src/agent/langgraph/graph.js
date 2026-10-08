@@ -22,15 +22,30 @@ function routeAfterReasoning(state) {
 
 /**
  * Controlled loop router after tool execution:
- * Allows Gemini to review intermediate findings and invoke follow-up tools
- * up to MAX_REASONING_LOOPS iterations. If the bound is reached, proceeds to synthesis.
+ * Prevents unnecessary tool loops when existing tool results are already sufficient.
+ * Chainable multi-step workflows (specialist search -> availability -> booking) are
+ * routed to reasoning up to MAX_REASONING_LOOPS; standalone tools proceed directly to synthesis.
  */
 function routeAfterTools(state) {
   const currentLoop = state.loopCount || 0;
-  if (currentLoop < MAX_REASONING_LOOPS) {
-    return "reasoning";
+  if (currentLoop >= MAX_REASONING_LOOPS) {
+    return "synthesis";
   }
-  return "synthesis";
+
+  // Standalone terminal tools already provide complete results
+  const CHAINABLE_TOOLS = new Set([
+    "search_dietitians",
+    "check_dietitian_availability",
+  ]);
+
+  const recentTools = (state.latestToolResults || []).map((r) => r.tool);
+  const hasChainableTool = recentTools.some((t) => CHAINABLE_TOOLS.has(t));
+
+  if (!hasChainableTool) {
+    return "synthesis";
+  }
+
+  return "reasoning";
 }
 
 /**

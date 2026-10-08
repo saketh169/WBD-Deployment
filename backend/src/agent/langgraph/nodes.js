@@ -50,38 +50,50 @@ async function reasoningNode(state) {
   const temporal = getTemporalContext();
   const systemInstruction = buildSystemPrompt(temporal, state.clinicalContextText);
 
-  const chatHistory = (state.messages || [])
+  const baseChatHistory = (state.messages || [])
     .filter((m) => m.content)
     .map((m) => ({
       role: m.type === "user" ? "user" : "model",
       parts: [{ text: m.content }],
     }));
 
-  while (chatHistory.length > 0 && chatHistory[0].role !== "user") {
-    chatHistory.shift();
+  while (baseChatHistory.length > 0 && baseChatHistory[0].role !== "user") {
+    baseChatHistory.shift();
   }
+
+  const intermediateHistory = state.intermediateHistory || [];
+  const chatHistory = [...baseChatHistory, ...intermediateHistory];
 
   const messageParts = [];
-  if (state.file?.base64 && state.file?.type) {
-    const commaIdx = state.file.base64.indexOf(",");
-    const cleanBase64 =
-      commaIdx !== -1
-        ? state.file.base64.substring(commaIdx + 1)
-        : state.file.base64;
-    messageParts.push({
-      inlineData: {
-        mimeType: state.file.type,
-        data: cleanBase64,
-      },
-    });
-  }
-  messageParts.push({ text: userPrompt });
-
-  if (state.toolResults && state.toolResults.length > 0) {
-    const priorSummary = formatToolSummary(state.toolResults);
-    messageParts.push({
-      text: `Intermediate Tool Execution Findings:\n${priorSummary}\n\nReview the findings above. If additional tool actions are strictly required, invoke them now. Otherwise, proceed without calling more tools.`,
-    });
+  if (state.loopCount === 0) {
+    if (state.file?.base64 && state.file?.type) {
+      const commaIdx = state.file.base64.indexOf(",");
+      const cleanBase64 =
+        commaIdx !== -1
+          ? state.file.base64.substring(commaIdx + 1)
+          : state.file.base64;
+      messageParts.push({
+        inlineData: {
+          mimeType: state.file.type,
+          data: cleanBase64,
+        },
+      });
+    }
+    messageParts.push({ text: userPrompt });
+  } else {
+    const recentResults = state.latestToolResults || state.toolResults || [];
+    messageParts.push(
+      ...recentResults.map((tr) => ({
+        functionResponse: {
+          name: tr.tool,
+          response: {
+            success: tr.success !== false,
+            message: tr.message || "",
+            data: tr.data || null,
+          },
+        },
+      }))
+    );
   }
 
   const startTime = Date.now();
@@ -137,8 +149,35 @@ async function reasoningNode(state) {
       "The consultation service is temporarily experiencing high demand. Please try your request again in a moment.";
   }
 
+  const newIntermediateHistory = [...intermediateHistory];
+  if (state.loopCount === 0) {
+    newIntermediateHistory.push({
+      role: "user",
+      parts: messageParts,
+    });
+  } else if (messageParts.length > 0) {
+    newIntermediateHistory.push({
+      role: "function",
+      parts: messageParts,
+    });
+  }
+
+  if (toolCalls.length > 0) {
+    newIntermediateHistory.push({
+      role: "model",
+      parts: toolCalls.map((c) => ({
+        functionCall: {
+          name: c.name,
+          args: c.args || {},
+        },
+      })),
+    });
+  }
+
   return {
     toolCalls,
+    executedToolCalls: toolCalls,
+    intermediateHistory: newIntermediateHistory,
     rawReply: rawText,
     executionStatus: toolCalls.length > 0 ? "tool_pending" : "synthesized",
   };
@@ -207,6 +246,8 @@ async function toolNode(state) {
     cards,
     openPaymentDetails,
     toolResults: allToolResults,
+    latestToolResults: newToolResults,
+    executedToolCalls: toolCalls,
     toolCalls: [],
     loopCount: (state.loopCount || 0) + 1,
     executionStatus: "tools_completed",
