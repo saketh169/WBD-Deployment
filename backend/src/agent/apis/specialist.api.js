@@ -32,16 +32,6 @@ async function findDietitiansApi({
     }
 
     // Direct in-process query without any regex:
-    const mongoose = require("mongoose");
-    if (mongoose.connection.readyState !== 1) {
-      return {
-        success: true,
-        count: 0,
-        dietitians: [],
-        message: "No verified dietitians found specializing in the requested criteria.",
-      };
-    }
-
     const query = {
       "verificationStatus.finalReport": "Verified",
       isDeleted: { $ne: true },

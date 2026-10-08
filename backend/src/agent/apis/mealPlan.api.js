@@ -155,7 +155,6 @@ async function generateMealPlanApi({
           generationConfig: {
             responseMimeType: "application/json",
             temperature: 0.3,
-            maxOutputTokens: 2500,
           },
         });
 

@@ -890,7 +890,17 @@ exports.getBookedSlots = async (req, res) => {
     const { date, userId } = req.query; // Add userId to query params
 
     // Handle null or "null" string userId
-    const validUserId = userId && userId !== 'null' && userId !== 'undefined' ? userId : null;
+    let validUserId = userId && userId !== 'null' && userId !== 'undefined' ? userId : null;
+    if (!validUserId && req.headers?.authorization) {
+      try {
+        const token = req.headers.authorization.replace(/^Bearer\s+/i, '');
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.decode(token);
+        if (decoded) {
+          validUserId = decoded.roleId || decoded.userId || decoded.id || decoded._id || null;
+        }
+      } catch {}
+    }
 
     if (!dietitianId || !date) {
       return res.status(400).json({

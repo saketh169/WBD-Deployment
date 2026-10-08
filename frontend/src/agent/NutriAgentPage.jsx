@@ -440,6 +440,10 @@ export function NutriAgentPage() {
 
     const currentUserId = user?.id || user?._id || user?.roleId || null;
 
+    window.dispatchEvent(
+      new CustomEvent("nutri_booking_update", { detail: details })
+    );
+
     // Update all slot cards in chat state live & add confirmation
     setMessages((prev) => {
       const updatedPrev = prev.map((msg) => {

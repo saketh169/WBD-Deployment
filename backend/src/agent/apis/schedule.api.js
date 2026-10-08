@@ -28,19 +28,6 @@ async function getDietitianSlotsData(dietitianId, dietitianName, userId = null) 
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const todayStr = formatLocalDate(now);
 
-  if (mongoose.connection.readyState !== 1) {
-    return {
-      success: false,
-      date: dateStr,
-      dietitianName: "Specialist",
-      availableSlots: [],
-      freeSlots: [],
-      bookedSlots: [],
-      workingHours: "09:00 - 20:00",
-      message: "Database connection initializing.",
-    };
-  }
-
   const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + 8);

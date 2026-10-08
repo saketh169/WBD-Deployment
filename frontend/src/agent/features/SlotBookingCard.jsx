@@ -4,8 +4,9 @@ import { useAuthContext } from "../../hooks/useAuthContext";
 import axiosInstance from "../../utils/axiosInstance";
 
 const to24 = (t) => {
-  const m = String(t || "").trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
-  if (!m) return (t || "").slice(0, 5);
+  const raw = typeof t === "object" && t !== null ? t.time || t.slot || "" : t;
+  const m = String(raw || "").trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!m) return String(raw || "").slice(0, 5);
   let h = +m[1];
   if (/PM/i.test(m[3]) && h < 12) h += 12;
   if (/AM/i.test(m[3]) && h === 12) h = 0;
@@ -47,10 +48,11 @@ export const SlotBookingCard = ({ data, onBookSlot }) => {
     user?.id ||
     user?._id ||
     user?.roleId ||
+    user?.userId ||
     (() => {
       try {
         const u = JSON.parse(localStorage.getItem("authUser_user") || "{}");
-        return u.id || u._id || u.roleId || "";
+        return u.id || u._id || u.roleId || u.userId || "";
       } catch {
         return "";
       }

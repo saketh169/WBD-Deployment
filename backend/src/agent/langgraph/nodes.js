@@ -14,9 +14,9 @@ const {
 
 const CANDIDATE_MODELS = [
   GEMINI_MODEL,
-  "gemini-flash-lite-latest",
+  "gemini-2.5-flash",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i);
-const OVERALL_TIMEOUT_MS = 6000;
+const OVERALL_TIMEOUT_MS = 10000;
 const MAX_RETRIES_PER_MODEL = 1;
 
 /**
@@ -240,45 +240,45 @@ async function synthesisNode(state) {
   let replyText = "";
 
   if (toolResults.length > 0) {
-    if (toolResults.length === 1 && toolResults[0].message) {
-      replyText = toolResults[0].message;
-    } else {
-      try {
-        const toolSummary = formatToolSummary(toolResults);
+    try {
+      const toolSummary = formatToolSummary(toolResults);
 
-        const synthPrompt = `Patient Query: "${userPrompt}"
+      const synthPrompt = `Patient Query: "${userPrompt}"
 Date Context: Today is ${temporal.todayStr} (${temporal.dayOfWeek}), ${temporal.currentTimeStr} IST.
 Findings:
 ${toolSummary}
 ${state.clinicalContextText ? `Patient Clinical Context:\n${state.clinicalContextText}\n` : ""}
 
-Synthesize a clear, empathetic, and concise clinical response for the patient:
+Synthesize a clear, empathetic, and helpful clinical response for the patient:
 - Directly answer the patient's specific inquiry using the exact verified data in Findings.
-- Stay strictly focused on what the patient asked for.
-- When interactive cards exist (meal plans, bookings, schedules), provide a concise summary and invite the patient to view the card below.
-- Format all key points, doctor names, fees, calorie targets, macros, and metrics in markdown bold (**...**).
+- Stay strictly focused on what the patient asked for. Do NOT introduce unrelated topics (such as consultation hours, clinic schedules, or doctor booking) unless the patient asked about scheduling or appointments.
+- For food nutrition or calorie inquiries, provide ONLY the direct nutritional breakdown of the requested food item clearly and concisely. Do NOT lecture the patient or bring up their personal lab biomarkers (such as HbA1c, LDL, or cholesterol), medical diagnoses, or historical health reports unless the patient explicitly asked about their health condition or report.
+- When interactive cards exist (such as meal plans, booking calendars, or schedules), provide a concise summary with key targets and invite the patient to explore the card below rather than repeating whole recipe menus or raw slot lists.
+- When asked about pricing or fees, compare or state the exact verified fees from Findings. Never claim that pricing details are untracked when fees are provided in Findings.
+- Accurately state how many verified dietitians were found based on Findings. If 0 specialists were found, state clearly that no verified dietitians specialize in the requested topic in our registry.
+- Do NOT fabricate or hallucinate doctor names or specialties. Use only verified facts from Findings.
+- Format all key points, specialist names, fees, calorie targets, macros, and metrics in markdown bold (**...**) so they stand out clearly for the patient.
 - Strict ZERO emojis in all output text.`;
 
-        for (const mName of CANDIDATE_MODELS) {
-          try {
-            const synthModel = genAI.getGenerativeModel({
-              model: mName,
-              generationConfig: { maxOutputTokens: 600, temperature: 0.2 },
-            });
+      for (const mName of CANDIDATE_MODELS) {
+        try {
+          const synthModel = genAI.getGenerativeModel({
+            model: mName,
+            generationConfig: { maxOutputTokens: 2500, temperature: 0.2 },
+          });
 
-            const synthRes = await synthModel.generateContent(synthPrompt);
-            const text = synthRes.response.text();
-            if (text && text.trim()) {
-              replyText = text.trim();
-              break;
-            }
-          } catch (mErr) {
-            console.warn(`[synthesisNode] ${mName} attempt warning:`, mErr.status || mErr.message);
+          const synthRes = await synthModel.generateContent(synthPrompt);
+          const text = synthRes.response.text();
+          if (text && text.trim()) {
+            replyText = text.trim();
+            break;
           }
+        } catch (mErr) {
+          console.warn(`[synthesisNode] ${mName} attempt warning:`, mErr.status || mErr.message);
         }
-      } catch (err) {
-        console.warn("[synthesisNode] Synthesis fallback warning:", err.message);
       }
+    } catch (err) {
+      console.warn("[synthesisNode] Synthesis fallback warning:", err.message);
     }
   }
 
