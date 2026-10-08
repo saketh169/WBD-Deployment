@@ -89,6 +89,7 @@ function createNutriConnectMCPServer(userId = null) {
     "get_user_schedule",
     "get_user_health_reports",
     "book_dietitian_appointment",
+    "generate_meal_plan",
   ]);
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
